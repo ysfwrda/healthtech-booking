@@ -66,7 +66,7 @@ See [`docs/adr/`](docs/adr/) for architecture decision records.
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/healthtech-booking.git
+git clone https://github.com/ysfwrda/healthtech-booking.git
 cd healthtech-booking
 
 # Start all infrastructure and services
