@@ -1,0 +1,139 @@
+version: '3.8'
+
+# ─────────────────────────────────────────────────────────────
+# HealthTech Booking Platform — Local Infrastructure
+#
+# Starts:
+#   - Zookeeper          (required by Kafka)
+#   - Kafka              (event broker)
+#   - PostgreSQL x3      (one DB per service — DB per Service pattern)
+#   - Kafka UI           (optional: browse topics at localhost:8090)
+#
+# Usage:
+#   docker-compose up -d              → start everything
+#   docker-compose ps                 → check status
+#   docker-compose logs -f kafka      → follow Kafka logs
+#   docker-compose down               → stop and remove containers
+#   docker-compose down -v            → also remove volumes (reset data)
+# ─────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Zookeeper ────────────────────────────────────────────────
+  # Kafka requires Zookeeper for cluster coordination.
+  # In production you would use KRaft mode (Kafka without Zookeeper),
+  # but for local dev this is the simpler and more widely documented setup.
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - healthtech-net
+
+  # ── Kafka ─────────────────────────────────────────────────────
+  # Single-node Kafka broker. Sufficient for local development.
+  # KAFKA_ADVERTISED_LISTENERS defines how clients (our Spring Boot services)
+  # connect to Kafka from outside the Docker network (via localhost:9092).
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - healthtech-net
+
+  # ── Kafka UI ──────────────────────────────────────────────────
+  # Optional but highly recommended for learning.
+  # Browse topics, view messages, monitor consumer groups
+  # at http://localhost:8090
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    networks:
+      - healthtech-net
+
+  # ── PostgreSQL: Appointment Service ───────────────────────────
+  # Each service owns its own database — DB per Service pattern.
+  # This enforces service autonomy: no service can query another
+  # service's DB directly. Data exchange happens via Kafka events only.
+  postgres-appointment:
+    image: postgres:16-alpine
+    container_name: postgres-appointment
+    environment:
+      POSTGRES_DB: appointment_db
+      POSTGRES_USER: appointment_user
+      POSTGRES_PASSWORD: appointment_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-appointment-data:/var/lib/postgresql/data
+    networks:
+      - healthtech-net
+
+  # ── PostgreSQL: Notification Service ──────────────────────────
+  postgres-notification:
+    image: postgres:16-alpine
+    container_name: postgres-notification
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: notification_user
+      POSTGRES_PASSWORD: notification_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-notification-data:/var/lib/postgresql/data
+    networks:
+      - healthtech-net
+
+  # ── PostgreSQL: Patient Service (Phase 2) ─────────────────────
+  # Added now so the infrastructure is ready when Phase 2 starts.
+  postgres-patient:
+    image: postgres:16-alpine
+    container_name: postgres-patient
+    environment:
+      POSTGRES_DB: patient_db
+      POSTGRES_USER: patient_user
+      POSTGRES_PASSWORD: patient_pass
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-patient-data:/var/lib/postgresql/data
+    networks:
+      - healthtech-net
+
+# ── Volumes ───────────────────────────────────────────────────
+# Named volumes persist data between container restarts.
+# Use `docker-compose down -v` to wipe them (full reset).
+volumes:
+  postgres-appointment-data:
+  postgres-notification-data:
+  postgres-patient-data:
+
+# ── Network ───────────────────────────────────────────────────
+# All services share one internal network.
+# Services reference each other by container name (e.g. kafka:29092).
+# From your host machine, use localhost with the mapped port (e.g. localhost:9092).
+networks:
+  healthtech-net:
+    driver: bridge
