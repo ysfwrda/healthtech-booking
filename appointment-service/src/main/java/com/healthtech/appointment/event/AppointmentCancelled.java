@@ -10,7 +10,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AppointmentCancelledEvent {
+public class AppointmentCancelled {
     private UUID eventId;
     private UUID appointmentId;
     private UUID patientId;
