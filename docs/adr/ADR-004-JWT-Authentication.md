@@ -28,9 +28,8 @@ service that needs to validate without granting signing capability.
 
 ## Decision
 
-Patient Service is the sole issuer of JWT tokens, signed with RS256. It holds
-the private key; the API Gateway and individual services hold the public key for
-validation only.
+Domain services issue JWT tokens for their own user type, signed with RS256. Patient Service issues PATIENT tokens; Doctor Service will issue DOCTOR tokens when doctor authentication is introduced.
+All issuers share a single RS256 key pair: the private key is held by each issuing service for signing, and the public key is distributed to all services for validation.
 
 Token validation follows a hybrid model. The API Gateway validates all inbound
 external requests and rejects unauthenticated traffic before it reaches any
@@ -67,3 +66,5 @@ known future improvement.
   must re-authenticate; this will need to be addressed before any production use
 - The 15-minute inactivity timeout is client-enforced and therefore not a
   server-side security guarantee; a determined client could ignore it
+- Sharing a private key across multiple issuing services (Patient Service, Doctor Service) is a pragmatic tradeoff at this scale.
+With more than two issuing services or a need for independent key rotation per service, a dedicated Identity Service becomes the appropriate evolution. This is documented as a known future improvement.
