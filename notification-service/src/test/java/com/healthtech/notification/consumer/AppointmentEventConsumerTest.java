@@ -30,6 +30,7 @@ class AppointmentEventConsumerTest {
 
     @Test
     void consumeBookedEvent_shouldDelegateToNotificationService() {
+        // Arrange
         AppointmentBooked event = AppointmentBooked.builder()
                 .eventId(UUID.randomUUID())
                 .appointmentId(UUID.randomUUID())
@@ -40,14 +41,17 @@ class AppointmentEventConsumerTest {
                 .bookedAt(LocalDateTime.now())
                 .build();
 
+        // Act
         consumer.consumeBookedEvent(event);
 
+        // Assert
         verify(notificationService).createForBookedAppointment(event);
         verifyNoMoreInteractions(notificationService);
     }
 
     @Test
     void consumeCancelledEvent_shouldDelegateToNotificationService() {
+        // Arrange
         AppointmentCancelled event = AppointmentCancelled.builder()
                 .eventId(UUID.randomUUID())
                 .appointmentId(UUID.randomUUID())
@@ -58,14 +62,17 @@ class AppointmentEventConsumerTest {
                 .cancelledAt(LocalDateTime.now())
                 .build();
 
+        // Act
         consumer.consumeCancelledEvent(event);
 
+        // Assert
         verify(notificationService).createForCancelledAppointment(event);
         verifyNoMoreInteractions(notificationService);
     }
 
     @Test
     void consumeBookedEvent_shouldNotTriggerCancelledFlow() {
+        // Arrange
         AppointmentBooked event = AppointmentBooked.builder()
                 .eventId(UUID.randomUUID())
                 .appointmentId(UUID.randomUUID())
@@ -74,14 +81,17 @@ class AppointmentEventConsumerTest {
                 .dateTime(LocalDateTime.now().plusDays(1))
                 .build();
 
+        // Act
         consumer.consumeBookedEvent(event);
 
+        // Assert
         verify(notificationService).createForBookedAppointment(event);
         verifyNoMoreInteractions(notificationService);
     }
 
     @Test
     void consumeCancelledEvent_shouldNotTriggerBookedFlow() {
+        // Arrange
         AppointmentCancelled event = AppointmentCancelled.builder()
                 .eventId(UUID.randomUUID())
                 .appointmentId(UUID.randomUUID())
@@ -90,8 +100,10 @@ class AppointmentEventConsumerTest {
                 .dateTime(LocalDateTime.now().plusDays(1))
                 .build();
 
+        // Act
         consumer.consumeCancelledEvent(event);
 
+        // Assert
         verify(notificationService).createForCancelledAppointment(event);
         verifyNoMoreInteractions(notificationService);
     }

@@ -33,6 +33,7 @@ class NotificationServiceTest {
 
     @Test
     void createForBookedAppointment_shouldSaveNotificationWithBookedType() {
+        // Arrange
         UUID appointmentId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
         UUID doctorId = UUID.randomUUID();
@@ -47,8 +48,10 @@ class NotificationServiceTest {
                 .bookedAt(LocalDateTime.now())
                 .build();
 
+        // Act
         notificationService.createForBookedAppointment(event);
 
+        // Assert
         ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
         verify(notificationRepository).save(captor.capture());
 
@@ -62,6 +65,7 @@ class NotificationServiceTest {
 
     @Test
     void createForCancelledAppointment_shouldSaveNotificationWithCancelledType() {
+        // Arrange
         UUID appointmentId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
         UUID doctorId = UUID.randomUUID();
@@ -76,8 +80,10 @@ class NotificationServiceTest {
                 .cancelledAt(LocalDateTime.now())
                 .build();
 
+        // Act
         notificationService.createForCancelledAppointment(event);
 
+        // Assert
         ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
         verify(notificationRepository).save(captor.capture());
 
@@ -91,6 +97,7 @@ class NotificationServiceTest {
 
     @Test
     void createForBookedAppointment_shouldNotSetCancelledType() {
+        // Arrange
         AppointmentBooked event = AppointmentBooked.builder()
                 .eventId(UUID.randomUUID())
                 .appointmentId(UUID.randomUUID())
@@ -99,8 +106,10 @@ class NotificationServiceTest {
                 .dateTime(LocalDateTime.now().plusDays(3))
                 .build();
 
+        // Act
         notificationService.createForBookedAppointment(event);
 
+        // Assert
         ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
         verify(notificationRepository).save(captor.capture());
         assertThat(captor.getValue().getType()).isNotEqualTo(NotificationType.APPOINTMENT_CANCELLED);
@@ -108,6 +117,7 @@ class NotificationServiceTest {
 
     @Test
     void createForCancelledAppointment_shouldNotSetBookedType() {
+        // Arrange
         AppointmentCancelled event = AppointmentCancelled.builder()
                 .eventId(UUID.randomUUID())
                 .appointmentId(UUID.randomUUID())
@@ -116,8 +126,10 @@ class NotificationServiceTest {
                 .dateTime(LocalDateTime.now().plusDays(3))
                 .build();
 
+        // Act
         notificationService.createForCancelledAppointment(event);
 
+        // Assert
         ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
         verify(notificationRepository).save(captor.capture());
         assertThat(captor.getValue().getType()).isNotEqualTo(NotificationType.APPOINTMENT_BOOKED);

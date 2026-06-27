@@ -9,8 +9,8 @@ import com.healthtech.appointment.service.AppointmentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
@@ -39,6 +39,7 @@ class AppointmentControllerTest {
 
     @Test
     void bookAppointment_shouldReturn201WithResponseBody() throws Exception {
+        // Arrange
         UUID appointmentId = UUID.randomUUID();
         AppointmentRequest request = AppointmentRequest.builder()
                 .patientId(UUID.randomUUID())
@@ -57,6 +58,7 @@ class AppointmentControllerTest {
 
         when(appointmentService.bookAppointment(any(AppointmentRequest.class))).thenReturn(response);
 
+        // Act and Assert
         mockMvc.perform(post("/api/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -71,11 +73,10 @@ class AppointmentControllerTest {
 
     @Test
     void bookAppointment_shouldPassRequestBodyToService() throws Exception {
-        UUID patientId = UUID.randomUUID();
-        UUID doctorId = UUID.randomUUID();
+        // Arrange
         AppointmentRequest request = AppointmentRequest.builder()
-                .patientId(patientId)
-                .doctorId(doctorId)
+                .patientId(UUID.randomUUID())
+                .doctorId(UUID.randomUUID())
                 .dateTime(LocalDateTime.of(2026, 8, 1, 10, 0))
                 .duration(45)
                 .type(AppointmentType.FOLLOW_UP)
@@ -87,6 +88,7 @@ class AppointmentControllerTest {
                 .status(AppointmentStatus.PENDING)
                 .build());
 
+        // Act and Assert
         mockMvc.perform(post("/api/appointments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -97,6 +99,7 @@ class AppointmentControllerTest {
 
     @Test
     void cancelAppointment_shouldReturn200WithCancelledStatus() throws Exception {
+        // Arrange
         UUID appointmentId = UUID.randomUUID();
         AppointmentResponse response = AppointmentResponse.builder()
                 .id(appointmentId)
@@ -106,6 +109,7 @@ class AppointmentControllerTest {
 
         when(appointmentService.cancelAppointment(appointmentId)).thenReturn(response);
 
+        // Act and Assert
         mockMvc.perform(put("/api/appointments/{id}/cancel", appointmentId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(appointmentId.toString()))
@@ -114,13 +118,12 @@ class AppointmentControllerTest {
 
     @Test
     void cancelAppointment_whenNotFound_shouldPropagateExceptionFromService() {
-        // Spring Boot 3.x / Spring Framework 6 propagates unhandled controller exceptions
-        // rather than silently converting them to 500. This test asserts the exception
-        // is not swallowed by the controller.
+        // Arrange
         UUID appointmentId = UUID.randomUUID();
         when(appointmentService.cancelAppointment(appointmentId))
                 .thenThrow(new RuntimeException("Appointment not found: " + appointmentId));
 
+        // Act and Assert
         assertThatThrownBy(() ->
             mockMvc.perform(put("/api/appointments/{id}/cancel", appointmentId))
         ).hasMessageContaining("Appointment not found: " + appointmentId);
