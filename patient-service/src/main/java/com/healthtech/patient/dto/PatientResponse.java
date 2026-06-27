@@ -1,10 +1,7 @@
 package com.healthtech.patient.dto;
 
 import com.healthtech.patient.domain.InsuranceType;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -14,6 +11,7 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class PatientResponse {
     private UUID id;
     private String firstName;
