@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: patient-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5434/patient_db
+    username: patient_user
+    password: patient_pass
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+app:
+  jwt:
+    public-key: classpath:keys/public.pem
+    private-key: classpath:keys/private.pem
+    expiration: 3600
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, beans, mappings
+
+server:
+  port: 8083
