@@ -11,6 +11,7 @@ import com.healthtech.appointment.repository.AppointmentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -116,5 +117,67 @@ class AppointmentServiceTest {
 
         verify(appointmentRepository, never()).save(any());
         verify(cancelledEventKafkaTemplate, never()).send(any(), any());
+    }
+
+    @Test
+    void bookAppointment_shouldPublishEventWithCorrectAppointmentFields() {
+        // Arrange
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        Appointment appointment = Appointment.builder()
+                .id(UUID.randomUUID())
+                .patientId(patientId)
+                .doctorId(doctorId)
+                .duration(30)
+                .type(INITIAL_CONSULTATION)
+                .build();
+
+        AppointmentRequest request = AppointmentRequest.builder()
+                .patientId(patientId)
+                .doctorId(doctorId)
+                .duration(30)
+                .type(INITIAL_CONSULTATION)
+                .build();
+
+        when(appointmentMapper.toEntity(request)).thenReturn(appointment);
+        when(appointmentRepository.save(any(Appointment.class))).thenReturn(appointment);
+        when(appointmentMapper.toResponse(appointment)).thenReturn(AppointmentResponse.builder().build());
+
+        // Act
+        appointmentService.bookAppointment(request);
+
+        // Assert: event carries the saved appointment's IDs
+        ArgumentCaptor<AppointmentBooked> eventCaptor = ArgumentCaptor.forClass(AppointmentBooked.class);
+        verify(bookedEventKafkaTemplate).send(eq("appointment.booked"), eventCaptor.capture());
+        AppointmentBooked event = eventCaptor.getValue();
+        assertThat(event.getAppointmentId()).isEqualTo(appointment.getId());
+        assertThat(event.getPatientId()).isEqualTo(patientId);
+        assertThat(event.getDoctorId()).isEqualTo(doctorId);
+        assertThat(event.getDuration()).isEqualTo(30);
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getBookedAt()).isNotNull();
+    }
+
+    @Test
+    void cancelAppointment_alreadyCancelledAppointment_shouldOverwriteStatusAndPublishEvent() {
+        // Documents current behavior: no guard against double-cancellation.
+        // Arrange
+        Appointment appointment = Appointment.builder()
+                .id(UUID.randomUUID())
+                .type(INITIAL_CONSULTATION)
+                .status(AppointmentStatus.CANCELLED)
+                .build();
+
+        when(appointmentRepository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.save(appointment)).thenReturn(appointment);
+        when(appointmentMapper.toResponse(appointment)).thenReturn(
+                AppointmentResponse.builder().status(AppointmentStatus.CANCELLED).build());
+
+        // Act
+        AppointmentResponse result = appointmentService.cancelAppointment(appointment.getId());
+
+        // Assert
+        assertThat(result.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+        verify(cancelledEventKafkaTemplate, times(1)).send(eq("appointment.cancelled"), any(AppointmentCancelled.class));
     }
 }
