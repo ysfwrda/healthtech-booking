@@ -37,7 +37,7 @@ class AuthServiceTest {
     @Mock private PatientMapper patientMapper;
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private PasswordEncoder passwordEncoder;
-    @Mock private KafkaTemplate<String, PatientRegistered> kafkaTemplate;
+    @Mock private KafkaTemplate<String, PatientRegistered> patientRegisteredKafkaTemplate;
 
     @InjectMocks
     private AuthService authService;
@@ -92,6 +92,7 @@ class AuthServiceTest {
         verify(passwordEncoder).encode("secret123");
         verify(patientRepository).save(patient);
         verify(jwtTokenProvider).generateToken(patientId);
+        verify(patientRegisteredKafkaTemplate, times(1)).send(eq("patient.registered"),any(PatientRegistered.class));
     }
 
     @Test

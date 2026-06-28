@@ -2,6 +2,7 @@ package com.healthtech.patient.event;
 
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -10,6 +11,11 @@ import java.util.UUID;
 @NoArgsConstructor
 @Builder
 public class PatientRegistered {
-    // TODO: Pending ADR-005
-    private UUID id;
+    private UUID eventId;
+    private UUID patientId;
+    private String firstName;
+    private String lastName;
+    private String email;
+    private LocalDateTime registeredAt;
+
 }

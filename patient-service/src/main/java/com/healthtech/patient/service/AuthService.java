@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -32,9 +33,14 @@ public class AuthService {
         patient.setPasswordHash(passwordEncoder.encode(registerRequest.getPassword()));
         patientRepository.save(patient);
         String token = jwtTokenProvider.generateToken(patient.getId());
-        // TODO: pending ADR-005
-        // PatientRegistered event = PatientRegistered.builder().build();
-       // kafkaTemplate.send("patient.register", event);
+        PatientRegistered event = PatientRegistered.builder()
+                .eventId(UUID.randomUUID())
+                .patientId(patient.getId())
+                .firstName(patient.getFirstName())
+                .lastName(patient.getLastName())
+                .email(patient.getEmail())
+                .registeredAt(patient.getRegisteredAt()).build();
+        kafkaTemplate.send("patient.registered", event);
 
         return AuthResponse.builder()
                 .username(patient.getUsername())
