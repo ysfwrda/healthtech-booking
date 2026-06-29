@@ -14,28 +14,38 @@ This project intentionally separates concerns across phases:
 
 ## Tech Stack
 
-Java 21 · Spring Boot 3 · Apache Kafka · PostgreSQL · Docker · MapStruct · Gemini API (planned)
+Java 21 · Spring Boot 3 · Apache Kafka · PostgreSQL · Docker · MapStruct · JWT (RS256)
 
 ---
 
-## Architecture Overview (Phase 1)
-
-Phase 1 focuses intentionally on **architecture mechanics rather than business complexity**.
+## Architecture Overview (Phase 2)
 
 ```
-┌─────────────┐     ┌───────────────────┐     ┌──────────────────────┐
-│   Client    │────▶│    API Gateway     │────▶│ Appointment Service  │
-└─────────────┘     └───────────────────┘     └──────────┬───────────┘
-                                                         │
-                                     Appointment Events  │
-                           (booked / cancelled)
-                                                    ┌────▼────────────────┐
-                                                    │    Apache Kafka     │
-                                                    └────┬────────────────┘
-                                                         │
-                                              ┌──────────▼───────────┐
-                                              │ Notification Service  │
-                                              └──────────────────────┘
+┌─────────────┐     ┌───────────────────┐
+│   Client    │────▶│    API Gateway     │
+└─────────────┘     └─────────┬─────────┘
+                              │
+          ┌───────────────────┼───────────────────┐
+          │                   │                   │
+          ▼                   ▼                   ▼
+┌─────────────────┐  ┌────────────────┐  ┌────────────────┐
+│ Patient Service │  │   Appointment  │  │ Doctor Service │
+│  (auth + JWT)   │  │    Service     │  │  (profiles +   │
+│                 │  │                │  │   filtering)   │
+└────────┬────────┘  └───────┬────────┘  └───────┬────────┘
+         │                   │                   │
+         │ patient.registered│ appointment.booked│ doctor.registered
+         │                   │ appointment.      │
+         │                   │ cancelled         │
+         └───────────────────┼───────────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  Apache Kafka   │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼──────────┐
+                    │ Notification Svc  │
+                    └───────────────────┘
 ```
 
 ---
@@ -47,31 +57,51 @@ Phase 1 focuses intentionally on **architecture mechanics rather than business c
 | `api-gateway`          | 8080 | Single entry point for all client requests. Centralizes routing, and in future phases: auth filtering and rate limiting |
 | `appointment-service`  | 8081 | Core booking and cancellation logic, publishes domain events to Kafka |
 | `notification-service` | 8082 | Consumes appointment events from Kafka and persists notification records independently |
+| `patient-service`      | 8083 | Patient registration, login, JWT issuance (RS256), and profile management |
+| `doctor-service`       | 8084 | Doctor profile creation, specialty filtering, language filtering, and registration event publishing |
 
 ---
 
 ## Kafka Event Model
 
-| Event                   | Producer            | Consumer             |
+| Event                   | Producer            | Consumer(s)          |
 | ----------------------- | ------------------- | -------------------- |
 | `appointment.booked`    | appointment-service | notification-service |
 | `appointment.cancelled` | appointment-service | notification-service |
+| `patient.registered`    | patient-service     | — (future consumers) |
+| `doctor.registered`     | doctor-service      | — (future consumers) |
 
 Kafka was chosen over direct REST calls to achieve temporal decoupling — the Notification Service does not need to be available when an appointment is booked. Events are retained in the log and consumed when the service is ready.
 
 ---
 
-## Key Architectural Focus (Phase 1)
+## Authentication
 
-Phase 1 deliberately isolates **distributed system fundamentals**:
+Patient authentication uses **JWT with RS256** (asymmetric signing):
 
+* The private key signs tokens at registration and login
+* The public key will be shared with other services (e.g. api-gateway) for token verification
+* Key pair is loaded from PEM files at `keys/private.pem` and `keys/public.pem` in the patient-service classpath
+* Token expiry is configured via `app.jwt.expiration` (seconds)
+
+---
+
+## Key Architectural Focus
+
+### Phase 1 — Distributed System Fundamentals
 * Service boundaries and decomposition
 * Asynchronous communication via Kafka
 * Event-driven architecture patterns
 * Decoupling between services
 * Database-per-service principle
 
-> Business logic is intentionally minimal in Phase 1 to keep the focus on architectural mechanics.
+### Phase 2 — Domain Modeling
+* Patient identity and authentication (JWT RS256)
+* Doctor profiles with specialties, languages, and opening hours
+* Domain events for cross-service awareness (`patient.registered`, `doctor.registered`)
+* Specialty seeding and filtering by specialty/language
+
+> Business rules are intentionally lean to keep focus on architectural mechanics.
 
 ---
 
@@ -87,47 +117,43 @@ Each ADR includes context, alternatives considered, trade-offs, and decision rat
 
 ---
 
-## Failure Scenarios (Phase 1 Behavior)
+## Failure Scenarios
 
 | Scenario | Behavior |
 | -------- | -------- |
 | Notification Service down | Kafka retains the event. Consumer resumes from last offset on restart — no data loss |
-| Duplicate events | Not handled in Phase 1. Idempotency planned for Phase 3 |
-| Kafka downtime | Appointment booking fails. No silent data loss — failure is explicit |
+| Duplicate events | Not handled yet. Idempotency planned for Phase 3 |
+| Kafka downtime | Appointment booking and patient/doctor registration fail. No silent data loss — failure is explicit |
 | Appointment not found on cancel | `RuntimeException` thrown with message. No partial state change |
+| Duplicate patient username | `UsernameAlreadyExistsException` thrown at registration |
+| Duplicate doctor email | `EmailAlreadyExistsException` thrown at registration |
 
 ---
 
-## Current Limitations (Intentional - Phase 1 Scope)
-
-The following are **not part of Phase 1 by design**:
+## Current Limitations (Intentional — Phase 3 Scope)
 
 ### Reliability & Observability (Phase 3)
-
 * Centralized logging strategy
 * Distributed tracing
 * Metrics (Prometheus/Grafana)
 * Monitoring dashboards
 
-### Robust Distributed System Behavior (Phase 2–3)
-
+### Robust Distributed System Behavior (Phase 3)
 * Idempotency handling
 * Retry policies
 * Failure recovery flows
 * Dead-letter queues
 * Event versioning
 
-### Domain Complexity (Phase 2)
-
-* Patient and doctor management
-* Authentication & authorization (JWT)
-* Business rules and constraints
+### Domain Complexity (Phase 3)
+* Appointment service does not yet validate patient/doctor existence
+* API Gateway does not yet enforce JWT authentication
 
 ---
 
 ## Project Phases
 
-### Phase 1 (Current) – Architecture Sandbox
+### Phase 1 — Architecture Sandbox
 
 ✔ Service decomposition  
 ✔ Kafka-based event communication  
@@ -135,17 +161,18 @@ The following are **not part of Phase 1 by design**:
 ✔ API Gateway  
 ✔ Unit tests (AppointmentService)
 
-### Phase 2 – Domain Modeling
+### Phase 2 — Domain Modeling
 
-🔄 Patient Service  
-🔄 Doctor Service  
-🔄 JWT authentication  
-🔄 Business rules and constraints
+✔ Patient Service (registration, login, JWT RS256)  
+✔ Doctor Service (profiles, specialties, language filtering)  
+✔ Domain events: `patient.registered`, `doctor.registered`  
+✔ Unit tests (DoctorService, PatientService)
 
-### Phase 3 – Production & Intelligence Layer
+### Phase 3 — Production & Intelligence Layer
 
 🔜 Observability (logs, metrics, tracing)  
 🔜 Reliability patterns (idempotency, retries, DLQ)  
+🔜 JWT validation in API Gateway  
 🔜 AI-assisted triage (Gemini API / Ollama)  
 🔜 Dockerfiles for all services
 
@@ -167,19 +194,58 @@ cd healthtech-booking
 docker-compose up -d
 ```
 
-This starts Kafka, Zookeeper, PostgreSQL (3 instances), and Kafka UI at `http://localhost:8090`.
+This starts Kafka, Zookeeper, 4 PostgreSQL instances (one per service), and Kafka UI at `http://localhost:8090`.
 
-### Step 2 — Start Services
+### Step 2 — Generate JWT Key Pair
+
+The patient-service requires an RSA key pair. Generate and place the PEM files in `patient-service/src/main/resources/keys/`:
+
+```bash
+openssl genrsa -out private.pem 2048
+openssl rsa -in private.pem -pubout -out public.pem
+```
+
+### Step 3 — Start Services
 
 Services are started separately via IntelliJ or Maven during development.
 Dockerfiles for all services are planned for Phase 3.
 
 Start in this order:
-1. `appointment-service` — port 8081
-2. `notification-service` — port 8082
-3. `api-gateway` — port 8080
+1. `patient-service` — port 8083
+2. `doctor-service` — port 8084
+3. `appointment-service` — port 8081
+4. `notification-service` — port 8082
+5. `api-gateway` — port 8080
 
-### Step 3 — Test the Flow
+### Step 4 — Test the Flow
+
+Register a patient:
+
+```bash
+curl -X POST http://localhost:8083/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "john.doe",
+    "password": "secret",
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john@example.com"
+  }'
+```
+
+Create a doctor:
+
+```bash
+curl -X POST http://localhost:8084/api/doctors \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "Jane",
+    "lastName": "Smith",
+    "email": "jane@clinic.com",
+    "specialtyIds": ["<specialty-uuid>"],
+    "languages": ["ENGLISH"]
+  }'
+```
 
 Book an appointment through the API Gateway:
 
@@ -202,10 +268,10 @@ Cancel an appointment:
 curl -X PUT http://localhost:8080/api/appointments/{id}/cancel
 ```
 
-### Step 4 — Verify the Event Flow
+### Step 5 — Verify the Event Flow
 
-* Kafka UI: `http://localhost:8090` — verify `appointment.booked` topic has a message
-* Notification Service logs — verify event was consumed
+* Kafka UI: `http://localhost:8090` — verify `appointment.booked`, `patient.registered`, and `doctor.registered` topics have messages
+* Notification Service logs — verify `appointment.booked` event was consumed
 * pgAdmin — connect to `notification_db` on port `5433` and verify notification record was saved
 
 ---
@@ -217,12 +283,27 @@ healthtech-booking/
 ├── api-gateway/
 ├── appointment-service/
 ├── notification-service/
+├── patient-service/
+├── doctor-service/
 ├── infrastructure/
 ├── docs/
 │   ├── adr/
 │   └── architecture/
 └── docker-compose.yml
 ```
+
+---
+
+## Infrastructure Ports
+
+| Resource            | Host Port | Notes                      |
+| ------------------- | --------- | -------------------------- |
+| Kafka               | 9092      | PLAINTEXT (host access)    |
+| Kafka UI            | 8090      | Browse topics and messages |
+| PostgreSQL (appt)   | 5432      | `appointment_db`           |
+| PostgreSQL (notif)  | 5433      | `notification_db`          |
+| PostgreSQL (patient)| 5434      | `patient_db`               |
+| PostgreSQL (doctor) | 5435      | `doctor_db`                |
 
 ---
 
