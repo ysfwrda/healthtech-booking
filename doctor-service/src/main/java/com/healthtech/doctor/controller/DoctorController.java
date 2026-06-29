@@ -21,7 +21,7 @@ public class DoctorController {
 
     private final DoctorService doctorService;
 
-    // TODO: doctor onboarding is open for portfolio scope; production requires admin + credential verification (LANR/eID), see README
+    // doctor onboarding is open for portfolio scope; production requires admin + credential verification (LANR/eID), see README
     @PostMapping
     public ResponseEntity<DoctorResponse> createDoctor(@Valid @RequestBody CreateDoctorRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(doctorService.createDoctor(request));
