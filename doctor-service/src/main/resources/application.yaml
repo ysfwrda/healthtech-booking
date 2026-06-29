@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: doctor-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5435/doctor_db
+    username: doctor_user
+    password: doctor_pass
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, beans, mappings
+
+server:
+  port: 8084

@@ -122,6 +122,21 @@ services:
     networks:
       - healthtech-net
 
+  # ── PostgreSQL: Doctor Service (Phase 2) ──────────────────────
+  postgres-doctor:
+    image: postgres:16-alpine
+    container_name: postgres-doctor
+    environment:
+      POSTGRES_DB: doctor_db
+      POSTGRES_USER: doctor_user
+      POSTGRES_PASSWORD: doctor_pass
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-doctor-data:/var/lib/postgresql/data
+    networks:
+      - healthtech-net
+
 # ── Volumes ───────────────────────────────────────────────────
 # Named volumes persist data between container restarts.
 # Use `docker-compose down -v` to wipe them (full reset).
@@ -129,6 +144,7 @@ volumes:
   postgres-appointment-data:
   postgres-notification-data:
   postgres-patient-data:
+  postgres-doctor-data:
 
 # ── Network ───────────────────────────────────────────────────
 # All services share one internal network.
