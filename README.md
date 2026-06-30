@@ -112,6 +112,8 @@ Key decisions documented in [`docs/adr/`](docs/adr/):
 * [ADR-001](docs/adr/ADR-001-microservices-vs-modular-monolith.md) — Microservices vs Modular Monolith
 * [ADR-002](docs/adr/ADR-002-kafka-as-event-broker.md) — Kafka as Event Broker
 * [ADR-003](docs/adr/ADR-003-db-per-service.md) — Database per Service Pattern
+* [ADR-004](docs/adr/ADR-004-JWT-Authentication.md) — JWT Authentication
+* [ARD-005](docs/adr/ADR-005-cross-service-validation.md) - Cross-service validation
 
 Each ADR includes context, alternatives considered, trade-offs, and decision rationale.
 
@@ -225,24 +227,45 @@ Register a patient:
 curl -X POST http://localhost:8083/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "john.doe",
-    "password": "secret",
     "firstName": "John",
     "lastName": "Doe",
-    "email": "john@example.com"
+    "username": "john.doe",
+    "password": "secret",
+    "dateOfBirth": "2005-01-01",
+    "email": "john.doe@gmail.com",
+    "insuranceType": "PRIVATE"
   }'
 ```
 
 Create a doctor:
 
 ```bash
+# 1. Get available specialties
+curl -X GET http://localhost:8084/api/specialties
+
+# 2. Create a doctor (replace <specialty-uuid> with an actual id from step 1)
 curl -X POST http://localhost:8084/api/doctors \
   -H "Content-Type: application/json" \
   -d '{
     "firstName": "Jane",
     "lastName": "Smith",
     "email": "jane@clinic.com",
-    "specialtyIds": ["<specialty-uuid>"],
+    "phoneNumber": "+49 30 1234567",
+    "address": {
+      "street": "Friedrichstrasse 100",
+	  "houseNumber": "12",
+      "postalCode": "10117",
+	  "city": "Berlin",
+      "country": "Germany"
+    },
+    "specialtyIds": ["<Specialty Ids>"],
+    "openingHours": [
+      {
+        "dayOfWeek": "MONDAY",
+        "startTime": "09:00",
+        "endTime": "17:00"
+      }
+    ],
     "languages": ["ENGLISH"]
   }'
 ```
@@ -253,8 +276,8 @@ Book an appointment through the API Gateway:
 curl -X POST http://localhost:8080/api/appointments \
   -H "Content-Type: application/json" \
   -d '{
-    "patientId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "doctorId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "patientId": "<id of patient created>",
+    "doctorId": "<id of doctor created>",
     "dateTime": "2025-09-01T10:00:00",
     "duration": 30,
     "type": "INITIAL_CONSULTATION",
