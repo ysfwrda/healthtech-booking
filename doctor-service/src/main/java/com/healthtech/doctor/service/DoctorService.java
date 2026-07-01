@@ -2,11 +2,13 @@ package com.healthtech.doctor.service;
 
 import com.healthtech.doctor.domain.Doctor;
 import com.healthtech.doctor.domain.Language;
+import com.healthtech.doctor.domain.OpeningHours;
 import com.healthtech.doctor.domain.Specialty;
 import com.healthtech.doctor.dto.CreateDoctorRequest;
 import com.healthtech.doctor.dto.DoctorResponse;
 import com.healthtech.doctor.dto.DoctorSummaryResponse;
 import com.healthtech.doctor.event.DoctorRegistered;
+import com.healthtech.doctor.event.OpeningHoursData;
 import com.healthtech.doctor.exception.DoctorNotFoundException;
 import com.healthtech.doctor.exception.EmailAlreadyExistsException;
 import com.healthtech.doctor.exception.SpecialtyNotFoundException;
@@ -49,11 +51,17 @@ public class DoctorService {
 
         Doctor savedDoctor = doctorRepository.saveAndFlush(doctor);
 
+        Set<OpeningHoursData> openingHours = savedDoctor.getOpeningHours() == null ? Set.of() :
+                savedDoctor.getOpeningHours().stream()
+                        .map(this::toOpeningHoursData)
+                        .collect(Collectors.toSet());
+
         DoctorRegistered event = DoctorRegistered.builder()
                 .eventId(UUID.randomUUID())
                 .doctorId(savedDoctor.getId())
                 .firstName(savedDoctor.getFirstName())
                 .lastName(savedDoctor.getLastName())
+                .openingHours(openingHours)
                 .registeredAt(savedDoctor.getRegisteredAt())
                 .build();
         kafkaTemplate.send("doctor.registered", event);
@@ -75,5 +83,13 @@ public class DoctorService {
         return doctorRepository.findAll(spec).stream()
                 .map(doctorMapper::toDoctorSummaryResponse)
                 .toList();
+    }
+
+    private OpeningHoursData toOpeningHoursData(OpeningHours openingHours) {
+        return OpeningHoursData.builder()
+                .dayOfWeek(openingHours.getDayOfWeek())
+                .startTime(openingHours.getStartTime())
+                .endTime(openingHours.getEndTime())
+                .build();
     }
 }
