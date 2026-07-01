@@ -1,4 +1,4 @@
-package com.healthtech.doctor.event;
+package com.healthtech.appointment.event;
 
 import lombok.*;
 
@@ -8,14 +8,14 @@ import java.util.UUID;
 
 @Getter
 @Setter
-@AllArgsConstructor
 @NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class DoctorRegistered {
     private UUID eventId;
     private UUID doctorId;
     private String firstName;
     private String lastName;
-    private Set<OpeningHoursData> openingHours;
     private LocalDateTime registeredAt;
+    private Set<OpeningHoursPayload> openingHours;
 }

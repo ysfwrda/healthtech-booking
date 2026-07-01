@@ -14,7 +14,9 @@ public class AppointmentBooked {
     private UUID eventId;
     private UUID appointmentId;
     private UUID patientId;
+    private String patientName;
     private UUID doctorId;
+    private String doctorName;
     private Integer duration;
     private LocalDateTime dateTime;
     private LocalDateTime bookedAt;
