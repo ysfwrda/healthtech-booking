@@ -45,7 +45,6 @@ class AppointmentControllerTest {
                 .patientId(UUID.randomUUID())
                 .doctorId(UUID.randomUUID())
                 .dateTime(LocalDateTime.now().plusDays(1))
-                .duration(30)
                 .type(AppointmentType.INITIAL_CONSULTATION)
                 .build();
 
@@ -78,7 +77,6 @@ class AppointmentControllerTest {
                 .patientId(UUID.randomUUID())
                 .doctorId(UUID.randomUUID())
                 .dateTime(LocalDateTime.of(2026, 8, 1, 10, 0))
-                .duration(45)
                 .type(AppointmentType.FOLLOW_UP)
                 .notes("Follow-up visit")
                 .build();

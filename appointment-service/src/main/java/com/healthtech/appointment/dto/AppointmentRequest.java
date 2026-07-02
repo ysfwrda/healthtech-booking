@@ -1,8 +1,8 @@
 package com.healthtech.appointment.dto;
 
 import com.healthtech.appointment.domain.AppointmentType;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -14,15 +14,19 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class AppointmentRequest {
+    // Provisional: will be derived from the JWT subject in the gateway auth work.
+    // Do not treat body-supplied patientId as trusted long-term.
     private UUID patientId;
 
+    @NotNull
     private UUID doctorId;
 
+    @NotNull
     private LocalDateTime dateTime;
 
-    private Integer duration;
-
+    @NotNull
     private AppointmentType type;
 
+    @Size(max = 500)
     private String notes;
 }

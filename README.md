@@ -279,7 +279,6 @@ curl -X POST http://localhost:8080/api/appointments \
     "patientId": "<id of patient created>",
     "doctorId": "<id of doctor created>",
     "dateTime": "2025-09-01T10:00:00",
-    "duration": 30,
     "type": "INITIAL_CONSULTATION",
     "notes": "First visit, general checkup"
   }'
