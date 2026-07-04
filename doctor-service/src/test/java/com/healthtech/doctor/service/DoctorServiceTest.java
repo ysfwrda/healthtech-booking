@@ -21,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.kafka.core.KafkaTemplate;
 
@@ -152,13 +153,13 @@ class DoctorServiceTest {
         Specialty specialty = Specialty.builder().id(specialtyId).name("Cardiology").build();
         when(doctorMapper.toEntity(createRequest)).thenReturn(doctor);
         when(specialtyRepository.findById(specialtyId)).thenReturn(Optional.of(specialty));
-        when(doctorRepository.findByEmail(createRequest.getEmail())).thenReturn(Optional.of(doctor));
+        when(doctorRepository.saveAndFlush(any(Doctor.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
 
         // Act & Assert
         assertThatThrownBy(() -> doctorService.createDoctor(createRequest))
                 .isInstanceOf(EmailAlreadyExistsException.class)
                 .hasMessageContaining("anna.mueller@example.com");
-        verify(doctorRepository, never()).saveAndFlush(any());
         verify(kafkaTemplate, never()).send(anyString(), any());
     }
 

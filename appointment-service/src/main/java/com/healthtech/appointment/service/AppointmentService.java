@@ -101,7 +101,7 @@ public class AppointmentService {
 
     public AppointmentResponse cancelAppointment(UUID appointmentId) {
         Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new RuntimeException("Appointment not found: " + appointmentId));
+                .orElseThrow(() -> new AppointmentNotFoundException("Appointment not found: " + appointmentId));
         appointment.setStatus(AppointmentStatus.CANCELLED);
         Appointment saved = appointmentRepository.save(appointment);
         AppointmentCancelled event = AppointmentCancelled.builder()
