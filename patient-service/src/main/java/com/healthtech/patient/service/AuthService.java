@@ -5,15 +5,18 @@ import com.healthtech.patient.dto.AuthResponse;
 import com.healthtech.patient.dto.LoginRequest;
 import com.healthtech.patient.dto.RegisterRequest;
 import com.healthtech.patient.event.PatientRegistered;
+import com.healthtech.patient.exception.EmailAlreadyExistsException;
 import com.healthtech.patient.exception.InvalidCredentialsException;
 import com.healthtech.patient.exception.UsernameAlreadyExistsException;
 import com.healthtech.patient.mapper.PatientMapper;
 import com.healthtech.patient.repository.PatientRepository;
 import com.healthtech.patient.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
 import java.util.UUID;
 
 @Service
@@ -26,12 +29,20 @@ public class AuthService {
     private final KafkaTemplate<String, PatientRegistered> kafkaTemplate;
 
     public AuthResponse register(RegisterRequest registerRequest) {
-       if(patientRepository.findByUsername(registerRequest.getUsername()).isPresent()){
-           throw new UsernameAlreadyExistsException("Username already exists");
-       }
         Patient patient = patientMapper.toEntity(registerRequest);
         patient.setPasswordHash(passwordEncoder.encode(registerRequest.getPassword()));
-        patientRepository.save(patient);
+        try {
+            patientRepository.saveAndFlush(patient);
+        } catch (DataIntegrityViolationException ex) {
+            if (patientRepository.existsByUsername(patient.getUsername())) {
+                throw new UsernameAlreadyExistsException(patient.getUsername());
+            }
+            if (patientRepository.existsByEmail(patient.getEmail())) {
+                throw new EmailAlreadyExistsException(patient.getEmail());
+            }
+            throw ex;
+        }
+
         String token = jwtTokenProvider.generateToken(patient.getId());
         PatientRegistered event = PatientRegistered.builder()
                 .eventId(UUID.randomUUID())

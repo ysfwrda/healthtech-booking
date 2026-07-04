@@ -17,6 +17,7 @@ import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.DoctorSpecifications;
 import com.healthtech.doctor.repository.SpecialtyRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -43,14 +44,15 @@ public class DoctorService {
                 .map(id -> specialtyRepository.findById(id)
                         .orElseThrow(() -> new SpecialtyNotFoundException(id)))
                 .collect(Collectors.toSet());
-        doctor.setSpecialties(specialties);
 
-        if (doctorRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new EmailAlreadyExistsException("Doctor with this email already exists: " + request.getEmail());
+        Doctor savedDoctor;
+        try {
+            savedDoctor = doctorRepository.saveAndFlush(doctor);
+        } catch (DataIntegrityViolationException ex) {
+            throw new EmailAlreadyExistsException(
+                    "Doctor with this email already exists: " + request.getEmail());
         }
-
-        Doctor savedDoctor = doctorRepository.saveAndFlush(doctor);
-
+        doctor.setSpecialties(specialties);
         Set<OpeningHoursData> openingHours = savedDoctor.getOpeningHours() == null ? Set.of() :
                 savedDoctor.getOpeningHours().stream()
                         .map(this::toOpeningHoursData)

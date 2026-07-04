@@ -13,6 +13,5 @@ import java.util.UUID;
 public interface DoctorRepository extends JpaRepository<Doctor, UUID>, JpaSpecificationExecutor<Doctor> {
     @EntityGraph(attributePaths = {"specialties", "openingHours", "languages"})
     Optional<Doctor> findWithDetailsById(UUID id);
-
     Optional<Doctor> findByEmail(String email);
 }
