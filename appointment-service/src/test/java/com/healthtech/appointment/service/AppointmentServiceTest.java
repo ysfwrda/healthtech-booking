@@ -7,6 +7,7 @@ import com.healthtech.appointment.dto.AppointmentResponse;
 import com.healthtech.appointment.dto.AvailableSlotsResponse;
 import com.healthtech.appointment.event.AppointmentBooked;
 import com.healthtech.appointment.event.AppointmentCancelled;
+import com.healthtech.appointment.exception.AppointmentNotFoundException;
 import com.healthtech.appointment.exception.UnknownDoctorException;
 import com.healthtech.appointment.mapper.AppointmentMapper;
 import com.healthtech.appointment.readmodel.OpeningHours;
@@ -154,14 +155,14 @@ class AppointmentServiceTest {
     }
 
     @Test
-    void cancelAppointment_appointmentNotFound_shouldThrowRuntimeExceptionWithMessage() {
+    void cancelAppointment_appointmentNotFound_shouldThrowAppointmentNotFoundException() {
         // Arrange
         UUID appointmentId = UUID.randomUUID();
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.empty());
 
         // Act and Assert
         assertThatThrownBy(() -> appointmentService.cancelAppointment(appointmentId))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(AppointmentNotFoundException.class)
                 .hasMessage("Appointment not found: " + appointmentId);
 
         verify(appointmentRepository, never()).save(any());

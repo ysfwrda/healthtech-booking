@@ -5,6 +5,7 @@ import com.healthtech.appointment.domain.AppointmentStatus;
 import com.healthtech.appointment.domain.AppointmentType;
 import com.healthtech.appointment.dto.AppointmentRequest;
 import com.healthtech.appointment.dto.AppointmentResponse;
+import com.healthtech.appointment.exception.AppointmentNotFoundException;
 import com.healthtech.appointment.service.AppointmentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,7 +17,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -115,15 +115,16 @@ class AppointmentControllerTest {
     }
 
     @Test
-    void cancelAppointment_whenNotFound_shouldPropagateExceptionFromService() {
+    void cancelAppointment_whenNotFound_shouldReturn404ProblemDetail() throws Exception {
         // Arrange
         UUID appointmentId = UUID.randomUUID();
         when(appointmentService.cancelAppointment(appointmentId))
-                .thenThrow(new RuntimeException("Appointment not found: " + appointmentId));
+                .thenThrow(new AppointmentNotFoundException("Appointment not found: " + appointmentId));
 
         // Act and Assert
-        assertThatThrownBy(() ->
-            mockMvc.perform(put("/api/appointments/{id}/cancel", appointmentId))
-        ).hasMessageContaining("Appointment not found: " + appointmentId);
+        mockMvc.perform(put("/api/appointments/{id}/cancel", appointmentId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Appointment Not Found"))
+                .andExpect(jsonPath("$.detail").value("Appointment not found: " + appointmentId));
     }
 }

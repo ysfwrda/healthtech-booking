@@ -71,4 +71,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problemDetail.setTitle("Slot Already Booked");
         return problemDetail;
     }
+
+    @ExceptionHandler(AppointmentNotFoundException.class)
+    public ProblemDetail handleAppointmentNotFoundException(AppointmentNotFoundException ex) {
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problemDetail.setTitle("Appointment Not Found");
+        return problemDetail;
+    }
 }

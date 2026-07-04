@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -75,10 +76,8 @@ class AuthServiceTest {
     @Test
     void register_happyPath_createsPatientAndHashesPassword() {
         // Arrange
-        when(patientRepository.findByUsername("johndoe")).thenReturn(Optional.empty());
         when(patientMapper.toEntity(registerRequest)).thenReturn(patient);
         when(passwordEncoder.encode("secret123")).thenReturn("$2a$hashed");
-        when(patientRepository.save(any(Patient.class))).thenReturn(patient);
         when(jwtTokenProvider.generateToken(patientId)).thenReturn("jwt-token");
         when(jwtTokenProvider.getExpirationSeconds()).thenReturn(3600L);
 
@@ -90,7 +89,7 @@ class AuthServiceTest {
         assertThat(response.getToken()).isEqualTo("jwt-token");
         assertThat(response.getExpiresIn()).isEqualTo(3600L);
         verify(passwordEncoder).encode("secret123");
-        verify(patientRepository).save(patient);
+        verify(patientRepository).saveAndFlush(patient);
         verify(jwtTokenProvider).generateToken(patientId);
         verify(patientRegisteredKafkaTemplate, times(1)).send(eq("patient.registered"),any(PatientRegistered.class));
     }
@@ -98,23 +97,23 @@ class AuthServiceTest {
     @Test
     void register_userExists_throwsUsernameAlreadyExistsException() {
         // Arrange
-        when(patientRepository.findByUsername("johndoe")).thenReturn(Optional.of(patient));
+        when(patientMapper.toEntity(registerRequest)).thenReturn(patient);
+        when(passwordEncoder.encode("secret123")).thenReturn("$2a$hashed");
+        when(patientRepository.saveAndFlush(patient)).thenThrow(new DataIntegrityViolationException("duplicate key"));
+        when(patientRepository.existsByUsername("johndoe")).thenReturn(true);
 
         // Act & Assert
         assertThatThrownBy(() -> authService.register(registerRequest))
                 .isInstanceOf(UsernameAlreadyExistsException.class)
-                .hasMessageContaining("Username already exists");
-        verify(patientRepository, never()).save(any());
+                .hasMessageContaining("johndoe");
         verify(jwtTokenProvider, never()).generateToken(any());
     }
 
     @Test
     void register_passwordIsStoredAsHash_notPlaintext() {
         // Arrange
-        when(patientRepository.findByUsername(anyString())).thenReturn(Optional.empty());
         when(patientMapper.toEntity(registerRequest)).thenReturn(patient);
         when(passwordEncoder.encode("secret123")).thenReturn("$2a$hashed");
-        when(patientRepository.save(any(Patient.class))).thenAnswer(inv -> inv.getArgument(0));
         when(jwtTokenProvider.generateToken(any())).thenReturn("jwt-token");
         when(jwtTokenProvider.getExpirationSeconds()).thenReturn(3600L);
 
@@ -122,7 +121,7 @@ class AuthServiceTest {
         authService.register(registerRequest);
 
         // Assert — the entity saved must carry the hashed value, never the raw password
-        verify(patientRepository).save(argThat(p -> "$2a$hashed".equals(p.getPasswordHash())));
+        verify(patientRepository).saveAndFlush(argThat(p -> "$2a$hashed".equals(p.getPasswordHash())));
     }
 
     // ── login ─────────────────────────────────────────────────────────────────
