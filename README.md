@@ -221,8 +221,9 @@ Start in this order:
 
 ### Step 4 — Test the Flow
 
-Register a patient:
+Convenience path: run `./scripts/test-flow.sh` to exercise the whole pipeline in one command (requires `curl` and `jq`). The individual calls below show the API contract.
 
+Register a patient:
 ```bash
 curl -X POST http://localhost:8083/api/auth/register \
   -H "Content-Type: application/json" \
@@ -238,12 +239,11 @@ curl -X POST http://localhost:8083/api/auth/register \
 ```
 
 Create a doctor:
-
 ```bash
 # 1. Get available specialties
 curl -X GET http://localhost:8084/api/specialties
 
-# 2. Create a doctor (replace <specialty-uuid> with an actual id from step 1)
+# 2. Create a doctor (replace <specialty-id> with an id from step 1)
 curl -X POST http://localhost:8084/api/doctors \
   -H "Content-Type: application/json" \
   -d '{
@@ -252,43 +252,44 @@ curl -X POST http://localhost:8084/api/doctors \
     "email": "jane@clinic.com",
     "phoneNumber": "+49 30 1234567",
     "address": {
-      "street": "Friedrichstrasse 100",
-	  "houseNumber": "12",
+      "street": "Friedrichstrasse",
+      "houseNumber": "12",
       "postalCode": "10117",
-	  "city": "Berlin",
-      "country": "Germany"
+      "city": "Berlin"
     },
-    "specialtyIds": ["<Specialty Ids>"],
+    "specialtyIds": ["<specialty-id>"],
     "openingHours": [
-      {
-        "dayOfWeek": "MONDAY",
-        "startTime": "09:00",
-        "endTime": "17:00"
-      }
+      { "dayOfWeek": "MONDAY", "startTime": "09:00", "endTime": "17:00" }
     ],
     "languages": ["ENGLISH"]
   }'
 ```
 
-Book an appointment through the API Gateway:
+Check a doctor's available slots (pick a date whose weekday matches the doctor's opening hours):
+```bash
+curl -X GET "http://localhost:8080/api/availability?doctorId=<doctor-id>&date=2026-07-13"
+```
+The response lists bookable 30-minute slot start times. Pick one for the booking below.
 
+Book an appointment through the API Gateway (use a slot from the availability response):
 ```bash
 curl -X POST http://localhost:8080/api/appointments \
   -H "Content-Type: application/json" \
   -d '{
-    "patientId": "<id of patient created>",
-    "doctorId": "<id of doctor created>",
-    "dateTime": "2025-09-01T10:00:00",
+    "patientId": "<patient-id>",
+    "doctorId": "<doctor-id>",
+    "dateTime": "2026-07-13T10:00:00",
     "type": "INITIAL_CONSULTATION",
     "notes": "First visit, general checkup"
   }'
 ```
 
 Cancel an appointment:
-
 ```bash
-curl -X PUT http://localhost:8080/api/appointments/{id}/cancel
+curl -X PUT http://localhost:8080/api/appointments/<appointment-id>/cancel
 ```
+
+Check availability again after booking or cancelling to see the slot disappear, then reappear.
 
 ### Step 5 — Verify the Event Flow
 
