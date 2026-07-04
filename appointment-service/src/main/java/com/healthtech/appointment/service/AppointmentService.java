@@ -4,14 +4,12 @@ import com.healthtech.appointment.domain.Appointment;
 import com.healthtech.appointment.domain.AppointmentStatus;
 import com.healthtech.appointment.dto.AppointmentRequest;
 import com.healthtech.appointment.dto.AppointmentResponse;
+import com.healthtech.appointment.dto.AvailableSlotsResponse;
 import com.healthtech.appointment.event.AppointmentBooked;
 import com.healthtech.appointment.event.AppointmentCancelled;
 import com.healthtech.appointment.exception.*;
 import com.healthtech.appointment.mapper.AppointmentMapper;
-import com.healthtech.appointment.readmodel.ValidDoctor;
-import com.healthtech.appointment.readmodel.ValidDoctorRepository;
-import com.healthtech.appointment.readmodel.ValidPatient;
-import com.healthtech.appointment.readmodel.ValidPatientRepository;
+import com.healthtech.appointment.readmodel.*;
 import com.healthtech.appointment.repository.AppointmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -19,9 +17,14 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -113,5 +116,47 @@ public class AppointmentService {
 
         cancelledEventKafkaTemplate.send("appointment.cancelled", event);
         return appointmentMapper.toResponse(saved);
+    }
+
+    public AvailableSlotsResponse getAvailableSlots(UUID doctorId, LocalDate date) {
+        ValidDoctor doctor = validDoctorRepository.findById(doctorId)
+                .orElseThrow(() -> new UnknownDoctorException(doctorId));
+
+        LocalDateTime startOfDay = date.atStartOfDay();
+        LocalDateTime endOfDay = date.plusDays(1).atStartOfDay();
+
+        List<Appointment> takenAppointments = appointmentRepository
+                .findByDoctorIdAndDateTimeGreaterThanEqualAndDateTimeLessThanAndStatusNot(
+                        doctorId, startOfDay, endOfDay, AppointmentStatus.CANCELLED);
+
+        List<OpeningHours> openingHoursForDay = doctor.getOpeningHours()
+                .stream()
+                .filter(openingHours -> openingHours.getDayOfWeek() == date.getDayOfWeek())
+                .toList();
+
+        List<LocalDateTime> availableSlots = new ArrayList<>();
+        for (OpeningHours openingHours : openingHoursForDay) {
+            LocalDateTime currentSlot = date.atTime(openingHours.getStartTime());
+            LocalDateTime lastSlot = date.atTime(openingHours.getEndTime().minusMinutes(30L));
+            while(!currentSlot.isAfter(lastSlot)) {
+                availableSlots.add(currentSlot);
+                currentSlot = currentSlot.plusMinutes(30);
+            }
+        }
+        Set<LocalDateTime> takenAppointmentSlots = takenAppointments.stream()
+                .map(Appointment::getDateTime)
+                .collect(Collectors.toSet());
+
+        availableSlots.removeAll(takenAppointmentSlots);
+
+        if(date.isEqual(LocalDate.now())) {
+            availableSlots.removeIf(slot -> slot.isBefore(LocalDateTime.now()));
+        }
+
+        return AvailableSlotsResponse.builder()
+                .doctorId(doctorId)
+                .date(date)
+                .availableSlots(availableSlots)
+                .build();
     }
 }

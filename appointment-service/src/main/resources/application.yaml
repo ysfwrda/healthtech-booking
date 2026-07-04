@@ -4,6 +4,7 @@ spring:
   sql:
     init:
       mode: always
+      platform: postgres
 
   kafka:
     bootstrap-servers: localhost:9092
