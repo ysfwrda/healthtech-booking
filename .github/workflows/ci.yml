@@ -37,6 +37,14 @@ jobs:
           cache: maven
           cache-dependency-path: ${{ matrix.service }}/pom.xml
 
+      - name: Generate JWT signing keys
+        if: matrix.service == 'patient-service'
+        working-directory: ${{ matrix.service }}
+        run: |
+          mkdir -p src/main/resources/keys
+          openssl genrsa -out src/main/resources/keys/private.pem 2048
+          openssl rsa -in src/main/resources/keys/private.pem -pubout -out src/main/resources/keys/public.pem
+
       - name: Test ${{ matrix.service }}
         working-directory: ${{ matrix.service }}
         run: mvn -B test ${{ matrix.test_args }}
