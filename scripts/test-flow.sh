@@ -14,9 +14,7 @@
 set -euo pipefail
 
 # ---- config ---------------------------------------------------------------
-PATIENT_SVC="http://localhost:8083"
-DOCTOR_SVC="http://localhost:8084"
-APPOINTMENT_SVC="http://localhost:8081"
+GATEWAY="http://localhost:8084"
 GATEWAY="http://localhost:8080"
 
 # Pick a date whose weekday matches the doctor's opening hours below.
@@ -31,7 +29,7 @@ ok()      { printf '\033[0;32mOK: %s\033[0m\n' "$1"; }
 
 # ---- 1. register a patient ------------------------------------------------
 section "Register patient"
-PATIENT_RESP="$(curl -s -X POST "$PATIENT_SVC/api/auth/register" \
+PATIENT_RESP="$(curl -s -X POST "$GATEWAY/api/auth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "firstName": "John",
@@ -56,10 +54,10 @@ ok "patient registered, id=$PATIENT_ID"
 # ---- 2. register a doctor -------------------------------------------------
 section "Register doctor"
 # get a real specialty id first
-SPECIALTY_ID="$(curl -s "$DOCTOR_SVC/api/specialties" | jq -r '.[0].id')"
+SPECIALTY_ID="$(curl -s "$GATEWAY/api/specialties" | jq -r '.[0].id')"
 [ "$SPECIALTY_ID" != "null" ] && [ -n "$SPECIALTY_ID" ] || fail "no specialty found; is the seeder running?"
 
-DOCTOR_RESP="$(curl -s -X POST "$DOCTOR_SVC/api/doctors" \
+DOCTOR_RESP="$(curl -s -X POST "$GATEWAY/api/doctors" \
   -H "Content-Type: application/json" \
   -d '{
     "firstName": "Jane",
@@ -89,7 +87,7 @@ sleep 3
 
 # ---- 3. read availability -------------------------------------------------
 section "Availability before booking ($BOOKING_DATE)"
-AVAIL_BEFORE="$(curl -s "$APPOINTMENT_SVC/api/availability?doctorId=$DOCTOR_ID&date=$BOOKING_DATE")"
+AVAIL_BEFORE="$(curl -s "$GATEWAY/api/availability?doctorId=$DOCTOR_ID&date=$BOOKING_DATE")"
 echo "$AVAIL_BEFORE" | jq '.availableSlots'
 
 SLOT="$(echo "$AVAIL_BEFORE" | jq -r '.availableSlots[0]')"
@@ -114,7 +112,7 @@ ok "booked, appointmentId=$APPOINTMENT_ID"
 
 # ---- 5. confirm slot disappeared ------------------------------------------
 section "Availability after booking (slot should be gone)"
-AVAIL_AFTER="$(curl -s "$APPOINTMENT_SVC/api/availability?doctorId=$DOCTOR_ID&date=$BOOKING_DATE")"
+AVAIL_AFTER="$(curl -s "$GATEWAY/api/availability?doctorId=$DOCTOR_ID&date=$BOOKING_DATE")"
 if echo "$AVAIL_AFTER" | jq -e --arg s "$SLOT" '.availableSlots | index($s)' >/dev/null; then
   fail "slot $SLOT still present after booking"
 fi
@@ -144,7 +142,7 @@ info "cancel returned $CANCEL_CODE"
 
 # ---- 8. confirm slot reappeared -------------------------------------------
 section "Availability after cancel (slot should return)"
-AVAIL_CANCELLED="$(curl -s "$APPOINTMENT_SVC/api/availability?doctorId=$DOCTOR_ID&date=$BOOKING_DATE")"
+AVAIL_CANCELLED="$(curl -s "$GATEWAY/api/availability?doctorId=$DOCTOR_ID&date=$BOOKING_DATE")"
 if echo "$AVAIL_CANCELLED" | jq -e --arg s "$SLOT" '.availableSlots | index($s)' >/dev/null; then
   ok "slot $SLOT correctly reappeared after cancellation (partial index working)"
 else
