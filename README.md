@@ -166,6 +166,7 @@ Documented in [`docs/adr/`](docs/adr/):
 * [ADR-004](docs/adr/ADR-004-JWT-Authentication.md) — JWT Authentication (RS256, hybrid validation, token-derived
   identity)
 * [ADR-005](docs/adr/ADR-005-cross-service-validation.md) — Cross-Service Validation via event-driven read-model
+* [ADR-006](docs/adr/ADR-006-service-discovery.md) — Static Service discovery
 
 Each ADR includes context, alternatives, trade-offs, and rationale.
 
@@ -194,7 +195,7 @@ Each ADR includes context, alternatives, trade-offs, and rationale.
 * **Doctor authentication** is not yet implemented. Doctor profiles are publicly browsable by design; doctor creation is
   currently open (admin/onboarding auth is a later pass).
 * **Refresh tokens** are not implemented; access tokens are valid for one hour.
-* **Service discovery** is static; Eureka/Consul is deferred.
+* **Service discovery** is static per [ADR-006](docs/adr/ADR-006-service-discovery.md); Eureka/Consul is deferred
 * **Reliability/observability** (tracing, metrics, retries, DLQ, event versioning) are Phase 3.
 
 ---
