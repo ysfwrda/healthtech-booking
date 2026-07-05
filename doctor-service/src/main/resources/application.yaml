@@ -3,9 +3,9 @@ spring:
     name: doctor-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5435/doctor_db
-    username: doctor_user
-    password: doctor_pass
+    url: ${DB_URL:jdbc:postgresql://localhost:5435/doctor_db}
+    username: ${DB_USERNAME:doctor_user}
+    password: ${DB_PASSWORD:doctor_pass}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -18,7 +18,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

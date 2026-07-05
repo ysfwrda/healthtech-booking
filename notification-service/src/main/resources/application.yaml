@@ -3,9 +3,9 @@ spring:
     name: notification-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/notification_db
-    username: notification_user
-    password: notification_pass
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/notification_db}
+    username: ${DB_USERNAME:notification_user}
+    password: ${DB_PASSWORD:notification_pass}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -18,7 +18,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 management:
   endpoints:

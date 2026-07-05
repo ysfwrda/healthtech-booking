@@ -153,6 +153,70 @@ services:
     networks:
       - healthtech-net
 
+  # ── Patient Service ──────────────────────────
+  patient-service:
+    build: ./patient-service
+    ports:
+      - "8083:8083"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DB_URL: jdbc:postgresql://postgres-patient:5432/patient_db
+      DB_USERNAME: patient_user
+      DB_PASSWORD: patient_pass
+    depends_on:
+      - kafka
+      - postgres-patient
+    networks:
+      - healthtech-net
+
+  # ── Doctor Service ───────────────────────────
+  doctor-service:
+    build: ./doctor-service
+    ports:
+      - "8084:8084"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DB_URL: jdbc:postgresql://postgres-doctor:5432/doctor_db
+      DB_USERNAME: doctor_user
+      DB_PASSWORD: doctor_pass
+    depends_on:
+      - kafka
+      - postgres-doctor
+    networks:
+      - healthtech-net
+
+  # ── Notification Service ─────────────────────
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "8082:8082"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DB_URL: jdbc:postgresql://postgres-notification:5432/notification_db
+      DB_USERNAME: notification_user
+      DB_PASSWORD: notification_pass
+    depends_on:
+      - kafka
+      - postgres-notification
+    networks:
+      - healthtech-net
+
+  # ── API Gateway ───────────────────────────────
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      APPOINTMENT_SERVICE_URI: http://appointment-service:8081
+      PATIENT_SERVICE_URI: http://patient-service:8083
+      DOCTOR_SERVICE_URI: http://doctor-service:8084
+    depends_on:
+      - appointment-service
+      - patient-service
+      - doctor-service
+    networks:
+      - healthtech-net
+
 # ── Volumes ───────────────────────────────────────────────────
 # Named volumes persist data between container restarts.
 # Use `docker-compose down -v` to wipe them (full reset).
