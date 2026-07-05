@@ -2,6 +2,12 @@ spring:
   application:
     name: api-gateway
 
+app:
+  gateway:
+    appointment-service-uri: ${APPOINTMENT_SERVICE_URI:http://localhost:8081}
+    patient-service-uri: ${PATIENT_SERVICE_URI:http://localhost:8083}
+    doctor-service-uri: ${DOCTOR_SERVICE_URI:http://localhost:8084}
+
 server:
   port: 8080
 

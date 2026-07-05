@@ -224,9 +224,8 @@ edge validation · dockerization of all services · service discovery · AI-assi
 
 ### Requirements
 
-* Docker & Docker Compose
-* Java 21
-* Maven 3.9+
+* Docker and Docker Compose (primary; runs the whole system)
+* Java 21 and Maven 3.9+ (optional; only for running a service on the host)
 * `curl` and `jq` (for the test script)
 
 ### Step 1 — Start Infrastructure
@@ -239,11 +238,11 @@ docker-compose up -d
 
 Starts Kafka, Zookeeper, four PostgreSQL instances (one per service), and Kafka UI at `http://localhost:8090`.
 
-### Step 2 — Generate the JWT Key Pair
+### Step 2 — JWT Keys
 
-Patient Service signs tokens; Appointment Service validates them with the shared public key. Generate an RSA key pair
-and place the PEM files where each service expects them (`src/main/resources/keys/`). The private key belongs only to
-the issuer (Patient Service); the public key is shared with validating services.
+The RSA key pair used to sign and validate tokens is committed for demo convenience (see the Authentication section). No
+key generation is required to run the project. In a real deployment the private key would never be committed; it would
+be injected via a secret manager or generated per environment.
 
 ```bash
 openssl genrsa -out private.pem 2048
@@ -252,14 +251,20 @@ openssl rsa -in private.pem -pubout -out public.pem
 
 ### Step 3 — Start the Services
 
-Each service is an independent Maven project (no parent pom). Start each in its own terminal, in this order:
+All services are containerized. Bring up the entire system (infrastructure plus all five services) with one command:
 
 ```bash
-cd patient-service     && mvn spring-boot:run   # 8083
-cd doctor-service      && mvn spring-boot:run   # 8084
-cd appointment-service && mvn spring-boot:run   # 8081
-cd notification-service && mvn spring-boot:run  # 8082
-cd api-gateway         && mvn spring-boot:run   # 8080
+docker compose up --build
+```
+
+This builds each service image and starts them alongside Kafka, Zookeeper, and the four PostgreSQL instances, all on a
+shared Docker network. The services connect to Kafka and their databases by container name.
+
+To run a single service against the infrastructure for development, you can still run it on the host with Maven (it
+falls back to `localhost` addresses by default):
+
+```bash
+cd appointment-service && mvn spring-boot:run
 ```
 
 Dockerization of the services is planned (Phase 3).
