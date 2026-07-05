@@ -1,182 +1,221 @@
 # HealthTech Appointment Booking Platform
 
-A microservice-based appointment booking platform designed as a **distributed systems and event-driven architecture sandbox**.
+A microservice-based appointment booking platform built as a **distributed systems and event-driven architecture project
+**.
 
-This project explores how distributed systems behave when architectural concerns are separated early and gradually re-integrated as domain complexity increases. The goal is not only to build services, but to understand how system behavior changes under different architectural constraints.
+The focus is not only building services, but demonstrating how system behavior changes under different architectural
+constraints: separating concerns early (service boundaries, async messaging, data ownership) and re-integrating them as
+domain complexity grows (authentication, cross-service validation, business rules).
 
-This project intentionally separates concerns across phases:
+The work is organized in phases:
 
-* **Phase 1:** Distributed system architecture fundamentals (service boundaries, async communication, data ownership)
-* **Phase 2:** Domain complexity (patients, doctors, authentication, business rules)
-* **Phase 3:** Production-grade concerns (observability, reliability, AI-assisted workflows)
+* **Phase 1:** Distributed system fundamentals (service boundaries, async communication, data ownership)
+* **Phase 2:** Domain complexity (patients, doctors, authentication, availability, booking rules, cross-service
+  validation)
+* **Phase 3:** Production-grade concerns (observability, reliability, service discovery, AI-assisted workflows)
+
+Phase 2 is substantially complete: end-to-end booking with JWT-secured, race-safe reservations and RFC 9457 error
+handling.
 
 ---
 
 ## Tech Stack
 
-Java 21 · Spring Boot 3 · Apache Kafka · PostgreSQL · Docker · MapStruct · JWT (RS256)
+Java 21 · Spring Boot 3 · Apache Kafka · PostgreSQL · Spring Cloud Gateway (MVC) · Spring Security (OAuth2 Resource
+Server) · MapStruct · JWT (RS256) · Docker
 
 ---
 
 ## Architecture Overview (Phase 2)
 
 ```
-┌─────────────┐     ┌───────────────────┐
-│   Client    │────▶│    API Gateway     │
-└─────────────┘     └─────────┬─────────┘
-                              │
-          ┌───────────────────┼───────────────────┐
-          │                   │                   │
-          ▼                   ▼                   ▼
-┌─────────────────┐  ┌────────────────┐  ┌────────────────┐
-│ Patient Service │  │   Appointment  │  │ Doctor Service │
-│  (auth + JWT)   │  │    Service     │  │  (profiles +   │
-│                 │  │                │  │   filtering)   │
-└────────┬────────┘  └───────┬────────┘  └───────┬────────┘
-         │                   │                   │
-         │ patient.registered│ appointment.booked│ doctor.registered
-         │                   │ appointment.      │
-         │                   │ cancelled         │
-         └───────────────────┼───────────────────┘
-                             │
-                    ┌────────▼────────┐
-                    │  Apache Kafka   │
-                    └────────┬────────┘
-                             │
-                    ┌────────▼──────────┐
-                    │ Notification Svc  │
-                    └───────────────────┘
+        ┌─────────────┐          ┌───────────────────┐
+        │   Client    │─────────▶│    API Gateway     │  (single entry, routing)
+        └─────────────┘          └─────────┬─────────┘
+                                           │
+        ┌──────────────────────────────────┼──────────────────────────────────┐
+        │                                  │                                  │
+        ▼                                  ▼                                  ▼
+┌─────────────────┐              ┌────────────────────┐              ┌────────────────┐
+│ Patient Service │              │  Appointment Svc   │              │ Doctor Service │
+│ auth, JWT issue │              │ booking, slots,    │              │ profiles,      │
+│ (RS256)         │              │ read-model,        │              │ specialties,   │
+│                 │              │ JWT validation     │              │ filtering      │
+└────────┬────────┘              └─────────┬──────────┘              └───────┬────────┘
+         │ patient.registered              │ appointment.booked              │ doctor.registered
+         │                                 │ appointment.cancelled           │
+         └─────────────────────────────────┼─────────────────────────────────┘
+                                           ▼
+                                   ┌────────────────┐
+                                   │  Apache Kafka  │
+                                   └───────┬────────┘
+                                           │ appointment.booked / cancelled
+                                           ▼
+                                 ┌───────────────────┐
+                                 │ Notification Svc  │
+                                 └───────────────────┘
 ```
+
+Appointment Service consumes `patient.registered` and `doctor.registered` to build a
+local read-model (see Cross-Service Validation below), and publishes booking events that
+Notification Service consumes.
 
 ---
 
 ## Services
 
-| Service                | Port | Responsibility                          |
-| ---------------------- | ---- | --------------------------------------- |
-| `api-gateway`          | 8080 | Single entry point for all client requests. Centralizes routing, and in future phases: auth filtering and rate limiting |
-| `appointment-service`  | 8081 | Core booking and cancellation logic, publishes domain events to Kafka |
-| `notification-service` | 8082 | Consumes appointment events from Kafka and persists notification records independently |
-| `patient-service`      | 8083 | Patient registration, login, JWT issuance (RS256), and profile management |
-| `doctor-service`       | 8084 | Doctor profile creation, specialty filtering, language filtering, and registration event publishing |
+| Service                | Port | Responsibility                                                                                                                      |
+|------------------------|------|-------------------------------------------------------------------------------------------------------------------------------------|
+| `api-gateway`          | 8080 | Single entry point for all client traffic; routes each path prefix to the owning service                                            |
+| `appointment-service`  | 8081 | Booking, cancellation, availability/slot computation, read-model of valid patients/doctors, JWT validation, publishes domain events |
+| `notification-service` | 8082 | Consumes appointment events from Kafka and persists notification records independently                                              |
+| `patient-service`      | 8083 | Patient registration, login, JWT issuance (RS256), profile management                                                               |
+| `doctor-service`       | 8084 | Doctor profile creation, specialty and language filtering, opening hours, registration event publishing                             |
 
 ---
 
 ## Kafka Event Model
 
-| Event                   | Producer            | Consumer(s)          |
-| ----------------------- | ------------------- | -------------------- |
-| `appointment.booked`    | appointment-service | notification-service |
-| `appointment.cancelled` | appointment-service | notification-service |
-| `patient.registered`    | patient-service     | — (future consumers) |
-| `doctor.registered`     | doctor-service      | — (future consumers) |
+| Event                   | Producer            | Consumer(s)                      |
+|-------------------------|---------------------|----------------------------------|
+| `patient.registered`    | patient-service     | appointment-service (read-model) |
+| `doctor.registered`     | doctor-service      | appointment-service (read-model) |
+| `appointment.booked`    | appointment-service | notification-service             |
+| `appointment.cancelled` | appointment-service | notification-service             |
 
-Kafka was chosen over direct REST calls to achieve temporal decoupling — the Notification Service does not need to be available when an appointment is booked. Events are retained in the log and consumed when the service is ready.
-
----
-
-## Authentication
-
-Patient authentication uses **JWT with RS256** (asymmetric signing):
-
-* The private key signs tokens at registration and login
-* The public key will be shared with other services (e.g. api-gateway) for token verification
-* Key pair is loaded from PEM files at `keys/private.pem` and `keys/public.pem` in the patient-service classpath
-* Token expiry is configured via `app.jwt.expiration` (seconds)
+Kafka was chosen over synchronous REST for temporal decoupling: a consumer does not need to be available when an event
+is produced. Events are retained in the log and consumed when the service is ready.
 
 ---
 
-## Key Architectural Focus
+## Authentication and Authorization
 
-### Phase 1 — Distributed System Fundamentals
-* Service boundaries and decomposition
-* Asynchronous communication via Kafka
-* Event-driven architecture patterns
-* Decoupling between services
-* Database-per-service principle
+Authentication uses **JWT with RS256** (asymmetric signing), per [ADR-004](docs/adr/ADR-004-JWT-Authentication.md).
 
-### Phase 2 — Domain Modeling
-* Patient identity and authentication (JWT RS256)
-* Doctor profiles with specialties, languages, and opening hours
-* Domain events for cross-service awareness (`patient.registered`, `doctor.registered`)
-* Specialty seeding and filtering by specialty/language
+* Patient Service issues PATIENT tokens (signs with the private key at registration and login).
+* The public key is distributed to services that validate tokens. Appointment Service validates tokens with the same
+  public key; it never holds the private key and cannot mint tokens.
+* Validation follows a hybrid, zero-trust model: services validate tokens independently (the authoritative boundary).
+  Gateway-level edge validation is a planned defense-in-depth addition and is not yet enabled.
+* Tokens carry minimal claims: `sub` (the subject's id: the patient id in a PATIENT token), `role`, and `exp`.
 
-> Business rules are intentionally lean to keep focus on architectural mechanics.
+**Identity is derived from the token, not the request body.** Booking takes the patient id from the token subject (
+`sub`), so a caller cannot book on behalf of another user by supplying a different id. Cancellation enforces ownership:
+a patient can only cancel their own appointment. Requests with the wrong token type or attempts to act on another user's
+resource are rejected with `403`.
+
+Public (no token required): doctor browsing, specialty listing, and availability. Booking and cancellation require a
+valid patient token.
+
+---
+
+## Booking and Availability
+
+Availability is modeled as a **first-class resource** (`GET /api/availability`), owned by Appointment Service because it
+is computed from appointment data plus doctor opening hours.
+
+* Slots are a fixed 30-minute grid generated from a doctor's opening hours for the requested day, minus already-taken (
+  non-cancelled) appointments, minus past slots for the current day.
+* **Double-booking is prevented at the database level, race-safe.** A Postgres **partial unique index** on
+  `(doctor_id, date_time) WHERE status <> 'CANCELLED'` makes concurrent double-bookings impossible: the database rejects
+  the second insert atomically, which is mapped to `409`. This avoids the check-then-insert race that application-level
+  checks suffer from.
+* Cancellation is a **soft delete** (status set to `CANCELLED`), so the audit trail is preserved and the slot becomes
+  bookable again. The partial index is what allows a cancelled slot to be re-booked without losing the record.
+
+---
+
+## Cross-Service Validation (Read-Model)
+
+Per [ADR-005](docs/adr/ADR-005-cross-service-validation.md), Appointment Service validates that a patient and doctor
+exist before booking, **without** synchronous calls to Patient or Doctor Service. It consumes `patient.registered` and
+`doctor.registered` into a local read-model (`ValidPatient`, `ValidDoctor`, including the doctor's opening hours), and
+validates bookings against that projection. This preserves the async decoupling of ADR-002 while still enforcing
+existence.
+
+The consumer is idempotent (keyed on the domain id) and hydrates from the beginning of the topic on first run, so it
+reconstructs state that predates it.
+
+---
+
+## Error Handling
+
+All services return **RFC 9457 problem+json** error responses via a per-service `@RestControllerAdvice`:
+
+| Condition                                                       | Status                                                          |
+|-----------------------------------------------------------------|-----------------------------------------------------------------|
+| Unknown patient/doctor, appointment/specialty not found         | `404`                                                           |
+| Validation failure (with field-level detail), malformed request | `400`                                                           |
+| Invalid credentials                                             | `401` (no/invalid token)                                        |
+| Wrong token type, or acting on another user's resource          | `403`                                                           |
+| Duplicate username/email, double-booking                        | `409`                                                           |
+| Unexpected error                                                | `500` (generic message; cause logged server-side, never leaked) |
+
+Duplicate detection (username, email, double-booking) is enforced by database unique constraints and translated to
+`409`, rather than by race-prone pre-checks.
 
 ---
 
 ## Architecture Decisions (ADRs)
 
-Key decisions documented in [`docs/adr/`](docs/adr/):
+Documented in [`docs/adr/`](docs/adr/):
 
-* [ADR-001](docs/adr/ADR-001-microservices-vs-modular-monolith.md) — Microservices vs Modular Monolith
+* [ADR-001](docs/adr/ADR-001-microservices-vs-monolith.md) — Microservices vs Modular Monolith
 * [ADR-002](docs/adr/ADR-002-kafka-as-event-broker.md) — Kafka as Event Broker
-* [ADR-003](docs/adr/ADR-003-db-per-service.md) — Database per Service Pattern
-* [ADR-004](docs/adr/ADR-004-JWT-Authentication.md) — JWT Authentication
-* [ARD-005](docs/adr/ADR-005-cross-service-validation.md) - Cross-service validation
+* [ADR-003](docs/adr/ADR-003-db-per-service.md) — Database per Service
+* [ADR-004](docs/adr/ADR-004-JWT-Authentication.md) — JWT Authentication (RS256, hybrid validation, token-derived
+  identity)
+* [ADR-005](docs/adr/ADR-005-cross-service-validation.md) — Cross-Service Validation via event-driven read-model
 
-Each ADR includes context, alternatives considered, trade-offs, and decision rationale.
-
----
-
-## Failure Scenarios
-
-| Scenario | Behavior |
-| -------- | -------- |
-| Notification Service down | Kafka retains the event. Consumer resumes from last offset on restart — no data loss |
-| Duplicate events | Not handled yet. Idempotency planned for Phase 3 |
-| Kafka downtime | Appointment booking and patient/doctor registration fail. No silent data loss — failure is explicit |
-| Appointment not found on cancel | `RuntimeException` thrown with message. No partial state change |
-| Duplicate patient username | `UsernameAlreadyExistsException` thrown at registration |
-| Duplicate doctor email | `EmailAlreadyExistsException` thrown at registration |
+Each ADR includes context, alternatives, trade-offs, and rationale.
 
 ---
 
-## Current Limitations (Intentional — Phase 3 Scope)
+## Failure and Edge Behavior
 
-### Reliability & Observability (Phase 3)
-* Centralized logging strategy
-* Distributed tracing
-* Metrics (Prometheus/Grafana)
-* Monitoring dashboards
+| Scenario                                           | Behavior                                                                                |
+|----------------------------------------------------|-----------------------------------------------------------------------------------------|
+| Notification Service down                          | Kafka retains the event; consumer resumes from last offset on restart, no data loss     |
+| Concurrent double-booking                          | Rejected atomically by the partial unique index, returned as `409`                      |
+| Booking outside opening hours or off the slot grid | Rejected with `400`                                                                     |
+| Booking for an unknown patient/doctor              | Rejected with `404` (validated against the read-model)                                  |
+| Cancelling another patient's appointment           | Rejected with `403`; no state change                                                    |
+| Appointment not found on cancel                    | `404` problem+json; no partial state change                                             |
+| Duplicate username/email                           | `409` problem+json                                                                      |
+| Kafka downtime                                     | Booking and registration fail explicitly; no silent data loss                           |
+| Duplicate event delivery                           | Read-model consumer is idempotent; event versioning and broader idempotency are Phase 3 |
 
-### Robust Distributed System Behavior (Phase 3)
-* Idempotency handling
-* Retry policies
-* Failure recovery flows
-* Dead-letter queues
-* Event versioning
+---
 
-### Domain Complexity (Phase 3)
-* Appointment service does not yet validate patient/doctor existence
-* API Gateway does not yet enforce JWT authentication
+## Current Limitations (Intentional)
+
+* **Gateway-level JWT enforcement** is deferred. Per-service validation is the authoritative boundary and is enforced;
+  the gateway edge filter is planned defense-in-depth.
+* **Doctor authentication** is not yet implemented. Doctor profiles are publicly browsable by design; doctor creation is
+  currently open (admin/onboarding auth is a later pass).
+* **Refresh tokens** are not implemented; access tokens are valid for one hour.
+* **Service discovery** is static; Eureka/Consul is deferred.
+* **Reliability/observability** (tracing, metrics, retries, DLQ, event versioning) are Phase 3.
 
 ---
 
 ## Project Phases
 
-### Phase 1 — Architecture Sandbox
+### Phase 1 — Architecture Sandbox (complete)
 
-✔ Service decomposition  
-✔ Kafka-based event communication  
-✔ Database-per-service  
-✔ API Gateway  
-✔ Unit tests (AppointmentService)
+Service decomposition · Kafka-based events · database-per-service · API Gateway · unit tests
 
-### Phase 2 — Domain Modeling
+### Phase 2 — Domain Modeling (substantially complete)
 
-✔ Patient Service (registration, login, JWT RS256)  
-✔ Doctor Service (profiles, specialties, language filtering)  
-✔ Domain events: `patient.registered`, `doctor.registered`  
-✔ Unit tests (DoctorService, PatientService)
+Patient auth (JWT RS256) · Doctor profiles, specialties, language filtering · availability/slot computation · race-safe
+booking (partial unique index) · soft-delete cancellation · cross-service validation via event-driven read-model ·
+per-service JWT validation with token-derived identity and ownership checks · RFC 9457 error handling across services ·
+gateway routing for all services
 
-### Phase 3 — Production & Intelligence Layer
+### Phase 3 — Production & Intelligence Layer (planned)
 
-🔜 Observability (logs, metrics, tracing)  
-🔜 Reliability patterns (idempotency, retries, DLQ)  
-🔜 JWT validation in API Gateway  
-🔜 AI-assisted triage (Gemini API / Ollama)  
-🔜 Dockerfiles for all services
+Observability (logs, metrics, tracing) · reliability (idempotency, retries, DLQ, event versioning) · gateway-level JWT
+edge validation · dockerization of all services · service discovery · AI-assisted symptom-to-specialty triage
 
 ---
 
@@ -187,6 +226,7 @@ Each ADR includes context, alternatives considered, trade-offs, and decision rat
 * Docker & Docker Compose
 * Java 21
 * Maven 3.9+
+* `curl` and `jq` (for the test script)
 
 ### Step 1 — Start Infrastructure
 
@@ -196,87 +236,94 @@ cd healthtech-booking
 docker-compose up -d
 ```
 
-This starts Kafka, Zookeeper, 4 PostgreSQL instances (one per service), and Kafka UI at `http://localhost:8090`.
+Starts Kafka, Zookeeper, four PostgreSQL instances (one per service), and Kafka UI at `http://localhost:8090`.
 
-### Step 2 — Generate JWT Key Pair
+### Step 2 — Generate the JWT Key Pair
 
-The patient-service requires an RSA key pair. Generate and place the PEM files in `patient-service/src/main/resources/keys/`:
+Patient Service signs tokens; Appointment Service validates them with the shared public key. Generate an RSA key pair
+and place the PEM files where each service expects them (`src/main/resources/keys/`). The private key belongs only to
+the issuer (Patient Service); the public key is shared with validating services.
 
 ```bash
 openssl genrsa -out private.pem 2048
 openssl rsa -in private.pem -pubout -out public.pem
 ```
 
-### Step 3 — Start Services
+### Step 3 — Start the Services
 
-Services are started separately via IntelliJ or Maven during development.
-Dockerfiles for all services are planned for Phase 3.
+Each service is an independent Maven project (no parent pom). Start each in its own terminal, in this order:
 
-Start in this order:
-1. `patient-service` — port 8083
-2. `doctor-service` — port 8084
-3. `appointment-service` — port 8081
-4. `notification-service` — port 8082
-5. `api-gateway` — port 8080
-
-### Step 4 — Test the Flow
-
-Convenience path: run `./scripts/test-flow.sh` to exercise the whole pipeline in one command (requires `curl` and `jq`). The individual calls below show the API contract.
-
-Register a patient:
 ```bash
-curl -X POST http://localhost:8083/api/auth/register \
+cd patient-service     && mvn spring-boot:run   # 8083
+cd doctor-service      && mvn spring-boot:run   # 8084
+cd appointment-service && mvn spring-boot:run   # 8081
+cd notification-service && mvn spring-boot:run  # 8082
+cd api-gateway         && mvn spring-boot:run   # 8080
+```
+
+Dockerization of the services is planned (Phase 3).
+
+### Step 4 — Exercise the Flow
+
+Convenience path: run the full pipeline in one command (requires `curl` and `jq`):
+
+```bash
+bash scripts/test-flow.sh
+```
+
+It registers a patient and doctor, reads availability, books a slot, confirms the slot disappears, rejects a
+double-booking, cancels, and confirms the slot reappears.
+
+The individual calls (all through the gateway at `8080`) below show the API contract.
+
+Register a patient (returns a JWT):
+
+```bash
+curl -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
-    "firstName": "John",
-    "lastName": "Doe",
-    "username": "john.doe",
-    "password": "secret",
-    "dateOfBirth": "2005-01-01",
-    "email": "john.doe@gmail.com",
+    "firstName": "John", "lastName": "Doe",
+    "username": "john.doe", "password": "secret",
+    "dateOfBirth": "1990-01-01",
+    "email": "john.doe@example.com",
     "insuranceType": "PRIVATE"
   }'
 ```
 
 Create a doctor:
+
 ```bash
-# 1. Get available specialties
-curl -X GET http://localhost:8084/api/specialties
+# 1. Get specialties
+curl http://localhost:8080/api/specialties
 
 # 2. Create a doctor (replace <specialty-id> with an id from step 1)
-curl -X POST http://localhost:8084/api/doctors \
+curl -X POST http://localhost:8080/api/doctors \
   -H "Content-Type: application/json" \
   -d '{
-    "firstName": "Jane",
-    "lastName": "Smith",
+    "firstName": "Jane", "lastName": "Smith",
     "email": "jane@clinic.com",
     "phoneNumber": "+49 30 1234567",
-    "address": {
-      "street": "Friedrichstrasse",
-      "houseNumber": "12",
-      "postalCode": "10117",
-      "city": "Berlin"
-    },
+    "address": { "street": "Friedrichstrasse", "houseNumber": "12", "postalCode": "10117", "city": "Berlin", "country": "Germany" },
     "specialtyIds": ["<specialty-id>"],
-    "openingHours": [
-      { "dayOfWeek": "MONDAY", "startTime": "09:00", "endTime": "17:00" }
-    ],
+    "openingHours": [ { "dayOfWeek": "MONDAY", "startTime": "09:00", "endTime": "17:00" } ],
     "languages": ["ENGLISH"]
   }'
 ```
 
-Check a doctor's available slots (pick a date whose weekday matches the doctor's opening hours):
-```bash
-curl -X GET "http://localhost:8080/api/availability?doctorId=<doctor-id>&date=2026-07-13"
-```
-The response lists bookable 30-minute slot start times. Pick one for the booking below.
+Check a doctor's available slots (use a date whose weekday matches the opening hours; public, no token):
 
-Book an appointment through the API Gateway (use a slot from the availability response):
+```bash
+curl "http://localhost:8080/api/availability?doctorId=<doctor-id>&date=2026-07-13"
+```
+
+Book an appointment (requires the patient token from register/login; the patient id is taken from the token, not the
+body):
+
 ```bash
 curl -X POST http://localhost:8080/api/appointments \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
-    "patientId": "<patient-id>",
     "doctorId": "<doctor-id>",
     "dateTime": "2026-07-13T10:00:00",
     "type": "INITIAL_CONSULTATION",
@@ -284,18 +331,21 @@ curl -X POST http://localhost:8080/api/appointments \
   }'
 ```
 
-Cancel an appointment:
+Cancel an appointment (requires the owning patient's token):
+
 ```bash
-curl -X PUT http://localhost:8080/api/appointments/<appointment-id>/cancel
+curl -X PUT http://localhost:8080/api/appointments/<appointment-id>/cancel \
+  -H "Authorization: Bearer <token>"
 ```
 
-Check availability again after booking or cancelling to see the slot disappear, then reappear.
+Re-check availability after booking or cancelling to see the slot disappear, then reappear.
 
 ### Step 5 — Verify the Event Flow
 
-* Kafka UI: `http://localhost:8090` — verify `appointment.booked`, `patient.registered`, and `doctor.registered` topics have messages
-* Notification Service logs — verify `appointment.booked` event was consumed
-* pgAdmin — connect to `notification_db` on port `5433` and verify notification record was saved
+* Kafka UI (`http://localhost:8090`): confirm `patient.registered`, `doctor.registered`, `appointment.booked`, and
+  `appointment.cancelled` have messages.
+* Appointment Service: confirm `valid_patient` / `valid_doctor` rows appear in `appointment_db` (the read-model).
+* Notification Service: confirm the booking event was consumed and a notification record was saved in `notification_db`.
 
 ---
 
@@ -309,6 +359,8 @@ healthtech-booking/
 ├── patient-service/
 ├── doctor-service/
 ├── infrastructure/
+├── scripts/
+│   └── test-flow.sh
 ├── docs/
 │   ├── adr/
 │   └── architecture/
@@ -319,14 +371,14 @@ healthtech-booking/
 
 ## Infrastructure Ports
 
-| Resource            | Host Port | Notes                      |
-| ------------------- | --------- | -------------------------- |
-| Kafka               | 9092      | PLAINTEXT (host access)    |
-| Kafka UI            | 8090      | Browse topics and messages |
-| PostgreSQL (appt)   | 5432      | `appointment_db`           |
-| PostgreSQL (notif)  | 5433      | `notification_db`          |
-| PostgreSQL (patient)| 5434      | `patient_db`               |
-| PostgreSQL (doctor) | 5435      | `doctor_db`                |
+| Resource             | Host Port | Notes                      |
+|----------------------|-----------|----------------------------|
+| Kafka                | 9092      | PLAINTEXT (host access)    |
+| Kafka UI             | 8090      | Browse topics and messages |
+| PostgreSQL (appt)    | 5432      | `appointment_db`           |
+| PostgreSQL (notif)   | 5433      | `notification_db`          |
+| PostgreSQL (patient) | 5434      | `patient_db`               |
+| PostgreSQL (doctor)  | 5435      | `doctor_db`                |
 
 ---
 

@@ -18,20 +18,21 @@ import static org.springframework.http.ProblemDetail.forStatusAndDetail;
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(@Nonnull MethodArgumentNotValidException ex, @Nonnull HttpHeaders headers,
-                                                                  @Nonnull HttpStatusCode status, @Nonnull WebRequest request){
+                                                                  @Nonnull HttpStatusCode status, @Nonnull WebRequest request) {
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
         problemDetail.setTitle("Validation Error");
-        Map<String, String> errors =  new HashMap<>();
+        Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getFieldErrors().forEach(fieldError -> errors.put(fieldError.getField(), fieldError.getDefaultMessage()));
         problemDetail.setProperty("errors", errors);
         return ResponseEntity.badRequest().body(problemDetail);
     }
 
     @ExceptionHandler(Exception.class)
-    public ProblemDetail handleUnexpected(Exception ex){
-        log.error(ex.getMessage(),ex);
+    public ProblemDetail handleUnexpected(Exception ex) {
+        log.error(ex.getMessage(), ex);
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error occurred");
         problemDetail.setTitle("Internal Server Error");
         return problemDetail;
@@ -77,5 +78,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problemDetail.setTitle("Appointment Not Found");
         return problemDetail;
+    }
+
+    @ExceptionHandler(AppointmentAccessDeniedException.class)
+    public ProblemDetail handleAppointmentAccessDeniedException(AppointmentAccessDeniedException ex) {
+        ProblemDetail pd = forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        pd.setTitle("Forbidden: not resource owner");
+        return pd;
+    }
+
+    @ExceptionHandler(WrongTokenTypeException.class)
+    public ProblemDetail handleWrongTokenTypeException(WrongTokenTypeException ex) {
+        ProblemDetail pd = forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        pd.setTitle("Forbidden: wrong token type");
+        return pd;
     }
 }

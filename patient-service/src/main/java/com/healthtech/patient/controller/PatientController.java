@@ -20,7 +20,7 @@ public class PatientController {
     @GetMapping("/{id}")
     public ResponseEntity<PatientResponse> getPatientProfile(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt){
         if(!jwt.getSubject().equals(id.toString())){
-            return new ResponseEntity<>(HttpStatus.FORBIDDEN);
+            return new ResponseEntity<>(HttpStatus.FORBIDDEN); // TODO: do this in service, same as in Appointment Service
         }
 
         return ResponseEntity.ok(patientService.getPatientProfileById(id));

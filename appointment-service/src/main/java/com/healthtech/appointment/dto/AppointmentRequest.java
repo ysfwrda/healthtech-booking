@@ -14,11 +14,6 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class AppointmentRequest {
-    // Provisional: will be derived from the JWT subject in the gateway auth work.
-    // Do not treat body-supplied patientId as trusted long-term.
-    @NotNull
-    private UUID patientId;
-
     @NotNull
     private UUID doctorId;
 

@@ -1,3 +1,7 @@
+app:
+  jwt:
+    public-key: classpath:keys/public.pem
+
 spring:
   application:
     name: appointment-service
