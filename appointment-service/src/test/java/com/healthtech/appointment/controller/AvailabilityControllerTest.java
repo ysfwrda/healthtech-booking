@@ -1,10 +1,13 @@
 package com.healthtech.appointment.controller;
 
 import com.healthtech.appointment.dto.AvailableSlotsResponse;
+import com.healthtech.appointment.security.SecurityConfig;
 import com.healthtech.appointment.service.AppointmentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -20,7 +23,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+// GET /api/availability/** is permitAll in SecurityConfig, but Spring Security's default
+// fallback (deny all) applies to any @WebMvcTest slice that does not load a SecurityConfig,
+// now that spring-boot-starter-oauth2-resource-server is on the classpath. Importing the
+// real SecurityConfig (with a mocked JwtDecoder so no key material is needed) restores the
+// permitAll rule for this public endpoint without requiring a token in these tests.
 @WebMvcTest(AvailabilityController.class)
+@Import(SecurityConfig.class)
 class AvailabilityControllerTest {
 
     @Autowired
@@ -28,6 +37,9 @@ class AvailabilityControllerTest {
 
     @MockitoBean
     private AppointmentService appointmentService;
+
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
 
     @Test
     void getAvailability_validRequest_shouldReturn200WithMockedBodyAndParsedDate() throws Exception {

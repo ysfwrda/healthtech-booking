@@ -7,6 +7,7 @@ import com.healthtech.appointment.dto.AppointmentResponse;
 import com.healthtech.appointment.dto.AvailableSlotsResponse;
 import com.healthtech.appointment.event.AppointmentBooked;
 import com.healthtech.appointment.event.AppointmentCancelled;
+import com.healthtech.appointment.exception.AppointmentAccessDeniedException;
 import com.healthtech.appointment.exception.AppointmentNotFoundException;
 import com.healthtech.appointment.exception.UnknownDoctorException;
 import com.healthtech.appointment.mapper.AppointmentMapper;
@@ -104,7 +105,6 @@ class AppointmentServiceTest {
                 .build();
 
         AppointmentRequest request = AppointmentRequest.builder()
-                .patientId(patientId)
                 .doctorId(doctorId)
                 .dateTime(dateTime)
                 .type(INITIAL_CONSULTATION)
@@ -120,7 +120,7 @@ class AppointmentServiceTest {
         when(appointmentMapper.toResponse(appointment)).thenReturn(response);
 
         // Act
-        AppointmentResponse result = appointmentService.bookAppointment(request);
+        AppointmentResponse result = appointmentService.bookAppointment(request, patientId);
 
         // Assert
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
@@ -129,11 +129,50 @@ class AppointmentServiceTest {
         verify(bookedEventKafkaTemplate, times(1)).send(eq("appointment.booked"), any(AppointmentBooked.class));    }
 
     @Test
+    void bookAppointment_shouldSetPatientIdFromTokenParameterNotFromMappedRequest() {
+        // Arrange: the mapper produces an entity carrying some other patientId (as it
+        // would if the DTO still had a stray value); the token-derived id must win.
+        UUID tokenPatientId = UUID.randomUUID();
+        UUID mapperPatientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        LocalDateTime dateTime = LocalDateTime.of(2026, 8, 10, 10, 0);
+
+        Appointment appointment = Appointment.builder()
+                .patientId(mapperPatientId)
+                .doctorId(doctorId)
+                .dateTime(dateTime)
+                .type(INITIAL_CONSULTATION)
+                .build();
+
+        AppointmentRequest request = AppointmentRequest.builder()
+                .doctorId(doctorId)
+                .dateTime(dateTime)
+                .type(INITIAL_CONSULTATION)
+                .build();
+
+        stubValidReadModel(tokenPatientId, doctorId, dateTime);
+        when(appointmentMapper.toEntity(request)).thenReturn(appointment);
+        when(appointmentRepository.save(any(Appointment.class))).thenReturn(appointment);
+        when(appointmentMapper.toResponse(appointment)).thenReturn(AppointmentResponse.builder().build());
+
+        // Act
+        appointmentService.bookAppointment(request, tokenPatientId);
+
+        // Assert: the persisted appointment carries the token's patientId, not the mapper's
+        ArgumentCaptor<Appointment> savedCaptor = ArgumentCaptor.forClass(Appointment.class);
+        verify(appointmentRepository).save(savedCaptor.capture());
+        assertThat(savedCaptor.getValue().getPatientId()).isEqualTo(tokenPatientId);
+        assertThat(savedCaptor.getValue().getPatientId()).isNotEqualTo(mapperPatientId);
+    }
+
+    @Test
     void cancelAppointment_shouldUpdateStatusToCancelledAndPublishEvent() {
         // Arrange
+        UUID patientId = UUID.randomUUID();
         Appointment appointment = Appointment.builder()
                 .type(INITIAL_CONSULTATION)
                 .id(UUID.randomUUID())
+                .patientId(patientId)
                 .build();
 
         AppointmentResponse response = AppointmentResponse.builder()
@@ -145,7 +184,7 @@ class AppointmentServiceTest {
         when(appointmentMapper.toResponse(appointment)).thenReturn(response);
 
         // Act
-        AppointmentResponse result = appointmentService.cancelAppointment(appointment.getId());
+        AppointmentResponse result = appointmentService.cancelAppointment(appointment.getId(), patientId);
 
         // Assert
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
@@ -155,13 +194,36 @@ class AppointmentServiceTest {
     }
 
     @Test
+    void cancelAppointment_mismatchedPatientId_shouldThrowAccessDeniedAndNotCancelOrSave() {
+        // Arrange
+        UUID ownerPatientId = UUID.randomUUID();
+        UUID callerPatientId = UUID.randomUUID();
+        Appointment appointment = Appointment.builder()
+                .id(UUID.randomUUID())
+                .patientId(ownerPatientId)
+                .type(INITIAL_CONSULTATION)
+                .status(AppointmentStatus.CONFIRMED)
+                .build();
+
+        when(appointmentRepository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+
+        // Act and Assert
+        assertThatThrownBy(() -> appointmentService.cancelAppointment(appointment.getId(), callerPatientId))
+                .isInstanceOf(AppointmentAccessDeniedException.class);
+
+        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
+        verify(appointmentRepository, never()).save(any());
+        verify(cancelledEventKafkaTemplate, never()).send(any(), any());
+    }
+
+    @Test
     void cancelAppointment_appointmentNotFound_shouldThrowAppointmentNotFoundException() {
         // Arrange
         UUID appointmentId = UUID.randomUUID();
         when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.empty());
 
         // Act and Assert
-        assertThatThrownBy(() -> appointmentService.cancelAppointment(appointmentId))
+        assertThatThrownBy(() -> appointmentService.cancelAppointment(appointmentId, UUID.randomUUID()))
                 .isInstanceOf(AppointmentNotFoundException.class)
                 .hasMessage("Appointment not found: " + appointmentId);
 
@@ -186,7 +248,6 @@ class AppointmentServiceTest {
                 .build();
 
         AppointmentRequest request = AppointmentRequest.builder()
-                .patientId(patientId)
                 .doctorId(doctorId)
                 .dateTime(dateTime)
                 .type(INITIAL_CONSULTATION)
@@ -198,7 +259,7 @@ class AppointmentServiceTest {
         when(appointmentMapper.toResponse(appointment)).thenReturn(AppointmentResponse.builder().build());
 
         // Act
-        appointmentService.bookAppointment(request);
+        appointmentService.bookAppointment(request, patientId);
 
         // Assert: event carries the saved appointment's IDs
         ArgumentCaptor<AppointmentBooked> eventCaptor = ArgumentCaptor.forClass(AppointmentBooked.class);
@@ -229,7 +290,6 @@ class AppointmentServiceTest {
                 .build();
 
         AppointmentRequest request = AppointmentRequest.builder()
-                .patientId(patientId)
                 .doctorId(doctorId)
                 .dateTime(dateTime)
                 .type(INITIAL_CONSULTATION)
@@ -241,7 +301,7 @@ class AppointmentServiceTest {
         when(appointmentMapper.toResponse(appointment)).thenReturn(AppointmentResponse.builder().build());
 
         // Act
-        appointmentService.bookAppointment(request);
+        appointmentService.bookAppointment(request, patientId);
 
         // Assert: duration is server-set regardless of request content
         assertThat(appointment.getDuration()).isEqualTo(30);
@@ -251,8 +311,10 @@ class AppointmentServiceTest {
     void cancelAppointment_alreadyCancelledAppointment_shouldOverwriteStatusAndPublishEvent() {
         // Documents current behavior: no guard against double-cancellation.
         // Arrange
+        UUID patientId = UUID.randomUUID();
         Appointment appointment = Appointment.builder()
                 .id(UUID.randomUUID())
+                .patientId(patientId)
                 .type(INITIAL_CONSULTATION)
                 .status(AppointmentStatus.CANCELLED)
                 .build();
@@ -263,7 +325,7 @@ class AppointmentServiceTest {
                 AppointmentResponse.builder().status(AppointmentStatus.CANCELLED).build());
 
         // Act
-        AppointmentResponse result = appointmentService.cancelAppointment(appointment.getId());
+        AppointmentResponse result = appointmentService.cancelAppointment(appointment.getId(), patientId);
 
         // Assert
         assertThat(result.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);

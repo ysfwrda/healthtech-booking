@@ -39,16 +39,17 @@ public class AppointmentService {
     private final KafkaTemplate <String, AppointmentBooked> bookedEventKafkaTemplate;
     private final KafkaTemplate<String, AppointmentCancelled> cancelledEventKafkaTemplate;
 
-    public AppointmentResponse bookAppointment(AppointmentRequest request) {
+    public AppointmentResponse bookAppointment(AppointmentRequest request, UUID patientId) {
         Appointment appointment = appointmentMapper.toEntity(request);
+        appointment.setPatientId(patientId);
         appointment.setDuration(SLOT_DURATION_MINUTES);
         appointment.setStatus(AppointmentStatus.CONFIRMED);
 
         ValidPatient patient = validPatientRepository.findById(appointment.getPatientId())
-                .orElseThrow(() -> new UnknownPatientException(appointment.getPatientId())); // TODO: Status 404
+                .orElseThrow(() -> new UnknownPatientException(appointment.getPatientId()));
 
         ValidDoctor doctor = validDoctorRepository.findById(appointment.getDoctorId())
-                .orElseThrow(() -> new UnknownDoctorException(appointment.getDoctorId())); // TODO: Status 404
+                .orElseThrow(() -> new UnknownDoctorException(appointment.getDoctorId()));
 
         LocalTime slotStart = request.getDateTime().toLocalTime();
 
@@ -66,11 +67,11 @@ public class AppointmentService {
                         && !oh.getEndTime().isBefore(slotEnd));      // end   >= slotEnd
 
         if(!aligned ) {
-            throw new SlotNotAlignedException(); // TODO: Status 400
+            throw new SlotNotAlignedException();
         }
 
         if(!appointmentWithinOpeningHours){
-            throw new OutsideOpeningHoursException(); //TODO: Status 422
+            throw new OutsideOpeningHoursException();
         }
 
         Appointment saved;
@@ -78,7 +79,7 @@ public class AppointmentService {
             saved = appointmentRepository.save(appointment);
         }
         catch (DataIntegrityViolationException e) {
-            throw new SlotAlreadyBookedException(); // TOOD: Status 409
+            throw new SlotAlreadyBookedException();
         }
 
         AppointmentBooked event = AppointmentBooked.builder()
@@ -99,9 +100,13 @@ public class AppointmentService {
         return appointmentMapper.toResponse(saved);
     }
 
-    public AppointmentResponse cancelAppointment(UUID appointmentId) {
+    public AppointmentResponse cancelAppointment(UUID appointmentId, UUID patientId) {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new AppointmentNotFoundException("Appointment not found: " + appointmentId));
+
+        if(!appointment.getPatientId().equals(patientId)) {
+            throw new AppointmentAccessDeniedException(appointmentId);
+        }
         appointment.setStatus(AppointmentStatus.CANCELLED);
         Appointment saved = appointmentRepository.save(appointment);
         AppointmentCancelled event = AppointmentCancelled.builder()

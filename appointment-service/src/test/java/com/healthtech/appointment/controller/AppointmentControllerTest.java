@@ -1,130 +1,160 @@
 package com.healthtech.appointment.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.appointment.domain.AppointmentStatus;
 import com.healthtech.appointment.domain.AppointmentType;
 import com.healthtech.appointment.dto.AppointmentRequest;
 import com.healthtech.appointment.dto.AppointmentResponse;
 import com.healthtech.appointment.exception.AppointmentNotFoundException;
+import com.healthtech.appointment.exception.WrongTokenTypeException;
 import com.healthtech.appointment.service.AppointmentService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
 
-@WebMvcTest(AppointmentController.class)
+// A plain Mockito unit test rather than @WebMvcTest: the controller now requires an
+// @AuthenticationPrincipal Jwt, and a mocked Jwt passed directly as a method argument is
+// enough to exercise the controller's own authorization logic without standing up a real
+// Spring Security filter chain (JWT signature validation is Spring Security's concern,
+// covered by SecurityConfig, not this class).
+@ExtendWith(MockitoExtension.class)
 class AppointmentControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @MockitoBean
+    @Mock
     private AppointmentService appointmentService;
 
-    @Test
-    void bookAppointment_shouldReturn201WithResponseBody() throws Exception {
-        // Arrange
-        UUID appointmentId = UUID.randomUUID();
-        AppointmentRequest request = AppointmentRequest.builder()
-                .patientId(UUID.randomUUID())
+    @Mock
+    private Jwt jwt;
+
+    private AppointmentController appointmentController;
+
+    @BeforeEach
+    void setUp() {
+        appointmentController = new AppointmentController(appointmentService);
+    }
+
+    private AppointmentRequest sampleRequest() {
+        return AppointmentRequest.builder()
                 .doctorId(UUID.randomUUID())
                 .dateTime(LocalDateTime.now().plusDays(1))
                 .type(AppointmentType.INITIAL_CONSULTATION)
                 .build();
+    }
+
+    @Test
+    void bookAppointment_patientToken_shouldReturn201WithResponseBody() {
+        // Arrange
+        UUID patientId = UUID.randomUUID();
+        UUID appointmentId = UUID.randomUUID();
+        AppointmentRequest request = sampleRequest();
+
+        when(jwt.getClaimAsString("role")).thenReturn("PATIENT");
+        when(jwt.getSubject()).thenReturn(patientId.toString());
 
         AppointmentResponse response = AppointmentResponse.builder()
                 .id(appointmentId)
-                .status(AppointmentStatus.PENDING)
+                .status(AppointmentStatus.CONFIRMED)
                 .type(AppointmentType.INITIAL_CONSULTATION)
                 .duration(30)
                 .build();
 
-        when(appointmentService.bookAppointment(any(AppointmentRequest.class))).thenReturn(response);
+        when(appointmentService.bookAppointment(eq(request), eq(patientId))).thenReturn(response);
 
-        // Act and Assert
-        mockMvc.perform(post("/api/appointments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(appointmentId.toString()))
-                .andExpect(jsonPath("$.status").value("PENDING"))
-                .andExpect(jsonPath("$.type").value("INITIAL_CONSULTATION"))
-                .andExpect(jsonPath("$.duration").value(30));
+        // Act
+        ResponseEntity<AppointmentResponse> result = appointmentController.bookAppointment(request, jwt);
 
-        verify(appointmentService).bookAppointment(any(AppointmentRequest.class));
+        // Assert
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(result.getBody()).isEqualTo(response);
+        assertThat(result.getBody().getId()).isEqualTo(appointmentId);
+        assertThat(result.getBody().getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
     }
 
     @Test
-    void bookAppointment_shouldPassRequestBodyToService() throws Exception {
+    void bookAppointment_patientToken_shouldCallServiceWithPatientIdFromTokenSubject() {
         // Arrange
-        AppointmentRequest request = AppointmentRequest.builder()
-                .patientId(UUID.randomUUID())
-                .doctorId(UUID.randomUUID())
-                .dateTime(LocalDateTime.of(2026, 8, 1, 10, 0))
-                .type(AppointmentType.FOLLOW_UP)
-                .notes("Follow-up visit")
-                .build();
+        UUID patientId = UUID.randomUUID();
+        AppointmentRequest request = sampleRequest();
 
-        when(appointmentService.bookAppointment(any())).thenReturn(AppointmentResponse.builder()
-                .id(UUID.randomUUID())
-                .status(AppointmentStatus.PENDING)
-                .build());
+        when(jwt.getClaimAsString("role")).thenReturn("PATIENT");
+        when(jwt.getSubject()).thenReturn(patientId.toString());
+        when(appointmentService.bookAppointment(any(), any())).thenReturn(AppointmentResponse.builder().build());
 
-        // Act and Assert
-        mockMvc.perform(post("/api/appointments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated());
+        // Act
+        appointmentController.bookAppointment(request, jwt);
 
-        verify(appointmentService).bookAppointment(any(AppointmentRequest.class));
+        // Assert: the id passed to the service is exactly the token's subject, proving
+        // identity comes from the token and not from the request body.
+        ArgumentCaptor<UUID> patientIdCaptor = ArgumentCaptor.forClass(UUID.class);
+        verify(appointmentService).bookAppointment(eq(request), patientIdCaptor.capture());
+        assertThat(patientIdCaptor.getValue()).isEqualTo(patientId);
     }
 
     @Test
-    void cancelAppointment_shouldReturn200WithCancelledStatus() throws Exception {
+    void bookAppointment_nonPatientToken_shouldThrowWrongTokenExceptionAndNeverCallService() {
+        // Arrange
+        AppointmentRequest request = sampleRequest();
+        when(jwt.getClaimAsString("role")).thenReturn("DOCTOR");
+
+        // Act and Assert: the critical "rejected" direction of the role check.
+        assertThatThrownBy(() -> appointmentController.bookAppointment(request, jwt))
+                .isInstanceOf(WrongTokenTypeException.class);
+
+        verifyNoInteractions(appointmentService);
+    }
+
+    @Test
+    void cancelAppointment_shouldReturn200AndPassPatientIdFromTokenSubject() {
         // Arrange
         UUID appointmentId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        when(jwt.getSubject()).thenReturn(patientId.toString());
+
         AppointmentResponse response = AppointmentResponse.builder()
                 .id(appointmentId)
                 .status(AppointmentStatus.CANCELLED)
                 .type(AppointmentType.INITIAL_CONSULTATION)
                 .build();
 
-        when(appointmentService.cancelAppointment(appointmentId)).thenReturn(response);
+        when(appointmentService.cancelAppointment(appointmentId, patientId)).thenReturn(response);
 
-        // Act and Assert
-        mockMvc.perform(put("/api/appointments/{id}/cancel", appointmentId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(appointmentId.toString()))
-                .andExpect(jsonPath("$.status").value("CANCELLED"));
+        // Act
+        ResponseEntity<AppointmentResponse> result = appointmentController.cancelAppointment(appointmentId, jwt);
+
+        // Assert
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody().getId()).isEqualTo(appointmentId);
+        assertThat(result.getBody().getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+        verify(appointmentService).cancelAppointment(appointmentId, patientId);
     }
 
     @Test
-    void cancelAppointment_whenNotFound_shouldReturn404ProblemDetail() throws Exception {
+    void cancelAppointment_whenNotFound_shouldPropagateAppointmentNotFoundException() {
         // Arrange
         UUID appointmentId = UUID.randomUUID();
-        when(appointmentService.cancelAppointment(appointmentId))
+        UUID patientId = UUID.randomUUID();
+        when(jwt.getSubject()).thenReturn(patientId.toString());
+        when(appointmentService.cancelAppointment(appointmentId, patientId))
                 .thenThrow(new AppointmentNotFoundException("Appointment not found: " + appointmentId));
 
-        // Act and Assert
-        mockMvc.perform(put("/api/appointments/{id}/cancel", appointmentId))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.title").value("Appointment Not Found"))
-                .andExpect(jsonPath("$.detail").value("Appointment not found: " + appointmentId));
+        // Act and Assert: HTTP status mapping for this exception is GlobalExceptionHandler's
+        // responsibility, not the controller's; here we assert the controller propagates it.
+        assertThatThrownBy(() -> appointmentController.cancelAppointment(appointmentId, jwt))
+                .isInstanceOf(AppointmentNotFoundException.class)
+                .hasMessage("Appointment not found: " + appointmentId);
     }
 }
