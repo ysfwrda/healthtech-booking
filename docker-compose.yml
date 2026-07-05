@@ -137,6 +137,22 @@ services:
     networks:
       - healthtech-net
 
+  # ── Appointment Service ──────────────────────
+  appointment-service:
+    build: ./appointment-service
+    ports:
+      - "8081:8081"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      DB_URL: jdbc:postgresql://postgres-appointment:5432/appointment_db
+      DB_USERNAME: appointment_user
+      DB_PASSWORD: appointment_pass
+    depends_on:
+      - kafka
+      - postgres-appointment
+    networks:
+      - healthtech-net
+
 # ── Volumes ───────────────────────────────────────────────────
 # Named volumes persist data between container restarts.
 # Use `docker-compose down -v` to wipe them (full reset).
