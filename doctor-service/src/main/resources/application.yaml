@@ -1,3 +1,7 @@
+app:
+  jwt:
+    public-key: ${JWT_PUBLIC_KEY_PATH:file:../keys/public.pem}
+
 spring:
   application:
     name: doctor-service
