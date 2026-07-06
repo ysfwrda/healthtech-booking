@@ -1,0 +1,157 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 1.5rem 3rem;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 0;
+  border-bottom: 1px solid #8884;
+  margin-bottom: 2rem;
+}
+
+.brand {
+  font-weight: 700;
+  text-decoration: none;
+  color: inherit;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.nav-username {
+  opacity: 0.7;
+}
+
+.form-page {
+  max-width: 420px;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+  padding: 0.5rem;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 4rem;
+}
+
+button {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.status {
+  padding: 0.5rem 0;
+}
+
+.status-error {
+  color: #d1453b;
+}
+
+.status-loading,
+.status-info {
+  opacity: 0.75;
+}
+
+.filters {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.doctor-list,
+.appointment-list {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.doctor-card,
+.appointment-list li {
+  border: 1px solid #8884;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.appointment-list li {
+  flex-direction: row;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.appointment-list li.cancelled {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.appointment-list li.cancelled button {
+  display: none;
+}
+
+.slot-grid {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.slot {
+  border: 1px solid #8884;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+}
+
+.slot.selected {
+  background: #4a7dfc;
+  color: white;
+  border-color: #4a7dfc;
+}
+
+.booking-form {
+  margin-top: 1.5rem;
+  max-width: 420px;
+}

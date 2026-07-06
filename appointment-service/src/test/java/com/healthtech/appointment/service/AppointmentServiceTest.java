@@ -332,6 +332,33 @@ class AppointmentServiceTest {
         verify(cancelledEventKafkaTemplate, times(1)).send(eq("appointment.cancelled"), any(AppointmentCancelled.class));
     }
 
+    @Test
+    void getAppointmentsForPatient_shouldReturnMappedResponsesOrderedByDateTimeAsc() {
+        // Arrange
+        UUID patientId = UUID.randomUUID();
+        Appointment confirmed = Appointment.builder()
+                .id(UUID.randomUUID()).patientId(patientId).type(INITIAL_CONSULTATION)
+                .status(AppointmentStatus.CONFIRMED).dateTime(LocalDateTime.of(2026, 8, 10, 9, 0)).build();
+        Appointment cancelled = Appointment.builder()
+                .id(UUID.randomUUID()).patientId(patientId).type(INITIAL_CONSULTATION)
+                .status(AppointmentStatus.CANCELLED).dateTime(LocalDateTime.of(2026, 8, 11, 9, 0)).build();
+
+        when(appointmentRepository.findByPatientIdOrderByDateTimeAsc(patientId))
+                .thenReturn(List.of(confirmed, cancelled));
+        when(appointmentMapper.toResponse(confirmed))
+                .thenReturn(AppointmentResponse.builder().id(confirmed.getId()).status(AppointmentStatus.CONFIRMED).build());
+        when(appointmentMapper.toResponse(cancelled))
+                .thenReturn(AppointmentResponse.builder().id(cancelled.getId()).status(AppointmentStatus.CANCELLED).build());
+
+        // Act
+        List<AppointmentResponse> result = appointmentService.getAppointmentsForPatient(patientId);
+
+        // Assert: cancelled appointments are included, not filtered out
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
+        assertThat(result.get(1).getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+    }
+
     // --- getAvailableSlots ---
     // A fixed future date is used so opening-hours blocks can be matched to it by
     // date.getDayOfWeek() without hand-calculating a weekday. It is never "today" at

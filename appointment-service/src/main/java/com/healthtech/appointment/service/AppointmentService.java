@@ -123,6 +123,12 @@ public class AppointmentService {
         return appointmentMapper.toResponse(saved);
     }
 
+    public List<AppointmentResponse> getAppointmentsForPatient(UUID patientId) {
+        return appointmentRepository.findByPatientIdOrderByDateTimeAsc(patientId).stream()
+                .map(appointmentMapper::toResponse)
+                .toList();
+    }
+
     public AvailableSlotsResponse getAvailableSlots(UUID doctorId, LocalDate date) {
         ValidDoctor doctor = validDoctorRepository.findById(doctorId)
                 .orElseThrow(() -> new UnknownDoctorException(doctorId));

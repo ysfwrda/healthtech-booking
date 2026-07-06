@@ -12,6 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -30,6 +31,16 @@ public class AppointmentController {
         UUID patientId = UUID.fromString(jwt.getSubject());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(appointmentService.bookAppointment(request, patientId));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<AppointmentResponse>> getMyAppointments(@AuthenticationPrincipal Jwt jwt) {
+        if (!"PATIENT".equals(jwt.getClaimAsString("role"))) {
+            throw new WrongTokenTypeException();
+        }
+
+        UUID patientId = UUID.fromString(jwt.getSubject());
+        return ResponseEntity.ok(appointmentService.getAppointmentsForPatient(patientId));
     }
 
     @PutMapping("/{id}/cancel")
