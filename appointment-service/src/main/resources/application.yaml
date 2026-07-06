@@ -1,6 +1,6 @@
 app:
   jwt:
-    public-key: classpath:keys/public.pem
+    public-key: ${JWT_PUBLIC_KEY_PATH:file:../keys/public.pem}
 
 spring:
   application:

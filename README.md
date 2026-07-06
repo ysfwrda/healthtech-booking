@@ -240,14 +240,51 @@ Starts Kafka, Zookeeper, four PostgreSQL instances (one per service), and Kafka 
 
 ### Step 2 — JWT Keys
 
-The RSA key pair used to sign and validate tokens is committed for demo convenience (see the Authentication section). No
-key generation is required to run the project. In a real deployment the private key would never be committed; it would
-be injected via a secret manager or generated per environment.
+The RSA key pair used to sign and validate tokens lives at the repo root, outside every service's resources, so there
+is a single source of truth instead of copies baked into each service jar:
+
+```
+keys/
+  private.pem   (gitignored, never committed)
+  public.pem    (committed for clone-and-run convenience)
+```
+
+Patient Service signs tokens with the private key. Appointment Service and the API Gateway validate tokens with the
+public key; neither holds the private key and neither can mint tokens.
+
+Generate your own matching pair (this overwrites the committed `keys/public.pem` locally with one that matches your
+freshly generated private key; that is expected, since a private key generated on your machine can only ever be
+verified by the public key derived from it):
 
 ```bash
-openssl genrsa -out private.pem 2048
-openssl rsa -in private.pem -pubout -out public.pem
+mkdir -p keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out keys/private.pem
+openssl rsa -in keys/private.pem -pubout -out keys/public.pem
 ```
+
+`keys/private.pem` is gitignored and must be generated locally; in a real deployment it would be injected via a secret
+manager instead. If `keys/public.pem` ever drifts from the private key actually in use (for example, a stale commit
+without regenerating it locally), token verification fails closed with a signature error, not a silent bypass.
+
+Each service reads its key path from an environment variable with a local-host default, matching the existing
+`${VAR:default}` pattern used for database and Kafka settings elsewhere in this project:
+
+| Service              | Env var                | Default (host)              |
+|----------------------|-------------------------|------------------------------|
+| patient-service      | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `file:../keys/private.pem`, `file:../keys/public.pem` |
+| doctor-service        | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `file:../keys/private.pem`, `file:../keys/public.pem` |
+| appointment-service   | `JWT_PUBLIC_KEY_PATH`   | `file:../keys/public.pem`    |
+| api-gateway           | `JWT_PUBLIC_KEY_PATH`   | `file:../keys/public.pem`    |
+
+The host defaults assume the process runs from within its own module directory (`cd patient-service && mvn
+spring-boot:run`, matching Step 3 below), so `../keys/` resolves to the repo-root `keys/` directory. Under Docker
+Compose, `./keys` is mounted read-only into each container at `/run/keys` and the env vars are set to
+`file:/run/keys/...` accordingly.
+
+Note: doctor-service does not currently issue tokens (only patient registration and login do), and the API Gateway
+does not yet validate tokens at the edge (per the Authentication section below, that is still planned). Both are
+wired up here for when that code lands, but today only patient-service and appointment-service actually read these
+paths.
 
 ### Step 3 — Start the Services
 
