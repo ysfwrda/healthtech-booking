@@ -45,9 +45,8 @@ export function DoctorDetailPage() {
       });
   }, [doctorId]);
 
-  function loadAvailability() {
+  function refreshSlots() {
     setSlotsStatus("loading");
-    setSelectedSlot(null);
     getAvailability(doctorId, date)
       .then((response) => {
         setSlots(response.availableSlots);
@@ -59,7 +58,18 @@ export function DoctorDetailPage() {
       });
   }
 
-  useEffect(loadAvailability, [doctorId, date]);
+  useEffect(() => {
+    setSelectedSlot(null);
+    setBookingStatus("idle");
+    refreshSlots();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doctorId, date]);
+
+  function selectSlot(slot: string) {
+    setSelectedSlot(slot);
+    setBookingStatus("idle");
+    setBookingMessage("");
+  }
 
   async function handleBook() {
     if (!selectedSlot) {
@@ -72,11 +82,13 @@ export function DoctorDetailPage() {
       setBookingStatus("success");
       setBookingMessage("Appointment booked.");
       setNotes("");
-      loadAvailability();
+      setSelectedSlot(null);
+      refreshSlots();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setBookingMessage("That slot was just taken. Here are the current openings for this day.");
-        loadAvailability();
+        setSelectedSlot(null);
+        refreshSlots();
       } else {
         setBookingMessage(err instanceof ApiError ? err.message : "Booking failed. Please try again.");
       }
@@ -121,7 +133,7 @@ export function DoctorDetailPage() {
               <button
                 type="button"
                 className={selectedSlot === slot ? "slot selected" : "slot"}
-                onClick={() => setSelectedSlot(slot)}
+                onClick={() => selectSlot(slot)}
               >
                 {slot.slice(11, 16)}
               </button>
@@ -131,30 +143,32 @@ export function DoctorDetailPage() {
       )}
 
       {isAuthenticated ? (
-        selectedSlot && (
-          <div className="booking-form">
-            <h2>Book {selectedSlot.replace("T", " ")}</h2>
-            <label>
-              Appointment type
-              <select value={type} onChange={(e) => setType(e.target.value as AppointmentType)}>
-                {APPOINTMENT_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Notes (optional)
-              <textarea value={notes} maxLength={500} onChange={(e) => setNotes(e.target.value)} />
-            </label>
-            <button type="button" onClick={handleBook} disabled={bookingStatus === "loading"}>
-              {bookingStatus === "loading" ? "Booking..." : "Confirm booking"}
-            </button>
-            {bookingStatus === "error" && <StatusMessage kind="error">{bookingMessage}</StatusMessage>}
-            {bookingStatus === "success" && <StatusMessage kind="info">{bookingMessage}</StatusMessage>}
-          </div>
-        )
+        <>
+          {selectedSlot && (
+            <div className="booking-form">
+              <h2>Book {selectedSlot.replace("T", " ")}</h2>
+              <label>
+                Appointment type
+                <select value={type} onChange={(e) => setType(e.target.value as AppointmentType)}>
+                  {APPOINTMENT_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Notes (optional)
+                <textarea value={notes} maxLength={500} onChange={(e) => setNotes(e.target.value)} />
+              </label>
+              <button type="button" onClick={handleBook} disabled={bookingStatus === "loading"}>
+                {bookingStatus === "loading" ? "Booking..." : "Confirm booking"}
+              </button>
+            </div>
+          )}
+          {bookingStatus === "success" && <StatusMessage kind="info">{bookingMessage}</StatusMessage>}
+          {bookingStatus === "error" && <StatusMessage kind="error">{bookingMessage}</StatusMessage>}
+        </>
       ) : (
         <StatusMessage kind="info">
           <Link to="/login">Log in</Link> to book an appointment.

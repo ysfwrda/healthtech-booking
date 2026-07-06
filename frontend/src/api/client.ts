@@ -61,7 +61,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 && auth) {
     clearSession();
     window.location.assign("/login");
     throw new ApiError(401, "Session Expired", "Your session has expired. Please log in again.");
