@@ -14,4 +14,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
 
     List<Appointment> findByDoctorIdAndDateTimeGreaterThanEqualAndDateTimeLessThanAndStatusNot(
             UUID doctorId, LocalDateTime startOfDayInclusive, LocalDateTime endOfDayExclusive, AppointmentStatus excludedStatus);
+
+    List<Appointment> findByPatientIdOrderByDateTimeAsc(UUID patientId);
 }

@@ -240,14 +240,68 @@ Starts Kafka, Zookeeper, four PostgreSQL instances (one per service), and Kafka 
 
 ### Step 2 — JWT Keys
 
-The RSA key pair used to sign and validate tokens is committed for demo convenience (see the Authentication section). No
-key generation is required to run the project. In a real deployment the private key would never be committed; it would
-be injected via a secret manager or generated per environment.
+The RSA key pair used to sign and validate tokens lives at the repo root, outside every service's resources, so there
+is a single source of truth instead of copies baked into each service jar:
+
+```
+keys/
+  private.pem   (gitignored, never committed)
+  public.pem    (committed for clone-and-run convenience)
+```
+
+Patient Service signs tokens with the private key. Appointment Service and the API Gateway validate tokens with the
+public key; neither holds the private key and neither can mint tokens.
+
+Generate your own matching pair (this overwrites the committed `keys/public.pem` locally with one that matches your
+freshly generated private key; that is expected, since a private key generated on your machine can only ever be
+verified by the public key derived from it):
 
 ```bash
-openssl genrsa -out private.pem 2048
-openssl rsa -in private.pem -pubout -out public.pem
+mkdir -p keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out keys/private.pem
+openssl rsa -in keys/private.pem -pubout -out keys/public.pem
 ```
+
+`keys/private.pem` is gitignored and must be generated locally; in a real deployment it would be injected via a secret
+manager instead. If `keys/public.pem` ever drifts from the private key actually in use (for example, a stale commit
+without regenerating it locally), token verification fails closed with a signature error, not a silent bypass.
+
+Each service reads its key path from an environment variable with a local-host default, matching the existing
+`${VAR:default}` pattern used for database and Kafka settings elsewhere in this project:
+
+| Service              | Env var                | Default (host)              |
+|----------------------|-------------------------|------------------------------|
+| patient-service      | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `file:../keys/private.pem`, `file:../keys/public.pem` |
+| doctor-service        | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `file:../keys/private.pem`, `file:../keys/public.pem` |
+| appointment-service   | `JWT_PUBLIC_KEY_PATH`   | `file:../keys/public.pem`    |
+| api-gateway           | `JWT_PUBLIC_KEY_PATH`   | `file:../keys/public.pem`    |
+
+The host defaults assume the process runs from within its own module directory (`cd patient-service && mvn
+spring-boot:run`, matching Step 3 below), so `../keys/` resolves to the repo-root `keys/` directory. Under Docker
+Compose, `./keys` is mounted read-only into each container at `/run/keys` and the env vars are set to
+`file:/run/keys/...` accordingly.
+
+Note: doctor-service does not currently issue tokens (only patient registration and login do), but it does validate
+them: writes (`POST /api/doctors`) require an authenticated caller, while browsing and specialty reads stay public.
+The API Gateway does not yet validate tokens at the edge (per the Authentication section below, that is still
+planned); its `JWT_PUBLIC_KEY_PATH` wiring is in place for when that code lands, but nothing reads it yet.
+
+### Test keys
+
+`@WebMvcTest` slice tests (`PatientControllerTest`, `DoctorControllerTest`, `SpecialtyControllerTest`,
+`AvailabilityControllerTest`) never read a PEM file at all. Each service's `SecurityConfig` holds only the
+authorization rules; the `JwtDecoder` bean (the thing that actually needs a real key) lives in a separate
+`JwtDecoderConfig`. A slice test imports `SecurityConfig` to get the real permitAll/authenticated rules, then
+supplies its own `@MockitoBean JwtDecoder`, so `JwtDecoderConfig` and the `RsaKeyProperties` binding behind it are
+never loaded into that context. These tests pass in a clean checkout with no `keys/` directory present at all.
+
+`@SpringBootTest` tests (`PatientServiceApplicationTests`, `DoctorServiceApplicationTests`,
+`AppointmentServiceApplicationTests`) load the full application, including `JwtDecoderConfig`, so they do exercise
+real RS256 signature validation. They read from the exact same `keys/` directory described above, the one and only
+key location in this repo: there is no second, duplicate test-key directory to drift out of sync with it. A real
+deployment never uses this location either; it overrides `JWT_PRIVATE_KEY_PATH`/`JWT_PUBLIC_KEY_PATH` to point at a
+mounted secret instead (see the Docker Compose table above), so nothing in the test tree can ever read a production
+key.
 
 ### Step 3 — Start the Services
 

@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -140,6 +141,38 @@ class AppointmentControllerTest {
         assertThat(result.getBody().getId()).isEqualTo(appointmentId);
         assertThat(result.getBody().getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
         verify(appointmentService).cancelAppointment(appointmentId, patientId);
+    }
+
+    @Test
+    void getMyAppointments_patientToken_shouldReturn200WithPatientIdFromTokenSubject() {
+        // Arrange
+        UUID patientId = UUID.randomUUID();
+        when(jwt.getClaimAsString("role")).thenReturn("PATIENT");
+        when(jwt.getSubject()).thenReturn(patientId.toString());
+
+        List<AppointmentResponse> responses = List.of(
+                AppointmentResponse.builder().id(UUID.randomUUID()).status(AppointmentStatus.CONFIRMED).build());
+        when(appointmentService.getAppointmentsForPatient(patientId)).thenReturn(responses);
+
+        // Act
+        ResponseEntity<List<AppointmentResponse>> result = appointmentController.getMyAppointments(jwt);
+
+        // Assert
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody()).isEqualTo(responses);
+        verify(appointmentService).getAppointmentsForPatient(patientId);
+    }
+
+    @Test
+    void getMyAppointments_nonPatientToken_shouldThrowWrongTokenExceptionAndNeverCallService() {
+        // Arrange
+        when(jwt.getClaimAsString("role")).thenReturn("DOCTOR");
+
+        // Act and Assert
+        assertThatThrownBy(() -> appointmentController.getMyAppointments(jwt))
+                .isInstanceOf(WrongTokenTypeException.class);
+
+        verifyNoInteractions(appointmentService);
     }
 
     @Test

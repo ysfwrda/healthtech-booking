@@ -51,6 +51,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problemDetail;
     }
 
+    @ExceptionHandler(EmailAlreadyExistsException.class)
+    public ProblemDetail handleEmailAlreadyExistsException(EmailAlreadyExistsException ex) {
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problemDetail.setTitle("Email Already Registered");
+        return problemDetail;
+    }
+
     @ExceptionHandler(PatientNotFoundException.class)
     public ProblemDetail handlePatientNotFoundException(PatientNotFoundException ex) {
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
