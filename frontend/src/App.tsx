@@ -7,10 +7,22 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { DoctorSearchPage } from "./pages/DoctorSearchPage";
 import { DoctorDetailPage } from "./pages/DoctorDetailPage";
 import { MyAppointmentsPage } from "./pages/MyAppointmentsPage";
+import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { setNavigate } from "./api/navigation";
+
+function RouterBridge() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    setNavigate((path) => navigate(path));
+  }, [navigate]);
+  return null;
+}
 
 function App() {
   return (
     <BrowserRouter>
+      <RouterBridge />
       <AuthProvider>
         <Routes>
           <Route element={<Layout />}>
