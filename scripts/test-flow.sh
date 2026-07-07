@@ -41,6 +41,7 @@ SPECIALTY_ID="$(curl -s "$GATEWAY/api/specialties" | jq -r '.[0].id')"
 [ "$SPECIALTY_ID" != "null" ] && [ -n "$SPECIALTY_ID" ] || fail "no specialty found; is the seeder running?"
 DOCTOR_RESP="$(curl -s -X POST "$GATEWAY/api/doctors" \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "firstName": "Jane", "lastName": "Smith",
     "email": "jane.'"$RANDOM"'@clinic.com",

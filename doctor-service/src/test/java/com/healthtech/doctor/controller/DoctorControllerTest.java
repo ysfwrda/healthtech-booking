@@ -27,14 +27,16 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-// Every doctor-service endpoint is permitAll in SecurityConfig, but Spring Security's default
-// fallback (deny all) applies to any @WebMvcTest slice that does not load a SecurityConfig, now
-// that spring-boot-starter-oauth2-resource-server is on the classpath. Importing the real
-// SecurityConfig (with a mocked JwtDecoder so no key material is needed) restores the permitAll
-// rule for these public endpoints without requiring a token in these tests.
+// GET /api/doctors/** is permitAll in SecurityConfig, but POST requires authentication. Spring
+// Security's default fallback (deny all) also applies to any @WebMvcTest slice that does not load
+// a SecurityConfig, now that spring-boot-starter-oauth2-resource-server is on the classpath.
+// Importing the real SecurityConfig (with a mocked JwtDecoder so no key material is needed)
+// restores the real rules; POST requests below use .with(jwt()) to simulate an authenticated
+// caller, matching the actual requirement.
 @WebMvcTest(DoctorController.class)
 @Import(SecurityConfig.class)
 class DoctorControllerTest {
@@ -97,6 +99,7 @@ class DoctorControllerTest {
 
         // Act & Assert
         mockMvc.perform(post("/api/doctors")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(validRequest())))
                 .andExpect(status().isCreated())
@@ -115,6 +118,7 @@ class DoctorControllerTest {
 
         // Act & Assert
         mockMvc.perform(post("/api/doctors")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest());
@@ -130,6 +134,7 @@ class DoctorControllerTest {
 
         // Act & Assert
         mockMvc.perform(post("/api/doctors")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest());
@@ -145,6 +150,7 @@ class DoctorControllerTest {
 
         // Act & Assert
         mockMvc.perform(post("/api/doctors")
+                        .with(jwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isBadRequest());
