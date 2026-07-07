@@ -93,6 +93,19 @@ class DoctorControllerTest {
     // -- POST /api/doctors ----------------------------------------------------
 
     @Test
+    void createDoctor_noToken_returns401() throws Exception {
+        // Missing credentials on a protected endpoint is a 401 (not 403) under the resource
+        // server: 403 is reserved for a caller who authenticated but lacks permission, which
+        // does not apply here since anyRequest().authenticated() has no role check at all.
+        mockMvc.perform(post("/api/doctors")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validRequest())))
+                .andExpect(status().isUnauthorized());
+
+        verify(doctorService, never()).createDoctor(any());
+    }
+
+    @Test
     void createDoctor_validRequest_returns201WithBody() throws Exception {
         // Arrange
         when(doctorService.createDoctor(any(CreateDoctorRequest.class))).thenReturn(sampleResponse());
@@ -165,9 +178,14 @@ class DoctorControllerTest {
         // Arrange
         when(doctorService.getDoctorById(doctorId)).thenReturn(sampleResponse());
 
-        // Act & Assert
+        // Act & Assert: no token is sent, and the request must reach the controller and
+        // succeed under the real permitAll rule. A missing or wrongly governed
+        // SecurityFilterChain would answer with 401 and a WWW-Authenticate: Basic header
+        // before the controller is ever invoked; asserting the header is absent is a
+        // direct regression guard against that failure mode.
         mockMvc.perform(get("/api/doctors/{id}", doctorId))
                 .andExpect(status().isOk())
+                .andExpect(header().doesNotExist("WWW-Authenticate"))
                 .andExpect(jsonPath("$.id").value(doctorId.toString()))
                 .andExpect(jsonPath("$.lastName").value("Mueller"));
 

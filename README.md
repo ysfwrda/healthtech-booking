@@ -281,10 +281,27 @@ spring-boot:run`, matching Step 3 below), so `../keys/` resolves to the repo-roo
 Compose, `./keys` is mounted read-only into each container at `/run/keys` and the env vars are set to
 `file:/run/keys/...` accordingly.
 
-Note: doctor-service does not currently issue tokens (only patient registration and login do), and the API Gateway
-does not yet validate tokens at the edge (per the Authentication section below, that is still planned). Both are
-wired up here for when that code lands, but today only patient-service and appointment-service actually read these
-paths.
+Note: doctor-service does not currently issue tokens (only patient registration and login do), but it does validate
+them: writes (`POST /api/doctors`) require an authenticated caller, while browsing and specialty reads stay public.
+The API Gateway does not yet validate tokens at the edge (per the Authentication section below, that is still
+planned); its `JWT_PUBLIC_KEY_PATH` wiring is in place for when that code lands, but nothing reads it yet.
+
+### Test keys
+
+`@WebMvcTest` slice tests (`PatientControllerTest`, `DoctorControllerTest`, `SpecialtyControllerTest`,
+`AvailabilityControllerTest`) never read a PEM file at all. Each service's `SecurityConfig` holds only the
+authorization rules; the `JwtDecoder` bean (the thing that actually needs a real key) lives in a separate
+`JwtDecoderConfig`. A slice test imports `SecurityConfig` to get the real permitAll/authenticated rules, then
+supplies its own `@MockitoBean JwtDecoder`, so `JwtDecoderConfig` and the `RsaKeyProperties` binding behind it are
+never loaded into that context. These tests pass in a clean checkout with no `keys/` directory present at all.
+
+`@SpringBootTest` tests (`PatientServiceApplicationTests`, `DoctorServiceApplicationTests`,
+`AppointmentServiceApplicationTests`) load the full application, including `JwtDecoderConfig`, so they do exercise
+real RS256 signature validation. They read from the exact same `keys/` directory described above, the one and only
+key location in this repo: there is no second, duplicate test-key directory to drift out of sync with it. A real
+deployment never uses this location either; it overrides `JWT_PRIVATE_KEY_PATH`/`JWT_PUBLIC_KEY_PATH` to point at a
+mounted secret instead (see the Docker Compose table above), so nothing in the test tree can ever read a production
+key.
 
 ### Step 3 — Start the Services
 

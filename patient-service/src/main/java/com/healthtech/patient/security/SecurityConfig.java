@@ -10,10 +10,12 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 
+// Authorization rules only. The JwtDecoder bean (and the RsaKeyProperties it needs,
+// which requires real PEM files) lives in JwtDecoderConfig, not here, so a
+// @WebMvcTest slice can @Import(SecurityConfig.class) to get the real rules while
+// supplying its own mocked JwtDecoder bean, without ever reading a key from disk.
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -33,11 +35,6 @@ public class SecurityConfig {
                 );
 
         return http.build();
-    }
-
-    @Bean
-    public JwtDecoder jwtDecoder(RsaKeyProperties rsaKeyProperties) {
-        return NimbusJwtDecoder.withPublicKey(rsaKeyProperties.publicKey()).build();
     }
 
     @Bean
