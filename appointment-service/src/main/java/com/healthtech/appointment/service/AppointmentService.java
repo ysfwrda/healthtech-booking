@@ -49,10 +49,10 @@ public class AppointmentService {
         appointment.setStatus(AppointmentStatus.CONFIRMED);
 
         ValidPatient patient = validPatientRepository.findById(appointment.getPatientId())
-                .orElseThrow(() -> new UnknownPatientException(appointment.getPatientId()));
+                .orElseThrow(() -> new PatientNotFoundException(appointment.getPatientId()));
 
         ValidDoctor doctor = validDoctorRepository.findById(appointment.getDoctorId())
-                .orElseThrow(() -> new UnknownDoctorException(appointment.getDoctorId()));
+                .orElseThrow(() -> new DoctorNotFoundException(appointment.getDoctorId()));
 
         LocalTime slotStart = request.getDateTime().toLocalTime();
 
@@ -136,7 +136,7 @@ public class AppointmentService {
 
     public AvailableSlotsResponse getAvailableSlots(UUID doctorId, LocalDate date) {
         ValidDoctor doctor = validDoctorRepository.findById(doctorId)
-                .orElseThrow(() -> new UnknownDoctorException(doctorId));
+                .orElseThrow(() -> new DoctorNotFoundException(doctorId));
 
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.plusDays(1).atStartOfDay();

@@ -1,7 +1,3 @@
-app:
-  jwt:
-    public-key: ${JWT_PUBLIC_KEY_PATH:file:../keys/public.pem}
-
 spring:
   application:
     name: doctor-service
@@ -26,6 +22,10 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+app:
+  jwt:
+    public-key: ${JWT_PUBLIC_KEY_PATH:file:../keys/public.pem}
 
 management:
   endpoints:

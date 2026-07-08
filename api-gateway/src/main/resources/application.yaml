@@ -10,9 +10,6 @@ app:
 
 cors:
   allowed-origins: ${FRONTEND_URL:http://localhost:5173}
-  
-server:
-  port: 8080
 
 management:
   endpoints:
@@ -23,3 +20,6 @@ management:
 logging:
   pattern:
     level: "%5p [%X{correlationId}]"
+
+server:
+  port: 8080

@@ -1,20 +1,6 @@
-app:
-  jwt:
-    public-key: ${JWT_PUBLIC_KEY_PATH:file:../keys/public.pem}
-
 spring:
   application:
     name: appointment-service
-  sql:
-    init:
-      mode: always
-      platform: postgres
-
-  kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/appointment_db}
@@ -31,6 +17,21 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  sql:
+    init:
+      mode: always
+      platform: postgres
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+app:
+  jwt:
+    public-key: ${JWT_PUBLIC_KEY_PATH:file:../keys/public.pem}
 
 management:
   endpoints:

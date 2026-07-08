@@ -93,8 +93,7 @@ class AvailabilityControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
-    // Note: an unknown-doctor case (service throws UnknownDoctorException) is not
-    // covered here. There is no @RestControllerAdvice mapping for it yet, so today the
-    // exception would surface as an unhandled 500, not a 404. This becomes a valid test
-    // once the exception handler exists; do not add one here just to make this pass.
+    // Note: an unknown-doctor case (service throws DoctorNotFoundException) is not
+    // covered here. GlobalExceptionHandler does map it to 404 already; this slice
+    // just doesn't have a test for it yet.
 }

@@ -69,4 +69,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problemDetail.setTitle("Patient Not Found");
         return problemDetail;
     }
+
+    @ExceptionHandler(PatientAccessDeniedException.class)
+    public ProblemDetail handlePatientAccessDeniedException(PatientAccessDeniedException ex) {
+        log.warn("{}, status 403", ex.getMessage());
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        problemDetail.setTitle("Not Resource Owner");
+        return problemDetail;
+    }
 }

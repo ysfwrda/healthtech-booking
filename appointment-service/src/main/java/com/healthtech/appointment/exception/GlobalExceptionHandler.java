@@ -39,16 +39,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problemDetail;
     }
 
-    @ExceptionHandler(UnknownPatientException.class)
-    public ProblemDetail handleUnknownPatientException(UnknownPatientException ex) {
+    @ExceptionHandler(PatientNotFoundException.class)
+    public ProblemDetail handlePatientNotFoundException(PatientNotFoundException ex) {
         log.warn("{}, status 404", ex.getMessage());
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problemDetail.setTitle("Patient Not Found");
         return problemDetail;
     }
 
-    @ExceptionHandler(UnknownDoctorException.class)
-    public ProblemDetail handleUnknownDoctorException(UnknownDoctorException ex) {
+    @ExceptionHandler(DoctorNotFoundException.class)
+    public ProblemDetail handleDoctorNotFoundException(DoctorNotFoundException ex) {
         log.warn("{}, status 404", ex.getMessage());
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problemDetail.setTitle("Doctor Not Found");
@@ -91,7 +91,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleAppointmentAccessDeniedException(AppointmentAccessDeniedException ex) {
         log.warn("{}, status 403", ex.getMessage());
         ProblemDetail pd = forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
-        pd.setTitle("Forbidden: not resource owner");
+        pd.setTitle("Not Resource Owner");
         return pd;
     }
 
@@ -99,7 +99,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleWrongTokenTypeException(WrongTokenTypeException ex) {
         log.warn("{}, status 403", ex.getMessage());
         ProblemDetail pd = forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
-        pd.setTitle("Forbidden: wrong token type");
+        pd.setTitle("Wrong Token Type");
         return pd;
     }
 }

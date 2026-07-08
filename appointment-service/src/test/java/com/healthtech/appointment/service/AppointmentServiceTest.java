@@ -9,7 +9,8 @@ import com.healthtech.appointment.event.AppointmentBooked;
 import com.healthtech.appointment.event.AppointmentCancelled;
 import com.healthtech.appointment.exception.AppointmentAccessDeniedException;
 import com.healthtech.appointment.exception.AppointmentNotFoundException;
-import com.healthtech.appointment.exception.UnknownDoctorException;
+import com.healthtech.appointment.exception.SlotAlreadyBookedException;
+import com.healthtech.appointment.exception.DoctorNotFoundException;
 import com.healthtech.appointment.mapper.AppointmentMapper;
 import com.healthtech.appointment.readmodel.OpeningHours;
 import com.healthtech.appointment.readmodel.ValidDoctor;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 
 import java.time.DayOfWeek;
@@ -229,6 +231,41 @@ class AppointmentServiceTest {
 
         verify(appointmentRepository, never()).save(any());
         verify(cancelledEventKafkaTemplate, never()).send(any(), any());
+    }
+
+    @Test
+    void bookAppointment_slotAlreadyTakenAtSaveTime_shouldThrowSlotAlreadyBookedExceptionAndNotPublishEvent() {
+        // Arrange: the availability check passed (no known conflict), but a concurrent
+        // booking wins the race at the DB unique-constraint level. save() surfaces this
+        // as a DataIntegrityViolationException, which the service must translate to the
+        // typed SlotAlreadyBookedException (mapped to 409 by GlobalExceptionHandler),
+        // without publishing a booked event for a booking that didn't happen.
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        LocalDateTime dateTime = LocalDateTime.of(2026, 8, 10, 10, 0);
+        Appointment appointment = Appointment.builder()
+                .patientId(patientId)
+                .doctorId(doctorId)
+                .dateTime(dateTime)
+                .type(INITIAL_CONSULTATION)
+                .build();
+
+        AppointmentRequest request = AppointmentRequest.builder()
+                .doctorId(doctorId)
+                .dateTime(dateTime)
+                .type(INITIAL_CONSULTATION)
+                .build();
+
+        stubValidReadModel(patientId, doctorId, dateTime);
+        when(appointmentMapper.toEntity(request)).thenReturn(appointment);
+        when(appointmentRepository.save(any(Appointment.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        // Act & Assert
+        assertThatThrownBy(() -> appointmentService.bookAppointment(request, patientId))
+                .isInstanceOf(SlotAlreadyBookedException.class);
+
+        verify(bookedEventKafkaTemplate, never()).send(any(), any());
     }
 
     @Test
@@ -503,14 +540,14 @@ class AppointmentServiceTest {
     }
 
     @Test
-    void getAvailableSlots_unknownDoctor_shouldThrowUnknownDoctorException() {
+    void getAvailableSlots_unknownDoctor_shouldThrowDoctorNotFoundException() {
         // Arrange
         UUID doctorId = UUID.randomUUID();
         when(validDoctorRepository.findById(doctorId)).thenReturn(Optional.empty());
 
         // Act and Assert
         assertThatThrownBy(() -> appointmentService.getAvailableSlots(doctorId, FUTURE_DATE))
-                .isInstanceOf(UnknownDoctorException.class);
+                .isInstanceOf(DoctorNotFoundException.class);
 
         verify(appointmentRepository, never())
                 .findByDoctorIdAndDateTimeGreaterThanEqualAndDateTimeLessThanAndStatusNot(any(), any(), any(), any());
