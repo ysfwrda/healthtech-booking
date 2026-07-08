@@ -26,6 +26,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         Map<String, String> errors =  new HashMap<>();
         ex.getBindingResult().getFieldErrors().forEach(fieldError -> errors.put(fieldError.getField(), fieldError.getDefaultMessage()));
         problemDetail.setProperty("errors", errors);
+        log.warn("Validation failed: {} field error(s), status 400", errors.size());
         return ResponseEntity.badRequest().body(problemDetail);
     }
 
@@ -39,6 +40,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(InvalidCredentialsException.class)
     public ProblemDetail handleInvalidCredentialsException(InvalidCredentialsException ex) {
+        log.warn("Login rejected: invalid credentials, status 401");
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
         problemDetail.setTitle("Invalid Credentials");
         return problemDetail;
@@ -46,6 +48,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(UsernameAlreadyExistsException.class)
     public ProblemDetail handleUsernameAlreadyExistsException(UsernameAlreadyExistsException ex) {
+        log.warn("Patient registration rejected: username already exists, status 409");
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problemDetail.setTitle("Username Already Taken");
         return problemDetail;
@@ -53,6 +56,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ProblemDetail handleEmailAlreadyExistsException(EmailAlreadyExistsException ex) {
+        log.warn("Patient registration rejected: email already exists, status 409");
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problemDetail.setTitle("Email Already Registered");
         return problemDetail;
@@ -60,6 +64,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(PatientNotFoundException.class)
     public ProblemDetail handlePatientNotFoundException(PatientNotFoundException ex) {
+        log.warn("{}, status 404", ex.getMessage());
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problemDetail.setTitle("Patient Not Found");
         return problemDetail;

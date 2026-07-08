@@ -27,12 +27,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getFieldErrors().forEach(fieldError -> errors.put(fieldError.getField(), fieldError.getDefaultMessage()));
         problemDetail.setProperty("errors", errors);
+        log.warn("Validation failed: {} field error(s), status 400", errors.size());
         return ResponseEntity.badRequest().body(problemDetail);
     }
 
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpected(Exception ex) {
-        log.error(ex.getMessage(), ex);
+        log.error("Unexpected error", ex);
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error occurred");
         problemDetail.setTitle("Internal Server Error");
         return problemDetail;
@@ -40,6 +41,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(UnknownPatientException.class)
     public ProblemDetail handleUnknownPatientException(UnknownPatientException ex) {
+        log.warn("{}, status 404", ex.getMessage());
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problemDetail.setTitle("Patient Not Found");
         return problemDetail;
@@ -47,6 +49,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(UnknownDoctorException.class)
     public ProblemDetail handleUnknownDoctorException(UnknownDoctorException ex) {
+        log.warn("{}, status 404", ex.getMessage());
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problemDetail.setTitle("Doctor Not Found");
         return problemDetail;
@@ -54,6 +57,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(SlotNotAlignedException.class)
     public ProblemDetail handleSlotNotAlignedException(SlotNotAlignedException ex) {
+        log.warn("{}, status 400", ex.getMessage());
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         problemDetail.setTitle("Slot Not Aligned");
         return problemDetail;
@@ -61,6 +65,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(OutsideOpeningHoursException.class)
     public ProblemDetail handleOutsideOpeningHoursException(OutsideOpeningHoursException ex) {
+        log.warn("{}, status 400", ex.getMessage());
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         problemDetail.setTitle("Outside Opening Hours");
         return problemDetail;
@@ -68,6 +73,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(SlotAlreadyBookedException.class)
     public ProblemDetail handleSlotAlreadyBookedException(SlotAlreadyBookedException ex) {
+        log.warn("Double-book conflict for doctorId {} at slot {}, status 409", ex.getDoctorId(), ex.getSlot());
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problemDetail.setTitle("Slot Already Booked");
         return problemDetail;
@@ -75,6 +81,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(AppointmentNotFoundException.class)
     public ProblemDetail handleAppointmentNotFoundException(AppointmentNotFoundException ex) {
+        log.warn("{}, status 404", ex.getMessage());
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problemDetail.setTitle("Appointment Not Found");
         return problemDetail;
@@ -82,6 +89,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(AppointmentAccessDeniedException.class)
     public ProblemDetail handleAppointmentAccessDeniedException(AppointmentAccessDeniedException ex) {
+        log.warn("{}, status 403", ex.getMessage());
         ProblemDetail pd = forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
         pd.setTitle("Forbidden: not resource owner");
         return pd;
@@ -89,6 +97,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(WrongTokenTypeException.class)
     public ProblemDetail handleWrongTokenTypeException(WrongTokenTypeException ex) {
+        log.warn("{}, status 403", ex.getMessage());
         ProblemDetail pd = forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
         pd.setTitle("Forbidden: wrong token type");
         return pd;

@@ -6,6 +6,8 @@ import com.healthtech.appointment.readmodel.OpeningHours;
 import com.healthtech.appointment.readmodel.ValidDoctor;
 import com.healthtech.appointment.readmodel.ValidDoctorRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +17,7 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class DoctorEventConsumer {
+    private static final Logger log = LoggerFactory.getLogger(DoctorEventConsumer.class);
 
     private final ValidDoctorRepository validDoctorRepository;
 
@@ -23,18 +26,24 @@ public class DoctorEventConsumer {
             containerFactory = "doctorRegisteredKafkaListenerFactory"
     )
     public void onDoctorRegistered(DoctorRegistered event) {
-        Set<OpeningHours> openingHours = event.getOpeningHours() == null ? Set.of() :
-                event.getOpeningHours().stream()
-                        .map(this::toOpeningHours)
-                        .collect(Collectors.toSet());
+        try {
+            Set<OpeningHours> openingHours = event.getOpeningHours() == null ? Set.of() :
+                    event.getOpeningHours().stream()
+                            .map(this::toOpeningHours)
+                            .collect(Collectors.toSet());
 
-        ValidDoctor doctor = ValidDoctor.builder()
-                .doctorId(event.getDoctorId())
-                .firstName(event.getFirstName())
-                .lastName(event.getLastName())
-                .openingHours(openingHours)
-                .build();
-        validDoctorRepository.save(doctor);
+            ValidDoctor doctor = ValidDoctor.builder()
+                    .doctorId(event.getDoctorId())
+                    .firstName(event.getFirstName())
+                    .lastName(event.getLastName())
+                    .openingHours(openingHours)
+                    .build();
+            validDoctorRepository.save(doctor);
+            log.info("Projected doctor read-model, doctorId {}", event.getDoctorId());
+        } catch (RuntimeException e) {
+            log.error("Failed to project doctor read-model, doctorId {}", event.getDoctorId(), e);
+            throw e;
+        }
     }
 
     private OpeningHours toOpeningHours(OpeningHoursPayload payload) {
