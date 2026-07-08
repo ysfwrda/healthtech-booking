@@ -2,6 +2,7 @@ package com.healthtech.patient.controller;
 
 import com.healthtech.patient.domain.InsuranceType;
 import com.healthtech.patient.dto.PatientResponse;
+import com.healthtech.patient.exception.PatientAccessDeniedException;
 import com.healthtech.patient.exception.PatientNotFoundException;
 import com.healthtech.patient.security.SecurityConfig;
 import com.healthtech.patient.service.PatientService;
@@ -50,7 +51,7 @@ class PatientControllerTest {
         // A request without a Bearer token should be rejected before reaching the controller.
         mockMvc.perform(get("/api/patients/" + UUID.randomUUID()))
                 .andExpect(status().isUnauthorized());
-        verify(patientService, never()).getPatientProfileById(any());
+        verify(patientService, never()).getPatientProfileById(any(), any());
     }
 
     @Test
@@ -66,7 +67,7 @@ class PatientControllerTest {
                 .insuranceType(InsuranceType.STATUTORY)
                 .build();
 
-        when(patientService.getPatientProfileById(patientId)).thenReturn(patientResponse);
+        when(patientService.getPatientProfileById(patientId, patientId)).thenReturn(patientResponse);
 
         mockMvc.perform(get("/api/patients/" + patientId)
                         .with(jwt().jwt(builder -> builder.subject(patientId.toString()))))
@@ -76,24 +77,23 @@ class PatientControllerTest {
 
     @Test
     void getPatientProfile_validTokenMismatchedId_returns403() throws Exception {
-        // JWT subject is a different UUID than the path variable: controller must return 403.
+        // JWT subject is a different UUID than the path variable: the service's ownership
+        // check must reject this, and the GlobalExceptionHandler must map it to 403.
         UUID patientId = UUID.randomUUID();
         UUID anotherId = UUID.randomUUID();
+        when(patientService.getPatientProfileById(patientId, anotherId))
+                .thenThrow(new PatientAccessDeniedException(patientId));
         mockMvc.perform(get("/api/patients/" + patientId)
                         .with(jwt().jwt(builder -> builder.subject(anotherId.toString()))))
                 .andExpect(status().isForbidden());
-        verify(patientService, never()).getPatientProfileById(any());
     }
 
-    // @Disabled("pending error-handling pass - exception mapping")
     @Test
     void getPatientProfile_validTokenPatientNotFound_returns404() throws Exception {
         UUID patientId = UUID.randomUUID();
-        when(patientService.getPatientProfileById(patientId)).thenThrow(new PatientNotFoundException(patientId));
+        when(patientService.getPatientProfileById(patientId, patientId)).thenThrow(new PatientNotFoundException(patientId));
         mockMvc.perform(get("/api/patients/" + patientId)
                         .with(jwt().jwt(builder -> builder.subject(patientId.toString()))))
                 .andExpect(status().isNotFound());
-        // JWT subject matches the path id, but patientService throws PatientNotFoundException.
-        // Assert 404 is returned (requires a @ControllerAdvice / exception handler).
     }
 }

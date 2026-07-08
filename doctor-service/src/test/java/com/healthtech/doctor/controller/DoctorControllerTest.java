@@ -9,7 +9,6 @@ import com.healthtech.doctor.dto.OpeningHoursDto;
 import com.healthtech.doctor.exception.DoctorNotFoundException;
 import com.healthtech.doctor.security.SecurityConfig;
 import com.healthtech.doctor.service.DoctorService;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -192,7 +191,6 @@ class DoctorControllerTest {
         verify(doctorService).getDoctorById(doctorId);
     }
 
-    @Disabled("pending error-handling pass: DoctorNotFoundException must be mapped to 404 by a @ControllerAdvice")
     @Test
     void getDoctorById_notFound_returns404() throws Exception {
         // Arrange

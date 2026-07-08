@@ -10,12 +10,12 @@ app:
 
 cors:
   allowed-origins: ${FRONTEND_URL:http://localhost:5173}
-  
-server:
-  port: 8080
 
 management:
   endpoints:
     web:
       exposure:
         include: health, info
+
+server:
+  port: 8080

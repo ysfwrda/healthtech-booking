@@ -2,8 +2,8 @@ package com.healthtech.appointment.exception;
 
 import java.util.UUID;
 
-public class UnknownPatientException extends RuntimeException {
-    public UnknownPatientException(UUID patientId) {
+public class PatientNotFoundException extends RuntimeException {
+    public PatientNotFoundException(UUID patientId) {
         super("Patient not found in read-model: " + patientId);
     }
 }
