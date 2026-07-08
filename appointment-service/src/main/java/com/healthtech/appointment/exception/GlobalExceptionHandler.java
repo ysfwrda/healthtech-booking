@@ -38,15 +38,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problemDetail;
     }
 
-    @ExceptionHandler(UnknownPatientException.class)
-    public ProblemDetail handleUnknownPatientException(UnknownPatientException ex) {
+    @ExceptionHandler(PatientNotFoundException.class)
+    public ProblemDetail handlePatientNotFoundException(PatientNotFoundException ex) {
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problemDetail.setTitle("Patient Not Found");
         return problemDetail;
     }
 
-    @ExceptionHandler(UnknownDoctorException.class)
-    public ProblemDetail handleUnknownDoctorException(UnknownDoctorException ex) {
+    @ExceptionHandler(DoctorNotFoundException.class)
+    public ProblemDetail handleDoctorNotFoundException(DoctorNotFoundException ex) {
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problemDetail.setTitle("Doctor Not Found");
         return problemDetail;

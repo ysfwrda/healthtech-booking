@@ -10,7 +10,7 @@ import com.healthtech.appointment.event.AppointmentCancelled;
 import com.healthtech.appointment.exception.AppointmentAccessDeniedException;
 import com.healthtech.appointment.exception.AppointmentNotFoundException;
 import com.healthtech.appointment.exception.SlotAlreadyBookedException;
-import com.healthtech.appointment.exception.UnknownDoctorException;
+import com.healthtech.appointment.exception.DoctorNotFoundException;
 import com.healthtech.appointment.mapper.AppointmentMapper;
 import com.healthtech.appointment.readmodel.OpeningHours;
 import com.healthtech.appointment.readmodel.ValidDoctor;
@@ -540,14 +540,14 @@ class AppointmentServiceTest {
     }
 
     @Test
-    void getAvailableSlots_unknownDoctor_shouldThrowUnknownDoctorException() {
+    void getAvailableSlots_unknownDoctor_shouldThrowDoctorNotFoundException() {
         // Arrange
         UUID doctorId = UUID.randomUUID();
         when(validDoctorRepository.findById(doctorId)).thenReturn(Optional.empty());
 
         // Act and Assert
         assertThatThrownBy(() -> appointmentService.getAvailableSlots(doctorId, FUTURE_DATE))
-                .isInstanceOf(UnknownDoctorException.class);
+                .isInstanceOf(DoctorNotFoundException.class);
 
         verify(appointmentRepository, never())
                 .findByDoctorIdAndDateTimeGreaterThanEqualAndDateTimeLessThanAndStatusNot(any(), any(), any(), any());
