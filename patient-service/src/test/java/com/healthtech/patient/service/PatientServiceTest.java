@@ -3,6 +3,7 @@ package com.healthtech.patient.service;
 import com.healthtech.patient.domain.InsuranceType;
 import com.healthtech.patient.domain.Patient;
 import com.healthtech.patient.dto.PatientResponse;
+import com.healthtech.patient.exception.PatientAccessDeniedException;
 import com.healthtech.patient.exception.PatientNotFoundException;
 import com.healthtech.patient.mapper.PatientMapper;
 import com.healthtech.patient.repository.PatientRepository;
@@ -20,6 +21,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -69,7 +72,7 @@ class PatientServiceTest {
         when(patientMapper.toPatientResponse(patient)).thenReturn(patientResponse);
 
         // Act
-        PatientResponse result = patientService.getPatientProfileById(patientId);
+        PatientResponse result = patientService.getPatientProfileById(patientId, patientId);
 
         // Assert
         assertThat(result.getId()).isEqualTo(patientId);
@@ -87,8 +90,20 @@ class PatientServiceTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThatThrownBy(() -> patientService.getPatientProfileById(patientId))
+        assertThatThrownBy(() -> patientService.getPatientProfileById(patientId, patientId))
                 .isInstanceOf(PatientNotFoundException.class)
                 .hasMessageContaining(patientId.toString());
+    }
+
+    @Test
+    void getPatientProfileById_requesterIdMismatch_throwsPatientAccessDeniedException() {
+        // Arrange
+        UUID requesterId = UUID.randomUUID();
+
+        // Act & Assert
+        assertThatThrownBy(() -> patientService.getPatientProfileById(patientId, requesterId))
+                .isInstanceOf(PatientAccessDeniedException.class)
+                .hasMessageContaining(patientId.toString());
+        verify(patientRepository, never()).findById(any());
     }
 }
