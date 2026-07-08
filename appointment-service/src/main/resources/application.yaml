@@ -38,5 +38,9 @@ management:
       exposure:
         include: health, beans, mappings
 
+logging:
+  pattern:
+    level: "%5p [%X{correlationId}]"
+
 server:
   port: 8081
