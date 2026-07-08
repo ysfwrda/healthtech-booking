@@ -17,5 +17,9 @@ management:
       exposure:
         include: health, info
 
+logging:
+  pattern:
+    level: "%5p [%X{correlationId}]"
+
 server:
   port: 8080

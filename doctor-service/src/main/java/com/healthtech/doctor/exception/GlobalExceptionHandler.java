@@ -26,6 +26,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         Map<String, String> errors =  new HashMap<>();
         ex.getBindingResult().getFieldErrors().forEach(fieldError -> errors.put(fieldError.getField(), fieldError.getDefaultMessage()));
         problemDetail.setProperty("errors", errors);
+        log.warn("Validation failed: {} field error(s), status 400", errors.size());
         return ResponseEntity.badRequest().body(problemDetail);
     }
 
@@ -39,6 +40,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(DoctorNotFoundException.class)
     public ProblemDetail handleDoctorNotFoundException(DoctorNotFoundException ex) {
+        log.warn("{}, status 404", ex.getMessage());
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problemDetail.setTitle("Doctor Not Found");
         return problemDetail;
@@ -46,6 +48,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ProblemDetail handleEmailAlreadyExistsException(EmailAlreadyExistsException ex) {
+        log.warn("Doctor registration rejected: email already exists, status 409");
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problemDetail.setTitle("Email Already Registered");
         return problemDetail;
@@ -53,6 +56,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(SpecialtyNotFoundException.class)
     public ProblemDetail handleSpecialtyNotFoundException(SpecialtyNotFoundException ex) {
+        log.warn("{}, status 404", ex.getMessage());
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problemDetail.setTitle("Specialty Not Found");
         return problemDetail;

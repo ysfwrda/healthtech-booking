@@ -12,6 +12,8 @@ import com.healthtech.appointment.mapper.AppointmentMapper;
 import com.healthtech.appointment.readmodel.*;
 import com.healthtech.appointment.repository.AppointmentRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AppointmentService {
 
+    private static final Logger log = LoggerFactory.getLogger(AppointmentService.class);
     private static final int SLOT_DURATION_MINUTES = 30;
 
     private final AppointmentRepository appointmentRepository;
@@ -79,7 +82,7 @@ public class AppointmentService {
             saved = appointmentRepository.save(appointment);
         }
         catch (DataIntegrityViolationException e) {
-            throw new SlotAlreadyBookedException();
+            throw new SlotAlreadyBookedException(appointment.getDoctorId(), appointment.getDateTime());
         }
 
         AppointmentBooked event = AppointmentBooked.builder()
@@ -97,6 +100,7 @@ public class AppointmentService {
                 .build();
 
         bookedEventKafkaTemplate.send("appointment.booked", event);
+        log.info("Appointment booked, appointmentId {}", saved.getId());
         return appointmentMapper.toResponse(saved);
     }
 
@@ -120,6 +124,7 @@ public class AppointmentService {
                 .build();
 
         cancelledEventKafkaTemplate.send("appointment.cancelled", event);
+        log.info("Appointment cancelled, appointmentId {}", saved.getId());
         return appointmentMapper.toResponse(saved);
     }
 
