@@ -83,14 +83,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(AppointmentAccessDeniedException.class)
     public ProblemDetail handleAppointmentAccessDeniedException(AppointmentAccessDeniedException ex) {
         ProblemDetail pd = forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
-        pd.setTitle("Forbidden: not resource owner");
+        pd.setTitle("Not Resource Owner");
         return pd;
     }
 
     @ExceptionHandler(WrongTokenTypeException.class)
     public ProblemDetail handleWrongTokenTypeException(WrongTokenTypeException ex) {
         ProblemDetail pd = forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
-        pd.setTitle("Forbidden: wrong token type");
+        pd.setTitle("Wrong Token Type");
         return pd;
     }
 }

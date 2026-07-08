@@ -68,7 +68,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(PatientAccessDeniedException.class)
     public ProblemDetail handlePatientAccessDeniedException(PatientAccessDeniedException ex) {
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
-        problemDetail.setTitle("Forbidden: not resource owner");
+        problemDetail.setTitle("Not Resource Owner");
         return problemDetail;
     }
 }
