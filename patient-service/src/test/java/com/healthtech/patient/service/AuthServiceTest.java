@@ -6,6 +6,7 @@ import com.healthtech.patient.dto.AuthResponse;
 import com.healthtech.patient.dto.LoginRequest;
 import com.healthtech.patient.dto.RegisterRequest;
 import com.healthtech.patient.event.PatientRegistered;
+import com.healthtech.patient.exception.EmailAlreadyExistsException;
 import com.healthtech.patient.exception.InvalidCredentialsException;
 import com.healthtech.patient.exception.UsernameAlreadyExistsException;
 import com.healthtech.patient.mapper.PatientMapper;
@@ -106,6 +107,42 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.register(registerRequest))
                 .isInstanceOf(UsernameAlreadyExistsException.class)
                 .hasMessageContaining("johndoe");
+        verify(jwtTokenProvider, never()).generateToken(any());
+    }
+
+    @Test
+    void register_emailExists_throwsEmailAlreadyExistsException() {
+        // Arrange: username is free, but the email collides. Must check
+        // existsByEmail as a distinct branch, not fall through to the username case.
+        when(patientMapper.toEntity(registerRequest)).thenReturn(patient);
+        when(passwordEncoder.encode("secret123")).thenReturn("$2a$hashed");
+        when(patientRepository.saveAndFlush(patient)).thenThrow(new DataIntegrityViolationException("duplicate key"));
+        when(patientRepository.existsByUsername("johndoe")).thenReturn(false);
+        when(patientRepository.existsByEmail("john@example.com")).thenReturn(true);
+
+        // Act & Assert
+        assertThatThrownBy(() -> authService.register(registerRequest))
+                .isInstanceOf(EmailAlreadyExistsException.class)
+                .hasMessageContaining("john@example.com");
+        verify(jwtTokenProvider, never()).generateToken(any());
+    }
+
+    @Test
+    void register_constraintViolationNotUsernameOrEmail_rethrowsOriginalException() {
+        // Arrange: a DataIntegrityViolationException that matches neither known unique
+        // constraint. The service must not misreport it as a username/email collision;
+        // it should propagate the original exception (falls through to the generic
+        // 500 handler in GlobalExceptionHandler, not a typed 409).
+        DataIntegrityViolationException original = new DataIntegrityViolationException("some other constraint");
+        when(patientMapper.toEntity(registerRequest)).thenReturn(patient);
+        when(passwordEncoder.encode("secret123")).thenReturn("$2a$hashed");
+        when(patientRepository.saveAndFlush(patient)).thenThrow(original);
+        when(patientRepository.existsByUsername("johndoe")).thenReturn(false);
+        when(patientRepository.existsByEmail("john@example.com")).thenReturn(false);
+
+        // Act & Assert
+        assertThatThrownBy(() -> authService.register(registerRequest))
+                .isSameAs(original);
         verify(jwtTokenProvider, never()).generateToken(any());
     }
 
