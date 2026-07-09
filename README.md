@@ -22,7 +22,7 @@ handling.
 ## Tech Stack
 
 Java 21 · Spring Boot 3 · Apache Kafka · PostgreSQL · Spring Cloud Gateway (MVC) · Spring Security (OAuth2 Resource
-Server) · MapStruct · JWT (RS256) · Docker
+Server) · MapStruct · JWT (RS256) · Docker · React (Vite, TypeScript)
 
 ---
 
@@ -71,6 +71,7 @@ Notification Service consumes.
 | `notification-service` | 8082 | Consumes appointment events from Kafka and persists notification records independently                                              |
 | `patient-service`      | 8083 | Patient registration, login, JWT issuance (RS256), profile management                                                               |
 | `doctor-service`       | 8084 | Doctor profile creation, specialty and language filtering, opening hours, registration event publishing                             |
+| `frontend`             | 5173 | React (Vite, TypeScript) client. Talks to every service exclusively through the API Gateway. Not yet containerized in `docker-compose.yml`; run separately, see Local Setup |
 
 ---
 
@@ -156,6 +157,18 @@ Duplicate detection (username, email, double-booking) is enforced by database un
 
 ---
 
+## Observability
+
+Every service, including the gateway, generates or propagates a correlation ID via a `CorrelationIdFilter` and logs
+it through MDC (`%5p [%X{correlationId}]` in the log pattern). The gateway resolves or generates the id first, then
+overwrites the outbound header before proxying, so the same id threads through the gateway and every downstream
+service call for a single request.
+
+Metrics, distributed tracing (spans), retries, and a dead-letter queue for Kafka consumers are not implemented yet
+and remain Phase 3 work; see Current Limitations.
+
+---
+
 ## Architecture Decisions (ADRs)
 
 Documented in [`docs/adr/`](docs/adr/):
@@ -192,11 +205,14 @@ Each ADR includes context, alternatives, trade-offs, and rationale.
 
 * **Gateway-level JWT enforcement** is deferred. Per-service validation is the authoritative boundary and is enforced;
   the gateway edge filter is planned defense-in-depth.
-* **Doctor authentication** is not yet implemented. Doctor profiles are publicly browsable by design; doctor creation is
-  currently open (admin/onboarding auth is a later pass).
+* **Doctor write authorization** has no role check yet. Creating a doctor profile (`POST /api/doctors`) requires a
+  valid JWT, but any authenticated caller is currently accepted, including a patient token; a dedicated admin/doctor
+  role is a later pass. Browsing (`GET`) stays public by design.
 * **Refresh tokens** are not implemented; access tokens are valid for one hour.
 * **Service discovery** is static per [ADR-006](docs/adr/ADR-006-service-discovery.md); Eureka/Consul is deferred
-* **Reliability/observability** (tracing, metrics, retries, DLQ, event versioning) are Phase 3.
+* **Reliability/observability**: correlation-ID propagation and structured logging are implemented across all
+  services and the gateway (see Observability above). Distributed tracing, metrics, retries, DLQ, and event
+  versioning are still Phase 3.
 
 ---
 
@@ -213,10 +229,11 @@ booking (partial unique index) · soft-delete cancellation · cross-service vali
 per-service JWT validation with token-derived identity and ownership checks · RFC 9457 error handling across services ·
 gateway routing for all services
 
-### Phase 3 — Production & Intelligence Layer (planned)
+### Phase 3: Production & Intelligence Layer (in progress)
 
-Observability (logs, metrics, tracing) · reliability (idempotency, retries, DLQ, event versioning) · gateway-level JWT
-edge validation · dockerization of all services · service discovery · AI-assisted symptom-to-specialty triage
+Correlation-ID propagation and structured logging (done, see Observability) · metrics and distributed tracing ·
+reliability (idempotency, retries, DLQ, event versioning) · gateway-level JWT edge validation · dockerization of all
+services · service discovery · AI-assisted symptom-to-specialty triage
 
 ---
 
@@ -272,9 +289,8 @@ Each service reads its key path from an environment variable with a local-host d
 | Service              | Env var                | Default (host)              |
 |----------------------|-------------------------|------------------------------|
 | patient-service      | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `file:../keys/private.pem`, `file:../keys/public.pem` |
-| doctor-service        | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `file:../keys/private.pem`, `file:../keys/public.pem` |
+| doctor-service        | `JWT_PUBLIC_KEY_PATH`   | `file:../keys/public.pem`    |
 | appointment-service   | `JWT_PUBLIC_KEY_PATH`   | `file:../keys/public.pem`    |
-| api-gateway           | `JWT_PUBLIC_KEY_PATH`   | `file:../keys/public.pem`    |
 
 The host defaults assume the process runs from within its own module directory (`cd patient-service && mvn
 spring-boot:run`, matching Step 3 below), so `../keys/` resolves to the repo-root `keys/` directory. Under Docker
@@ -282,9 +298,11 @@ Compose, `./keys` is mounted read-only into each container at `/run/keys` and th
 `file:/run/keys/...` accordingly.
 
 Note: doctor-service does not currently issue tokens (only patient registration and login do), but it does validate
-them: writes (`POST /api/doctors`) require an authenticated caller, while browsing and specialty reads stay public.
+them: writes (`POST /api/doctors`) require an authenticated caller of any role (there is no admin/doctor role check
+yet, so a valid patient token is currently accepted too), while browsing and specialty reads stay public.
 The API Gateway does not yet validate tokens at the edge (per the Authentication section below, that is still
-planned); its `JWT_PUBLIC_KEY_PATH` wiring is in place for when that code lands, but nothing reads it yet.
+planned). No `JwtDecoder` or `JWT_PUBLIC_KEY_PATH` wiring exists in `api-gateway` yet; that scaffolding still needs
+to be added when gateway-level validation lands.
 
 ### Test keys
 
@@ -350,15 +368,17 @@ curl -X POST http://localhost:8080/api/auth/register \
   }'
 ```
 
-Create a doctor:
+Create a doctor (requires a token; any authenticated caller is accepted for now, including the patient token from
+registration above, see Current Limitations):
 
 ```bash
 # 1. Get specialties
 curl http://localhost:8080/api/specialties
 
-# 2. Create a doctor (replace <specialty-id> with an id from step 1)
+# 2. Create a doctor (replace <specialty-id> with an id from step 1, <token> with the patient token from above)
 curl -X POST http://localhost:8080/api/doctors \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
     "firstName": "Jane", "lastName": "Smith",
     "email": "jane@clinic.com",
@@ -418,7 +438,9 @@ healthtech-booking/
 ├── notification-service/
 ├── patient-service/
 ├── doctor-service/
+├── frontend/
 ├── infrastructure/
+├── keys/
 ├── scripts/
 │   └── test-flow.sh
 ├── docs/
