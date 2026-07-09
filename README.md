@@ -14,7 +14,7 @@ The work is organized in phases:
   validation)
 * **Phase 3:** Production-grade concerns (observability, reliability, service discovery, AI-assisted workflows)
 
-Phase 2 is substantially complete: end-to-end booking with JWT-secured, race-safe reservations and RFC 9457 error
+Phase 2 is complete: end-to-end booking with JWT-secured, race-safe reservations and RFC 9457 error
 handling.
 
 ---
@@ -222,18 +222,69 @@ Each ADR includes context, alternatives, trade-offs, and rationale.
 
 Service decomposition · Kafka-based events · database-per-service · API Gateway · unit tests
 
-### Phase 2 — Domain Modeling (substantially complete)
+### Phase 2 — Domain Modeling (complete)
 
 Patient auth (JWT RS256) · Doctor profiles, specialties, language filtering · availability/slot computation · race-safe
 booking (partial unique index) · soft-delete cancellation · cross-service validation via event-driven read-model ·
 per-service JWT validation with token-derived identity and ownership checks · RFC 9457 error handling across services ·
-gateway routing for all services
+gateway routing for all services · Testcontainers integration coverage (concurrency-verified booking, cross-service JWT rejection, read-model projection, ownership enforcement)
 
 ### Phase 3: Production & Intelligence Layer (in progress)
 
 Correlation-ID propagation and structured logging (done, see Observability) · metrics and distributed tracing ·
-reliability (idempotency, retries, DLQ, event versioning) · gateway-level JWT edge validation · dockerization of all
-services · service discovery · AI-assisted symptom-to-specialty triage
+reliability (idempotency, retries, DLQ, event versioning) · gateway-level JWT edge validation · service discovery · AI-assisted symptom-to-specialty triage
+
+---
+
+## Testing
+
+Each service is tested at three layers, isolating a different concern at each level: unit tests for business logic,
+slice tests for the web/security contract, and integration tests for what only a real database, Kafka broker, and
+full Spring context can catch.
+
+### Unit tests
+
+Plain Mockito tests against a single class, no Spring context, no I/O. These cover business logic and edge cases in
+isolation: `AppointmentServiceTest`, `DoctorServiceTest`, `SpecialtyServiceTest`, `DoctorSpecificationsTest`,
+`SpecialtySeederTest`, `AuthServiceTest`, `PatientServiceTest`, `JwtTokenProviderTest`, `NotificationServiceTest`,
+and `AppointmentEventConsumerTest` (the Kafka listener method tested with a mocked service dependency).
+
+### Slice tests
+
+`@WebMvcTest` tests (`AppointmentControllerTest`, `AvailabilityControllerTest`, `DoctorControllerTest`,
+`SpecialtyControllerTest`, `PatientControllerTest`) load only the web layer: the controller, validation, and the
+real Spring Security authorization rules, with the service layer mocked. Each service's `SecurityConfig` holds only
+those authorization rules; the `JwtDecoder` bean (the thing that actually needs a real key) lives in a separate
+`JwtDecoderConfig`. A slice test imports `SecurityConfig` to get the real permitAll/authenticated rules, then
+supplies its own `@MockitoBean JwtDecoder`, so `JwtDecoderConfig` and the `RsaKeyProperties` binding behind it are
+never loaded. These tests pass in a clean checkout with no `keys/` directory present at all, and run in milliseconds
+since there's no database or broker involved.
+
+### Integration tests (Testcontainers)
+
+Four services have full application-context integration tests backed by Testcontainers instead of mocks, exercising
+real persistence, real RS256 signature validation, and in some cases a real Kafka broker:
+
+* `patient-service` (`AuthIntegrationTest`): registration and duplicate-username/email conflict flows against a real
+  Postgres container. Kafka is mocked with `@MockitoBean KafkaTemplate`, and the test asserts `patient.registered`
+  is published with the expected payload.
+* `doctor-service` (`DoctorIntegrationTest`): the same pattern, plus JWT-secured write paths, using a throwaway RSA
+  key pair generated inside the test (its own `TestJwtFactory`), so it never reads `keys/private.pem`.
+* `appointment-service` (`AppointmentIntegrationTest`, `AvailabilityIntegrationTest`): booking, cancellation,
+  ownership checks, and availability against a real Postgres container, with Kafka mocked and JWTs minted the same
+  throwaway way. `ReadModelProjectionIntegrationTest` instead runs a real `ConfluentKafkaContainer` alongside
+  Postgres, publishes real `patient.registered`/`doctor.registered` events, and asserts the read-model consumer
+  projects them correctly, exercising the actual Kafka listener rather than a mock.
+* `notification-service` (`NotificationConsumerIntegrationTest`): the same real-Kafka-container approach, publishing
+  a real `appointment.booked` event and asserting a notification row gets persisted, verifying the consumer wiring
+  end to end.
+
+The `*ApplicationTests` smoke tests (`PatientServiceApplicationTests`, `DoctorServiceApplicationTests`,
+`AppointmentServiceApplicationTests`) also load the full application, including `JwtDecoderConfig`, and each starts
+its own Testcontainers Postgres, so they no longer silently depend on a manually-run `docker-compose` stack being up.
+They read from the same `keys/` directory described in JWT Keys below, the one and only key location in this repo;
+a real deployment never uses this location either, since it overrides `JWT_PRIVATE_KEY_PATH`/`JWT_PUBLIC_KEY_PATH`
+to point at a mounted secret instead (see the Docker Compose table below).
 
 ---
 
@@ -304,29 +355,12 @@ The API Gateway does not yet validate tokens at the edge (per the Authentication
 planned). No `JwtDecoder` or `JWT_PUBLIC_KEY_PATH` wiring exists in `api-gateway` yet; that scaffolding still needs
 to be added when gateway-level validation lands.
 
-### Test keys
-
-`@WebMvcTest` slice tests (`PatientControllerTest`, `DoctorControllerTest`, `SpecialtyControllerTest`,
-`AvailabilityControllerTest`) never read a PEM file at all. Each service's `SecurityConfig` holds only the
-authorization rules; the `JwtDecoder` bean (the thing that actually needs a real key) lives in a separate
-`JwtDecoderConfig`. A slice test imports `SecurityConfig` to get the real permitAll/authenticated rules, then
-supplies its own `@MockitoBean JwtDecoder`, so `JwtDecoderConfig` and the `RsaKeyProperties` binding behind it are
-never loaded into that context. These tests pass in a clean checkout with no `keys/` directory present at all.
-
-`@SpringBootTest` tests (`PatientServiceApplicationTests`, `DoctorServiceApplicationTests`,
-`AppointmentServiceApplicationTests`) load the full application, including `JwtDecoderConfig`, so they do exercise
-real RS256 signature validation. They read from the exact same `keys/` directory described above, the one and only
-key location in this repo: there is no second, duplicate test-key directory to drift out of sync with it. A real
-deployment never uses this location either; it overrides `JWT_PRIVATE_KEY_PATH`/`JWT_PUBLIC_KEY_PATH` to point at a
-mounted secret instead (see the Docker Compose table above), so nothing in the test tree can ever read a production
-key.
-
 ### Step 3 — Start the Services
 
 All services are containerized. Bring up the entire system (infrastructure plus all five services) with one command:
 
 ```bash
-docker compose up --build
+docker-compose up --build
 ```
 
 This builds each service image and starts them alongside Kafka, Zookeeper, and the four PostgreSQL instances, all on a
