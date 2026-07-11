@@ -8,3 +8,4 @@ import java.security.interfaces.RSAPublicKey;
 @ConfigurationProperties(prefix = "app.jwt")
 public record RsaKeyProperties(RSAPublicKey publicKey, RSAPrivateKey privateKey) {
 }
+

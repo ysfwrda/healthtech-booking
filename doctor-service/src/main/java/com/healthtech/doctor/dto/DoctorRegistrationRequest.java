@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.util.Set;
@@ -16,7 +17,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreateDoctorRequest {
+public class DoctorRegistrationRequest {
     @NotBlank
     private String firstName;
 
@@ -26,6 +27,10 @@ public class CreateDoctorRequest {
     @NotBlank
     @Email
     private String email;
+
+    @NotBlank
+    @Size(min = 8)
+    private String password;
 
     @NotBlank
     private String phoneNumber;
@@ -41,5 +46,5 @@ public class CreateDoctorRequest {
     private Set<@Valid OpeningHoursDto> openingHours;
 
     @NotEmpty
-    private  Set<Language> languages;
+    private Set<Language> languages;
 }

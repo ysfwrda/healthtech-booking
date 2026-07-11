@@ -39,12 +39,12 @@ ok "patient registered, token obtained"
 section "Register doctor"
 SPECIALTY_ID="$(curl -s "$GATEWAY/api/specialties" | jq -r '.[0].id')"
 [ "$SPECIALTY_ID" != "null" ] && [ -n "$SPECIALTY_ID" ] || fail "no specialty found; is the seeder running?"
-DOCTOR_RESP="$(curl -s -X POST "$GATEWAY/api/doctors" \
+DOCTOR_RESP="$(curl -s -X POST "$GATEWAY/api/doctors/register" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "firstName": "Jane", "lastName": "Smith",
     "email": "jane.'"$RANDOM"'@clinic.com",
+    "password": "secret123",
     "phoneNumber": "+49 30 1234567",
     "address": { "street": "Friedrichstrasse", "houseNumber": "200", "postalCode": "10117", "city": "Berlin", "country": "Germany" },
     "specialtyIds": ["'"$SPECIALTY_ID"'"],
@@ -52,7 +52,7 @@ DOCTOR_RESP="$(curl -s -X POST "$GATEWAY/api/doctors" \
     "languages": ["ENGLISH"]
   }')"
 DOCTOR_ID="$(echo "$DOCTOR_RESP" | jq -r '.id')"
-[ "$DOCTOR_ID" != "null" ] && [ -n "$DOCTOR_ID" ] || fail "no doctor id in response: $DOCTOR_RESP"
+[ "$DOCTOR_ID" != "null" ] && [ -n "$DOCTOR_ID" ] || fail "no doctor id in register response: $DOCTOR_RESP"
 ok "doctor registered, id=$DOCTOR_ID"
 
 info "waiting for read-model to consume patient.registered and doctor.registered..."

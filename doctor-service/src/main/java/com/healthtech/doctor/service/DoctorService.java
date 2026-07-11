@@ -2,74 +2,26 @@ package com.healthtech.doctor.service;
 
 import com.healthtech.doctor.domain.Doctor;
 import com.healthtech.doctor.domain.Language;
-import com.healthtech.doctor.domain.OpeningHours;
-import com.healthtech.doctor.domain.Specialty;
-import com.healthtech.doctor.dto.CreateDoctorRequest;
 import com.healthtech.doctor.dto.DoctorResponse;
 import com.healthtech.doctor.dto.DoctorSummaryResponse;
-import com.healthtech.doctor.event.DoctorRegistered;
-import com.healthtech.doctor.event.OpeningHoursData;
 import com.healthtech.doctor.exception.DoctorNotFoundException;
-import com.healthtech.doctor.exception.EmailAlreadyExistsException;
-import com.healthtech.doctor.exception.SpecialtyNotFoundException;
 import com.healthtech.doctor.mapper.DoctorMapper;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.DoctorSpecifications;
-import com.healthtech.doctor.repository.SpecialtyRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class DoctorService {
 
     private final DoctorRepository doctorRepository;
-    private final SpecialtyRepository specialtyRepository;
     private final DoctorMapper doctorMapper;
-    private final KafkaTemplate<String, DoctorRegistered> kafkaTemplate;
-
-    @Transactional
-    public DoctorResponse createDoctor(CreateDoctorRequest request) {
-        Doctor doctor = doctorMapper.toEntity(request);
-        Set<Specialty> specialties = request.getSpecialtyIds().stream()
-                .map(id -> specialtyRepository.findById(id)
-                        .orElseThrow(() -> new SpecialtyNotFoundException(id)))
-                .collect(Collectors.toSet());
-
-        Doctor savedDoctor;
-        try {
-            savedDoctor = doctorRepository.saveAndFlush(doctor);
-        } catch (DataIntegrityViolationException ex) {
-            throw new EmailAlreadyExistsException(
-                    "Doctor with this email already exists: " + request.getEmail());
-        }
-        doctor.setSpecialties(specialties);
-        Set<OpeningHoursData> openingHours = savedDoctor.getOpeningHours() == null ? Set.of() :
-                savedDoctor.getOpeningHours().stream()
-                        .map(this::toOpeningHoursData)
-                        .collect(Collectors.toSet());
-
-        DoctorRegistered event = DoctorRegistered.builder()
-                .eventId(UUID.randomUUID())
-                .doctorId(savedDoctor.getId())
-                .firstName(savedDoctor.getFirstName())
-                .lastName(savedDoctor.getLastName())
-                .openingHours(openingHours)
-                .registeredAt(savedDoctor.getRegisteredAt())
-                .build();
-        kafkaTemplate.send("doctor.registered", event);
-
-        return doctorMapper.toDoctorResponse(doctor);
-    }
 
     public DoctorResponse getDoctorById(UUID id) {
         Doctor doctor = doctorRepository.findWithDetailsById(id)
@@ -85,13 +37,5 @@ public class DoctorService {
         return doctorRepository.findAll(spec).stream()
                 .map(doctorMapper::toDoctorSummaryResponse)
                 .toList();
-    }
-
-    private OpeningHoursData toOpeningHoursData(OpeningHours openingHours) {
-        return OpeningHoursData.builder()
-                .dayOfWeek(openingHours.getDayOfWeek())
-                .startTime(openingHours.getStartTime())
-                .endTime(openingHours.getEndTime())
-                .build();
     }
 }

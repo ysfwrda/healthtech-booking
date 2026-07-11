@@ -45,6 +45,10 @@ public class AppointmentController {
 
     @PutMapping("/{id}/cancel")
     public ResponseEntity<AppointmentResponse> cancelAppointment(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        if (!"PATIENT".equals(jwt.getClaimAsString("role"))) {
+            throw new WrongTokenTypeException();
+        }
+
         UUID patientId = UUID.fromString(jwt.getSubject());
         return ResponseEntity.status(HttpStatus.OK)
                 .body(appointmentService.cancelAppointment(id, patientId));

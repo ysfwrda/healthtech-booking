@@ -123,6 +123,7 @@ class AppointmentControllerTest {
         // Arrange
         UUID appointmentId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
+        when(jwt.getClaimAsString("role")).thenReturn("PATIENT");
         when(jwt.getSubject()).thenReturn(patientId.toString());
 
         AppointmentResponse response = AppointmentResponse.builder()
@@ -141,6 +142,19 @@ class AppointmentControllerTest {
         assertThat(result.getBody().getId()).isEqualTo(appointmentId);
         assertThat(result.getBody().getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
         verify(appointmentService).cancelAppointment(appointmentId, patientId);
+    }
+
+    @Test
+    void cancelAppointment_nonPatientToken_shouldThrowWrongTokenExceptionAndNeverCallService() {
+        // Arrange
+        UUID appointmentId = UUID.randomUUID();
+        when(jwt.getClaimAsString("role")).thenReturn("DOCTOR");
+
+        // Act and Assert
+        assertThatThrownBy(() -> appointmentController.cancelAppointment(appointmentId, jwt))
+                .isInstanceOf(WrongTokenTypeException.class);
+
+        verifyNoInteractions(appointmentService);
     }
 
     @Test
@@ -180,6 +194,7 @@ class AppointmentControllerTest {
         // Arrange
         UUID appointmentId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
+        when(jwt.getClaimAsString("role")).thenReturn("PATIENT");
         when(jwt.getSubject()).thenReturn(patientId.toString());
         when(appointmentService.cancelAppointment(appointmentId, patientId))
                 .thenThrow(new AppointmentNotFoundException("Appointment not found: " + appointmentId));
