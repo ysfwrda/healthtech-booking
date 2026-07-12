@@ -70,7 +70,7 @@ Notification Service consumes.
 | `appointment-service`  | 8081 | Booking, cancellation, availability/slot computation, read-model of valid patients/doctors, JWT validation, publishes domain events |
 | `notification-service` | 8082 | Consumes appointment events from Kafka and persists notification records independently                                              |
 | `patient-service`      | 8083 | Patient registration, login, JWT issuance (RS256), profile management                                                               |
-| `doctor-service`       | 8084 | Doctor profile creation, specialty and language filtering, opening hours, registration event publishing                             |
+| `doctor-service`       | 8084 | Doctor self-registration, login, JWT issuance (RS256), specialty and language filtering, opening hours, registration event publishing |
 | `frontend`             | 5173 | React (Vite, TypeScript) client. Talks to every service exclusively through the API Gateway. Not yet containerized in `docker-compose.yml`; run separately, see Local Setup |
 
 ---
@@ -94,19 +94,21 @@ is produced. Events are retained in the log and consumed when the service is rea
 Authentication uses **JWT with RS256** (asymmetric signing), per [ADR-004](docs/adr/ADR-004-JWT-Authentication.md).
 
 * Patient Service issues PATIENT tokens (signs with the private key at registration and login).
+* Doctor Service issues DOCTOR tokens (signs with the same shared private key at self-registration and login).
 * The public key is distributed to services that validate tokens. Appointment Service validates tokens with the same
   public key; it never holds the private key and cannot mint tokens.
 * Validation follows a hybrid, zero-trust model: services validate tokens independently (the authoritative boundary).
   Gateway-level edge validation is a planned defense-in-depth addition and is not yet enabled.
-* Tokens carry minimal claims: `sub` (the subject's id: the patient id in a PATIENT token), `role`, and `exp`.
+* Tokens carry minimal claims: `sub` (the subject's id: the patient id in a PATIENT token, the doctor id in a DOCTOR
+  token), `role`, and `exp`.
 
 **Identity is derived from the token, not the request body.** Booking takes the patient id from the token subject (
-`sub`), so a caller cannot book on behalf of another user by supplying a different id. Cancellation enforces ownership:
-a patient can only cancel their own appointment. Requests with the wrong token type or attempts to act on another user's
-resource are rejected with `403`.
+`sub`), so a caller cannot book on behalf of another user by supplying a different id. Cancellation enforces ownership
+and requires a PATIENT token, consistent with booking: a patient can only cancel their own appointment. Requests with
+the wrong token type or attempts to act on another user's resource are rejected with `403`.
 
-Public (no token required): doctor browsing, specialty listing, and availability. Booking and cancellation require a
-valid patient token.
+Public (no token required): patient and doctor registration/login, doctor browsing, specialty listing, and
+availability. Booking and cancellation require a valid patient token.
 
 ---
 
@@ -205,9 +207,12 @@ Each ADR includes context, alternatives, trade-offs, and rationale.
 
 * **Gateway-level JWT enforcement** is deferred. Per-service validation is the authoritative boundary and is enforced;
   the gateway edge filter is planned defense-in-depth.
-* **Doctor write authorization** has no role check yet. Creating a doctor profile (`POST /api/doctors`) requires a
-  valid JWT, but any authenticated caller is currently accepted, including a patient token; a dedicated admin/doctor
-  role is a later pass. Browsing (`GET`) stays public by design.
+* **Doctor onboarding trust** is intentionally shallow in Phase 2. Self-registration (`POST /api/doctors/register`) is
+  public and issues a DOCTOR token immediately: it proves someone can create an account, not that they are a verified
+  provider. Production would gate provider visibility and trust behind credential verification (for example, an
+  Arztekammer number) and identity checks in a proper onboarding flow; that distinction, and closing it, is deferred
+  to Phase 3. Admin-provisioned doctor accounts are deferred too, as YAGNI at the current scale. Browsing (`GET`)
+  stays public by design.
 * **Refresh tokens** are not implemented; access tokens are valid for one hour.
 * **Service discovery** is static per [ADR-006](docs/adr/ADR-006-service-discovery.md); Eureka/Consul is deferred
 * **Reliability/observability**: correlation-ID propagation and structured logging are implemented across all
@@ -340,7 +345,7 @@ Each service reads its key path from an environment variable with a local-host d
 | Service              | Env var                | Default (host)              |
 |----------------------|-------------------------|------------------------------|
 | patient-service      | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `file:../keys/private.pem`, `file:../keys/public.pem` |
-| doctor-service        | `JWT_PUBLIC_KEY_PATH`   | `file:../keys/public.pem`    |
+| doctor-service        | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `file:../keys/private.pem`, `file:../keys/public.pem` |
 | appointment-service   | `JWT_PUBLIC_KEY_PATH`   | `file:../keys/public.pem`    |
 
 The host defaults assume the process runs from within its own module directory (`cd patient-service && mvn
@@ -348,9 +353,10 @@ spring-boot:run`, matching Step 3 below), so `../keys/` resolves to the repo-roo
 Compose, `./keys` is mounted read-only into each container at `/run/keys` and the env vars are set to
 `file:/run/keys/...` accordingly.
 
-Note: doctor-service does not currently issue tokens (only patient registration and login do), but it does validate
-them: writes (`POST /api/doctors`) require an authenticated caller of any role (there is no admin/doctor role check
-yet, so a valid patient token is currently accepted too), while browsing and specialty reads stay public.
+Note: doctor-service now issues DOCTOR tokens too (self-registration and login), signing with the same shared private
+key patient-service uses for PATIENT tokens, per [ADR-004](docs/adr/ADR-004-JWT-Authentication.md). Doctor
+registration is public by design; there is no admin/doctor role check gating who can register (see Current
+Limitations). Browsing and specialty reads stay public.
 The API Gateway does not yet validate tokens at the edge (per the Authentication section below, that is still
 planned). No `JwtDecoder` or `JWT_PUBLIC_KEY_PATH` wiring exists in `api-gateway` yet; that scaffolding still needs
 to be added when gateway-level validation lands.
@@ -402,26 +408,35 @@ curl -X POST http://localhost:8080/api/auth/register \
   }'
 ```
 
-Create a doctor (requires a token; any authenticated caller is accepted for now, including the patient token from
-registration above, see Current Limitations):
+Register a doctor (public, no token required; issues a DOCTOR JWT immediately, see Current Limitations for what that
+does and doesn't vouch for):
 
 ```bash
 # 1. Get specialties
 curl http://localhost:8080/api/specialties
 
-# 2. Create a doctor (replace <specialty-id> with an id from step 1, <token> with the patient token from above)
-curl -X POST http://localhost:8080/api/doctors \
+# 2. Register a doctor (replace <specialty-id> with an id from step 1)
+curl -X POST http://localhost:8080/api/doctors/register \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
   -d '{
     "firstName": "Jane", "lastName": "Smith",
     "email": "jane@clinic.com",
+    "password": "secret123",
     "phoneNumber": "+49 30 1234567",
     "address": { "street": "Friedrichstrasse", "houseNumber": "12", "postalCode": "10117", "city": "Berlin", "country": "Germany" },
     "specialtyIds": ["<specialty-id>"],
     "openingHours": [ { "dayOfWeek": "MONDAY", "startTime": "09:00", "endTime": "17:00" } ],
     "languages": ["ENGLISH"]
   }'
+```
+
+Doctor login (returns a fresh DOCTOR JWT for an already-registered doctor, including any of the seeded demo doctors
+below):
+
+```bash
+curl -X POST http://localhost:8080/api/doctors/login \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "jane@clinic.com", "password": "secret123" }'
 ```
 
 Check a doctor's available slots (use a date whose weekday matches the opening hours; public, no token):
@@ -453,6 +468,31 @@ curl -X PUT http://localhost:8080/api/appointments/<appointment-id>/cancel \
 ```
 
 Re-check availability after booking or cancelling to see the slot disappear, then reappear.
+
+### Demo Data (Seeded)
+
+`DoctorSeeder` runs at doctor-service startup (after `SpecialtySeeder`, which it depends on) and seeds six demo
+doctors, idempotently (skipped on restart if the email already exists). Each covers multiple specialties and
+languages, with opening hours across several weekdays, so filtering and availability have realistic overlap to
+explore. Each publishes `doctor.registered` on creation, same as a real self-registration, so they're immediately
+bookable through the normal flow.
+
+All seeded doctors share one password: **`demo12345`**. Log in as any of them via `POST /api/doctors/login`:
+
+| Email                              | Specialties                              | Languages                  |
+|-------------------------------------|-------------------------------------------|-----------------------------|
+| `anna.weber@demo.healthtech.com`     | General Practice, Cardiology              | German, English             |
+| `mehmet.yilmaz@demo.healthtech.com`  | Cardiology, Orthopedics                   | Turkish, German              |
+| `sophie.dubois@demo.healthtech.com`  | Dermatology, Gynecology                   | French, English              |
+| `elena.rossi@demo.healthtech.com`    | Pediatrics, Dermatology, Gynecology       | Italian, Spanish             |
+| `omar.haddad@demo.healthtech.com`    | Neurology, General Practice               | Arabic, Persian, English     |
+| `katarina.petrov@demo.healthtech.com`| Orthopedics, Neurology, Pediatrics        | Russian, English             |
+
+```bash
+curl -X POST http://localhost:8080/api/doctors/login \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "anna.weber@demo.healthtech.com", "password": "demo12345" }'
+```
 
 ### Step 5 — Verify the Event Flow
 

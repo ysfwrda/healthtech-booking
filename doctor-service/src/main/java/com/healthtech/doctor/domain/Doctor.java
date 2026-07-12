@@ -31,6 +31,9 @@ public class Doctor {
     private String email;
 
     @Column(nullable = false)
+    private String passwordHash;
+
+    @Column(nullable = false)
     private String phoneNumber;
 
     @Embedded

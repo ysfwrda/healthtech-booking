@@ -38,7 +38,7 @@ jobs:
           cache-dependency-path: ${{ matrix.service }}/pom.xml
 
       - name: Generate JWT signing keys
-        if: matrix.service == 'patient-service'
+        if: matrix.service == 'patient-service' || matrix.service == 'doctor-service'
         run: |
           mkdir -p keys
           openssl genrsa -out keys/private.pem 2048

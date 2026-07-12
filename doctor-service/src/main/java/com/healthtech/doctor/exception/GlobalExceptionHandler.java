@@ -61,4 +61,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problemDetail.setTitle("Specialty Not Found");
         return problemDetail;
     }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ProblemDetail handleInvalidCredentialsException(InvalidCredentialsException ex) {
+        log.warn("Login rejected: invalid credentials, status 401");
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+        problemDetail.setTitle("Invalid Credentials");
+        return problemDetail;
+    }
 }
