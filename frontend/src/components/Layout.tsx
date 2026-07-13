@@ -1,13 +1,20 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { useDoctorAuth } from "../auth/DoctorAuthContext";
 
 export function Layout() {
   const { isAuthenticated, username, logout } = useAuth();
+  const { isDoctorAuthenticated, doctorEmail, logoutDoctor } = useDoctorAuth();
   const navigate = useNavigate();
 
   function handleLogout() {
     logout();
     navigate("/login");
+  }
+
+  function handleDoctorLogout() {
+    logoutDoctor();
+    navigate("/doctors");
   }
 
   return (
@@ -30,6 +37,19 @@ export function Layout() {
             <>
               <NavLink to="/login">Log in</NavLink>
               <NavLink to="/register">Register</NavLink>
+            </>
+          )}
+          {isDoctorAuthenticated ? (
+            <>
+              <span className="nav-username">{doctorEmail}</span>
+              <button type="button" onClick={handleDoctorLogout}>
+                Log out (doctor)
+              </button>
+            </>
+          ) : (
+            <>
+              <NavLink to="/doctors/login">Doctor log in</NavLink>
+              <NavLink to="/doctors/register">Register as a doctor</NavLink>
             </>
           )}
         </nav>

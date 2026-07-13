@@ -1,9 +1,12 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
+import { DoctorAuthProvider } from "./auth/DoctorAuthContext";
 import { RequireAuth } from "./auth/RequireAuth";
 import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { DoctorLoginPage } from "./pages/DoctorLoginPage";
+import { DoctorRegisterPage } from "./pages/DoctorRegisterPage";
 import { DoctorSearchPage } from "./pages/DoctorSearchPage";
 import { DoctorDetailPage } from "./pages/DoctorDetailPage";
 import { MyAppointmentsPage } from "./pages/MyAppointmentsPage";
@@ -24,19 +27,23 @@ function App() {
     <BrowserRouter>
       <RouterBridge />
       <AuthProvider>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route index element={<Navigate to="/doctors" replace />} />
-            <Route path="login" element={<LoginPage />} />
-            <Route path="register" element={<RegisterPage />} />
-            <Route path="doctors" element={<DoctorSearchPage />} />
-            <Route path="doctors/:id" element={<DoctorDetailPage />} />
-            <Route element={<RequireAuth />}>
-              <Route path="appointments" element={<MyAppointmentsPage />} />
+        <DoctorAuthProvider>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route index element={<Navigate to="/doctors" replace />} />
+              <Route path="login" element={<LoginPage />} />
+              <Route path="register" element={<RegisterPage />} />
+              <Route path="doctors/login" element={<DoctorLoginPage />} />
+              <Route path="doctors/register" element={<DoctorRegisterPage />} />
+              <Route path="doctors" element={<DoctorSearchPage />} />
+              <Route path="doctors/:id" element={<DoctorDetailPage />} />
+              <Route element={<RequireAuth />}>
+                <Route path="appointments" element={<MyAppointmentsPage />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/doctors" replace />} />
             </Route>
-            <Route path="*" element={<Navigate to="/doctors" replace />} />
-          </Route>
-        </Routes>
+          </Routes>
+        </DoctorAuthProvider>
       </AuthProvider>
     </BrowserRouter>
   );
