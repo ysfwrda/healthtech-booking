@@ -17,6 +17,16 @@ function emptyRow(): OpeningHoursRow {
   return { dayOfWeek: "MONDAY", startTime: "", endTime: "" };
 }
 
+function isDuplicateRow(rows: OpeningHoursRow[], candidate: OpeningHoursRow, excludeIndex: number): boolean {
+  return rows.some(
+    (row, i) =>
+      i !== excludeIndex &&
+      row.dayOfWeek === candidate.dayOfWeek &&
+      row.startTime === candidate.startTime &&
+      row.endTime === candidate.endTime,
+  );
+}
+
 export function DoctorRegisterPage() {
   const { registerDoctor } = useDoctorAuth();
   const navigate = useNavigate();
@@ -38,6 +48,7 @@ export function DoctorRegisterPage() {
   const [selectedSpecialtyIds, setSelectedSpecialtyIds] = useState<Set<string>>(new Set());
   const [selectedLanguages, setSelectedLanguages] = useState<Set<Language>>(new Set());
   const [openingHours, setOpeningHours] = useState<OpeningHoursRow[]>([emptyRow()]);
+  const [duplicateRowIndex, setDuplicateRowIndex] = useState<number | null>(null);
 
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState("");
@@ -68,14 +79,22 @@ export function DoctorRegisterPage() {
   }
 
   function updateRow(index: number, patch: Partial<OpeningHoursRow>) {
-    setOpeningHours((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+    const candidate = { ...openingHours[index], ...patch };
+    if (candidate.startTime && candidate.endTime && isDuplicateRow(openingHours, candidate, index)) {
+      setDuplicateRowIndex(index);
+      return;
+    }
+    setDuplicateRowIndex(null);
+    setOpeningHours((prev) => prev.map((row, i) => (i === index ? candidate : row)));
   }
 
   function addRow() {
+    setDuplicateRowIndex(null);
     setOpeningHours((prev) => [...prev, emptyRow()]);
   }
 
   function removeRow(index: number) {
+    setDuplicateRowIndex(null);
     setOpeningHours((prev) => prev.filter((_, i) => i !== index));
   }
 
@@ -226,48 +245,53 @@ export function DoctorRegisterPage() {
 
         <h2>Opening hours</h2>
         {openingHours.map((row, index) => (
-          <div key={index} className="opening-hours-row">
-            <select
-              value={row.dayOfWeek}
-              onChange={(e) => updateRow(index, { dayOfWeek: e.target.value as DayOfWeek })}
-            >
-              {DAYS_OF_WEEK.map((day) => (
-                <option key={day} value={day}>
-                  {day}
+          <div key={index}>
+            <div className="opening-hours-row">
+              <select
+                value={row.dayOfWeek}
+                onChange={(e) => updateRow(index, { dayOfWeek: e.target.value as DayOfWeek })}
+              >
+                {DAYS_OF_WEEK.map((day) => (
+                  <option key={day} value={day}>
+                    {day}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={row.startTime}
+                onChange={(e) => updateRow(index, { startTime: e.target.value })}
+                required
+              >
+                <option value="" disabled>
+                  Start time
                 </option>
-              ))}
-            </select>
-            <select
-              value={row.startTime}
-              onChange={(e) => updateRow(index, { startTime: e.target.value })}
-              required
-            >
-              <option value="" disabled>
-                Start time
-              </option>
-              {HALF_HOUR_TIMES.map((time) => (
-                <option key={time} value={time}>
-                  {time}
+                {HALF_HOUR_TIMES.map((time) => (
+                  <option key={time} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={row.endTime}
+                onChange={(e) => updateRow(index, { endTime: e.target.value })}
+                required
+              >
+                <option value="" disabled>
+                  End time
                 </option>
-              ))}
-            </select>
-            <select
-              value={row.endTime}
-              onChange={(e) => updateRow(index, { endTime: e.target.value })}
-              required
-            >
-              <option value="" disabled>
-                End time
-              </option>
-              {HALF_HOUR_TIMES.map((time) => (
-                <option key={time} value={time}>
-                  {time}
-                </option>
-              ))}
-            </select>
-            <button type="button" onClick={() => removeRow(index)} disabled={openingHours.length === 1}>
-              Remove
-            </button>
+                {HALF_HOUR_TIMES.map((time) => (
+                  <option key={time} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={() => removeRow(index)} disabled={openingHours.length === 1}>
+                Remove
+              </button>
+            </div>
+            {duplicateRowIndex === index && (
+              <StatusMessage kind="error">This opening-hours block is already added.</StatusMessage>
+            )}
           </div>
         ))}
         <button type="button" onClick={addRow}>
