@@ -498,6 +498,23 @@ curl -X POST http://localhost:8080/api/doctors/login \
 * Appointment Service: confirm `valid_patient` / `valid_doctor` rows appear in `appointment_db` (the read-model).
 * Notification Service: confirm the booking event was consumed and a notification record was saved in `notification_db`.
 
+### Step 6 — Run the Frontend
+
+The frontend is a React (Vite, TypeScript) client that talks to every service exclusively through the API Gateway.
+It is not containerized, so run it on the host against the Docker Compose stack from Step 1:
+
+```bash
+cd frontend
+cp .env.example .env.local   # VITE_API_BASE=http://localhost:8080, points at the gateway
+npm install
+npm run dev
+```
+
+Opens at `http://localhost:5173`. Covers both patient and doctor self-service flows end to end: patient
+register/login, doctor search with specialty/language filters, doctor detail with formatted opening hours and
+live availability, appointment booking/cancellation, and doctor register/login (`/doctors/register`,
+`/doctors/login`), mirroring the API described in Step 4.
+
 ---
 
 ## Project Structure

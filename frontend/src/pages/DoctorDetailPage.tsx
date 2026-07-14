@@ -6,11 +6,30 @@ import { bookAppointment } from "../api/appointments";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { StatusMessage } from "../components/StatusMessage";
-import { APPOINTMENT_TYPES } from "../api/constants";
-import type { AppointmentType, DoctorResponse } from "../api/types";
+import { APPOINTMENT_TYPES, DAYS_OF_WEEK } from "../api/constants";
+import type { AppointmentType, DoctorResponse, OpeningHoursDto } from "../api/types";
 
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function formatTime(time: string): string {
+  const [hourStr, minuteStr] = time.split(":");
+  const hour = Number(hourStr);
+  const period = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return minuteStr === "00" ? `${hour12} ${period}` : `${hour12}:${minuteStr} ${period}`;
+}
+
+function formatOpeningHours(openingHours: OpeningHoursDto[]): string[] {
+  return DAYS_OF_WEEK.flatMap((day) =>
+    openingHours
+      .filter((row) => row.dayOfWeek === day)
+      .map((row) => {
+        const label = day.charAt(0) + day.slice(1).toLowerCase();
+        return `${label}: ${formatTime(row.startTime)} - ${formatTime(row.endTime)}`;
+      }),
+  );
 }
 
 export function DoctorDetailPage() {
@@ -112,6 +131,7 @@ export function DoctorDetailPage() {
       <p>
         {doctor.address.street} {doctor.address.houseNumber}, {doctor.address.postalCode} {doctor.address.city}
       </p>
+      <p>Availability: {formatOpeningHours(doctor.openingHours).join(", ")}</p>
       <p>Languages: {doctor.languages.join(", ")}</p>
 
       <h2>Availability</h2>

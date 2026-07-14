@@ -11,6 +11,15 @@ export type Language =
   | "RUSSIAN"
   | "PERSIAN";
 
+export type DayOfWeek =
+  | "MONDAY"
+  | "TUESDAY"
+  | "WEDNESDAY"
+  | "THURSDAY"
+  | "FRIDAY"
+  | "SATURDAY"
+  | "SUNDAY";
+
 export type AppointmentType = "INITIAL_CONSULTATION" | "FOLLOW_UP" | "VACCINATION";
 
 export type AppointmentStatus = "PENDING" | "CONFIRMED" | "CANCELLED";
@@ -42,7 +51,7 @@ export interface SpecialtyDto {
 }
 
 export interface OpeningHoursDto {
-  dayOfWeek: string;
+  dayOfWeek: DayOfWeek;
   startTime: string;
   endTime: string;
 }
@@ -79,6 +88,30 @@ export interface DoctorResponse {
   registeredAt: string;
 }
 
+export interface DoctorRegistrationRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  phoneNumber: string;
+  address: AddressDto;
+  specialtyIds: string[];
+  openingHours: OpeningHoursDto[];
+  languages: Language[];
+}
+
+export interface DoctorLoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface DoctorAuthResponse {
+  id: string;
+  token: string;
+  expiresIn: number;
+  email: string;
+}
+
 export interface AvailableSlotsResponse {
   doctorId: string;
   date: string;
@@ -109,4 +142,5 @@ export interface ProblemDetail {
   title?: string;
   status?: number;
   detail?: string;
+  errors?: Record<string, string>;
 }

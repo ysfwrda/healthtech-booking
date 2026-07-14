@@ -6,6 +6,9 @@ const API_BASE = import.meta.env.VITE_API_BASE as string;
 const TOKEN_KEY = "healthtech.token";
 const USERNAME_KEY = "healthtech.username";
 
+const DOCTOR_TOKEN_KEY = "healthtech.doctor.token";
+const DOCTOR_EMAIL_KEY = "healthtech.doctor.email";
+
 export function getToken(): string | null {
     return sessionStorage.getItem(TOKEN_KEY);
 }
@@ -25,14 +28,34 @@ export function clearSession(): void {
     sessionStorage.removeItem(USERNAME_KEY);
 }
 
+export function getDoctorToken(): string | null {
+    return sessionStorage.getItem(DOCTOR_TOKEN_KEY);
+}
+
+export function getDoctorEmail(): string | null {
+    return sessionStorage.getItem(DOCTOR_EMAIL_KEY);
+}
+
+export function setDoctorSession(token: string, email: string): void {
+    sessionStorage.setItem(DOCTOR_TOKEN_KEY, token);
+    sessionStorage.setItem(DOCTOR_EMAIL_KEY, email);
+}
+
+export function clearDoctorSession(): void {
+    sessionStorage.removeItem(DOCTOR_TOKEN_KEY);
+    sessionStorage.removeItem(DOCTOR_EMAIL_KEY);
+}
+
 export class ApiError extends Error {
     status: number;
     title: string;
+    errors?: Record<string, string>;
 
-    constructor(status: number, title: string, detail: string) {
+    constructor(status: number, title: string, detail: string, errors?: Record<string, string>) {
         super(detail || title);
         this.status = status;
         this.title = title;
+        this.errors = errors;
     }
 }
 
@@ -77,6 +100,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
             response.status,
             problem.title ?? "Request Failed",
             problem.detail ?? "Something went wrong. Please try again.",
+            problem.errors,
         );
     }
 
