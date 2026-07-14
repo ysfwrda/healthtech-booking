@@ -378,9 +378,6 @@ falls back to `localhost` addresses by default):
 ```bash
 cd appointment-service && mvn spring-boot:run
 ```
-
-Dockerization of the services is planned (Phase 3).
-
 ### Step 4 — Exercise the Flow
 
 Convenience path: run the full pipeline in one command (requires `curl` and `jq`):
