@@ -30,6 +30,7 @@ import org.testcontainers.junit.jupiter.Container;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalTime;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
 
@@ -145,6 +146,57 @@ public class DoctorIntegrationTest {
         assertThat(event.getFirstName()).isEqualTo("John");
         assertThat(event.getLastName()).isEqualTo("Smith");
         assertThat(event.getOpeningHours()).hasSize(1);
+    }
+
+    @Test
+    void register_overlappingOpeningHours_returns400WithOverlapError() throws Exception {
+        OpeningHoursDto first = OpeningHoursDto.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(13, 0))
+                .build();
+        OpeningHoursDto overlapping = OpeningHoursDto.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(12, 0))
+                .endTime(LocalTime.of(17, 0))
+                .build();
+
+        DoctorRegistrationRequest request = validRequestBuilder("overlap.doctor@example.com")
+                .openingHours(new LinkedHashSet<>(Set.of(first, overlapping)))
+                .build();
+
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                "/api/doctors/register", request, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        JsonNode problem = new ObjectMapper().readTree(response.getBody());
+        assertThat(problem.get("title").asText()).isEqualTo("Validation Error");
+        assertThat(problem.get("errors").get("openingHours").asText()).containsIgnoringCase("overlap");
+        assertThat(doctorRepository.findByEmail("overlap.doctor@example.com")).isEmpty();
+    }
+
+    @Test
+    void register_backToBackOpeningHours_returns201() {
+        OpeningHoursDto morning = OpeningHoursDto.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(8, 0))
+                .endTime(LocalTime.of(12, 0))
+                .build();
+        OpeningHoursDto afternoon = OpeningHoursDto.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(12, 0))
+                .endTime(LocalTime.of(16, 0))
+                .build();
+
+        DoctorRegistrationRequest request = validRequestBuilder("backtoback.doctor@example.com")
+                .openingHours(new LinkedHashSet<>(Set.of(morning, afternoon)))
+                .build();
+
+        ResponseEntity<DoctorAuthResponse> response = restTemplate.postForEntity(
+                "/api/doctors/register", request, DoctorAuthResponse.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(doctorRepository.findByEmail("backtoback.doctor@example.com")).isPresent();
     }
 
     @Test
