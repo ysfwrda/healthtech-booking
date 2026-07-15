@@ -1,6 +1,7 @@
 package com.healthtech.doctor.dto;
 
 import com.healthtech.doctor.domain.Language;
+import com.healthtech.doctor.validation.ValidOpeningHours;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -43,6 +44,7 @@ public class DoctorRegistrationRequest {
     private Set<UUID> specialtyIds;
 
     @NotEmpty
+    @ValidOpeningHours
     private Set<@Valid OpeningHoursDto> openingHours;
 
     @NotEmpty
