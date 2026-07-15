@@ -33,6 +33,18 @@ class OpeningHoursValidatorTest {
     }
 
     @Test
+    void identicalBlocksSameDay_areInvalid() {
+        // OpeningHoursDto has no equals()/hashCode(), so a Set never collapses these into one
+        // element -- the overlap check is what actually catches an exact duplicate today.
+        Set<OpeningHoursDto> blocks = new LinkedHashSet<>(Set.of(
+                block(DayOfWeek.MONDAY, 9, 0, 17, 0),
+                block(DayOfWeek.MONDAY, 9, 0, 17, 0)
+        ));
+
+        assertThat(validator.isValid(blocks, context)).isFalse();
+    }
+
+    @Test
     void overlappingBlocksSameDay_areInvalid() {
         Set<OpeningHoursDto> blocks = new LinkedHashSet<>(Set.of(
                 block(DayOfWeek.MONDAY, 9, 0, 13, 0),

@@ -149,6 +149,36 @@ public class DoctorIntegrationTest {
     }
 
     @Test
+    void register_duplicateOpeningHoursBlock_returns400() throws Exception {
+        // OpeningHoursDto has no equals()/hashCode(), so submitting the same block twice
+        // produces two distinct Set elements. The overlap check (a range trivially overlaps
+        // itself) is what actually rejects this today -- pinned here so that adding DTO
+        // equality later doesn't silently flip this case to a 201 with nothing failing.
+        OpeningHoursDto block = OpeningHoursDto.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(17, 0))
+                .build();
+        OpeningHoursDto sameBlockAgain = OpeningHoursDto.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(17, 0))
+                .build();
+
+        DoctorRegistrationRequest request = validRequestBuilder("duplicate.block.doctor@example.com")
+                .openingHours(new LinkedHashSet<>(Set.of(block, sameBlockAgain)))
+                .build();
+
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                "/api/doctors/register", request, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        JsonNode problem = new ObjectMapper().readTree(response.getBody());
+        assertThat(problem.get("errors").get("openingHours").asText()).containsIgnoringCase("overlap");
+        assertThat(doctorRepository.findByEmail("duplicate.block.doctor@example.com")).isEmpty();
+    }
+
+    @Test
     void register_overlappingOpeningHours_returns400WithOverlapError() throws Exception {
         OpeningHoursDto first = OpeningHoursDto.builder()
                 .dayOfWeek(DayOfWeek.MONDAY)
