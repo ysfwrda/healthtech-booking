@@ -23,6 +23,7 @@ public class DoctorService {
     private final DoctorRepository doctorRepository;
     private final DoctorMapper doctorMapper;
 
+    @Transactional(readOnly = true)
     public DoctorResponse getDoctorById(UUID id) {
         Doctor doctor = doctorRepository.findWithDetailsById(id)
                 .orElseThrow(() -> new DoctorNotFoundException(id));

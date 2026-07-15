@@ -8,6 +8,7 @@ import com.healthtech.doctor.dto.AddressDto;
 import com.healthtech.doctor.dto.DoctorAuthResponse;
 import com.healthtech.doctor.dto.DoctorLoginRequest;
 import com.healthtech.doctor.dto.DoctorRegistrationRequest;
+import com.healthtech.doctor.dto.DoctorResponse;
 import com.healthtech.doctor.dto.OpeningHoursDto;
 import com.healthtech.doctor.event.DoctorRegistered;
 import com.healthtech.doctor.repository.DoctorRepository;
@@ -180,6 +181,57 @@ public class DoctorIntegrationTest {
         ResponseEntity<String> response = restTemplate.postForEntity("/api/doctors/login", loginRequest, String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void getDoctorById_multipleSpecialtiesLanguagesOpeningHours_returnsNoCartesianDuplicates() {
+        Specialty generalPractice = specialtyRepository.findByName("General Practice").orElseThrow();
+        Specialty cardiology = specialtyRepository.findByName("Cardiology").orElseThrow();
+
+        AddressDto address = AddressDto.builder()
+                .street("Main St")
+                .houseNumber("1")
+                .postalCode("12345")
+                .city("Berlin")
+                .country("Germany")
+                .build();
+
+        OpeningHoursDto monday = OpeningHoursDto.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(17, 0))
+                .build();
+        OpeningHoursDto tuesday = OpeningHoursDto.builder()
+                .dayOfWeek(DayOfWeek.TUESDAY)
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(17, 0))
+                .build();
+
+        DoctorRegistrationRequest request = DoctorRegistrationRequest.builder()
+                .firstName("Jane")
+                .lastName("Doe")
+                .email("jane.doe.multi@example.com")
+                .password("secret123")
+                .phoneNumber("+491234567")
+                .address(address)
+                .specialtyIds(Set.of(generalPractice.getId(), cardiology.getId()))
+                .openingHours(Set.of(monday, tuesday))
+                .languages(Set.of(Language.ENGLISH, Language.GERMAN))
+                .build();
+
+        ResponseEntity<DoctorAuthResponse> registerResponse = restTemplate.postForEntity(
+                "/api/doctors/register", request, DoctorAuthResponse.class);
+        assertThat(registerResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        UUID doctorId = registerResponse.getBody().getId();
+
+        ResponseEntity<DoctorResponse> detailResponse = restTemplate.getForEntity(
+                "/api/doctors/{id}", DoctorResponse.class, doctorId);
+
+        assertThat(detailResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        DoctorResponse body = detailResponse.getBody();
+        assertThat(body.getSpecialties()).hasSize(2);
+        assertThat(body.getOpeningHours()).hasSize(2);
+        assertThat(body.getLanguages()).hasSize(2);
     }
 
     // No round-trip test (token from register authenticating a doctor-scoped call): after
