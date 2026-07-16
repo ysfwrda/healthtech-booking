@@ -2,6 +2,7 @@ package com.healthtech.doctor.controller.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.healthtech.doctor.domain.Doctor;
 import com.healthtech.doctor.domain.Language;
 import com.healthtech.doctor.domain.Specialty;
 import com.healthtech.doctor.dto.AddressDto;
@@ -23,11 +24,14 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalTime;
@@ -59,6 +63,10 @@ public class DoctorIntegrationTest {
     SpecialtyRepository specialtyRepository;
     @Autowired
     TestRestTemplate restTemplate;
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+    @PersistenceContext
+    EntityManager entityManager;
 
     @BeforeEach
     void resetKafkaMock() {
@@ -314,6 +322,39 @@ public class DoctorIntegrationTest {
         assertThat(body.getSpecialties()).hasSize(2);
         assertThat(body.getOpeningHours()).hasSize(2);
         assertThat(body.getLanguages()).hasSize(2);
+    }
+
+    @Test
+    void openingHours_duplicateRowAtRest_collapsesToOneEntryWhenLoaded() {
+        DoctorRegistrationRequest request = validRequestBuilder("dedup.doctor@example.com").build();
+        ResponseEntity<DoctorAuthResponse> registerResponse = restTemplate.postForEntity(
+                "/api/doctors/register", request, DoctorAuthResponse.class);
+        assertThat(registerResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        UUID doctorId = registerResponse.getBody().getId();
+
+        // Bypass the entity layer entirely and insert a byte-for-byte duplicate of the
+        // already-persisted MONDAY 09:00-17:00 block directly into the collection table.
+        // This simulates the only way a duplicate row could ever land at rest (corrupted
+        // data, a manual insert, a future write path that doesn't go through the Set) and
+        // is exactly the scenario the cleanup script in scripts/cleanup-duplicate-opening-hours.sql
+        // targets.
+        jdbcTemplate.update(
+                "INSERT INTO doctor_opening_hours (doctor_id, day_of_week, start_time, end_time) "
+                        + "SELECT doctor_id, day_of_week, start_time, end_time FROM doctor_opening_hours "
+                        + "WHERE doctor_id = ?",
+                doctorId);
+
+        Integer rowCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM doctor_opening_hours WHERE doctor_id = ?", Integer.class, doctorId);
+        assertThat(rowCount).isEqualTo(2);
+
+        // Force a fresh load from the database rather than the persistence context's
+        // first-level cache, so this actually exercises OpeningHours.equals()/hashCode()
+        // deduplicating the two rows as Hibernate materializes the Set.
+        entityManager.clear();
+        Doctor reloaded = doctorRepository.findWithDetailsById(doctorId).orElseThrow();
+
+        assertThat(reloaded.getOpeningHours()).hasSize(1);
     }
 
     // No round-trip test (token from register authenticating a doctor-scoped call): after
