@@ -27,6 +27,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 
@@ -324,7 +325,12 @@ public class DoctorIntegrationTest {
         assertThat(body.getLanguages()).hasSize(2);
     }
 
+    // findWithDetailsById lazy-loads openingHours (no more @EntityGraph after the
+    // cartesian-product fix), so reading the collection needs an open Hibernate session.
+    // DoctorService.getDoctorById gets this via its own @Transactional(readOnly = true);
+    // this test needs the same here since it calls the repository directly.
     @Test
+    @Transactional
     void openingHours_duplicateRowAtRest_collapsesToOneEntryWhenLoaded() {
         DoctorRegistrationRequest request = validRequestBuilder("dedup.doctor@example.com").build();
         ResponseEntity<DoctorAuthResponse> registerResponse = restTemplate.postForEntity(
