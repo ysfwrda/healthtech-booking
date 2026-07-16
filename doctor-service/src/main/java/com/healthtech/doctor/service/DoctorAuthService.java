@@ -10,17 +10,21 @@ import com.healthtech.doctor.event.OpeningHoursData;
 import com.healthtech.doctor.exception.EmailAlreadyExistsException;
 import com.healthtech.doctor.exception.InvalidCredentialsException;
 import com.healthtech.doctor.exception.SpecialtyNotFoundException;
+import com.healthtech.doctor.filter.CorrelationIdFilter;
 import com.healthtech.doctor.mapper.DoctorMapper;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
 import com.healthtech.doctor.security.DoctorTokenProvider;
 import lombok.RequiredArgsConstructor;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -72,7 +76,11 @@ public class DoctorAuthService {
                 .openingHours(openingHours)
                 .registeredAt(savedDoctor.getRegisteredAt())
                 .build();
-        kafkaTemplate.send("doctor.registered", event);
+        ProducerRecord<String, DoctorRegistered> record =
+                new ProducerRecord<>("doctor.registered", event);
+        record.headers().add(CorrelationIdFilter.CORRELATION_ID_HEADER,
+                correlationIdOrGenerate().getBytes(StandardCharsets.UTF_8));
+        kafkaTemplate.send(record);
 
         String token = doctorTokenProvider.generateToken(savedDoctor.getId());
         return DoctorAuthResponse.builder()
@@ -97,5 +105,14 @@ public class DoctorAuthService {
                 .token(token)
                 .expiresIn(doctorTokenProvider.getExpirationSeconds())
                 .build();
+    }
+
+    // Threads the current request's correlation id onto the outgoing Kafka message so a
+    // consumer processing this event can tie its own log lines back to the request that
+    // produced it. Falls back to a fresh id outside a request context (e.g. a test),
+    // matching CorrelationIdFilter's own fallback for a missing incoming header.
+    private String correlationIdOrGenerate() {
+        String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
+        return correlationId != null ? correlationId : UUID.randomUUID().toString();
     }
 }

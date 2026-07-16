@@ -8,16 +8,20 @@ import com.healthtech.appointment.dto.AvailableSlotsResponse;
 import com.healthtech.appointment.event.AppointmentBooked;
 import com.healthtech.appointment.event.AppointmentCancelled;
 import com.healthtech.appointment.exception.*;
+import com.healthtech.appointment.filter.CorrelationIdFilter;
 import com.healthtech.appointment.mapper.AppointmentMapper;
 import com.healthtech.appointment.readmodel.*;
 import com.healthtech.appointment.repository.AppointmentRepository;
 import lombok.RequiredArgsConstructor;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -99,7 +103,11 @@ public class AppointmentService {
                 .bookedAt(saved.getCreatedAt())
                 .build();
 
-        bookedEventKafkaTemplate.send("appointment.booked", event);
+        ProducerRecord<String, AppointmentBooked> bookedRecord =
+                new ProducerRecord<>("appointment.booked", event);
+        bookedRecord.headers().add(CorrelationIdFilter.CORRELATION_ID_HEADER,
+                correlationIdOrGenerate().getBytes(StandardCharsets.UTF_8));
+        bookedEventKafkaTemplate.send(bookedRecord);
         log.info("Appointment booked, appointmentId {}", saved.getId());
         return appointmentMapper.toResponse(saved);
     }
@@ -123,7 +131,11 @@ public class AppointmentService {
                 .cancelledAt(LocalDateTime.now())
                 .build();
 
-        cancelledEventKafkaTemplate.send("appointment.cancelled", event);
+        ProducerRecord<String, AppointmentCancelled> cancelledRecord =
+                new ProducerRecord<>("appointment.cancelled", event);
+        cancelledRecord.headers().add(CorrelationIdFilter.CORRELATION_ID_HEADER,
+                correlationIdOrGenerate().getBytes(StandardCharsets.UTF_8));
+        cancelledEventKafkaTemplate.send(cancelledRecord);
         log.info("Appointment cancelled, appointmentId {}", saved.getId());
         return appointmentMapper.toResponse(saved);
     }
@@ -174,5 +186,13 @@ public class AppointmentService {
                 .date(date)
                 .availableSlots(availableSlots)
                 .build();
+    }
+
+    // Threads the current request's correlation id onto outgoing Kafka messages so a
+    // consumer (e.g. Notification Service) can tie its own log lines back to the request
+    // that produced the event. Falls back to a fresh id outside a request context.
+    private String correlationIdOrGenerate() {
+        String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
+        return correlationId != null ? correlationId : UUID.randomUUID().toString();
     }
 }
