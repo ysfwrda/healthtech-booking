@@ -12,6 +12,7 @@ import java.time.LocalTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode
 public class OpeningHours {
     private DayOfWeek dayOfWeek;
     private LocalTime startTime;
