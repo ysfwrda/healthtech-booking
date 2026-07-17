@@ -12,9 +12,11 @@ import com.healthtech.patient.exception.UsernameAlreadyExistsException;
 import com.healthtech.patient.mapper.PatientMapper;
 import com.healthtech.patient.repository.PatientRepository;
 import com.healthtech.patient.security.JwtTokenProvider;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatcher;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -92,7 +94,9 @@ class AuthServiceTest {
         verify(passwordEncoder).encode("secret123");
         verify(patientRepository).saveAndFlush(patient);
         verify(jwtTokenProvider).generateToken(patientId);
-        verify(patientRegisteredKafkaTemplate, times(1)).send(eq("patient.registered"),any(PatientRegistered.class));
+        ArgumentMatcher<ProducerRecord<String, PatientRegistered>> matchesRegisteredRecord = record ->
+                record.topic().equals("patient.registered") && record.value() instanceof PatientRegistered;
+        verify(patientRegisteredKafkaTemplate, times(1)).send(argThat(matchesRegisteredRecord));
     }
 
     @Test

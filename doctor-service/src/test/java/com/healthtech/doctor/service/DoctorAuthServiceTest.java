@@ -18,9 +18,11 @@ import com.healthtech.doctor.mapper.DoctorMapper;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
 import com.healthtech.doctor.security.DoctorTokenProvider;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatcher;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -37,7 +39,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -122,7 +123,9 @@ class DoctorAuthServiceTest {
         assertThat(response.getToken()).isEqualTo("jwt-token");
         assertThat(response.getExpiresIn()).isEqualTo(3600L);
         verify(doctorRepository).saveAndFlush(doctor);
-        verify(kafkaTemplate, times(1)).send(eq("doctor.registered"), any(DoctorRegistered.class));
+        ArgumentMatcher<ProducerRecord<String, DoctorRegistered>> matchesRegisteredRecord = record ->
+                record.topic().equals("doctor.registered") && record.value() instanceof DoctorRegistered;
+        verify(kafkaTemplate, times(1)).send(argThat(matchesRegisteredRecord));
     }
 
     @Test
@@ -155,7 +158,7 @@ class DoctorAuthServiceTest {
                 .isInstanceOf(SpecialtyNotFoundException.class);
 
         verify(doctorRepository, never()).saveAndFlush(any());
-        verify(kafkaTemplate, never()).send(anyString(), any());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 
     @Test
@@ -173,7 +176,7 @@ class DoctorAuthServiceTest {
                 .isInstanceOf(EmailAlreadyExistsException.class)
                 .hasMessageContaining("anna.mueller@example.com");
 
-        verify(kafkaTemplate, never()).send(anyString(), any());
+        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
         verify(doctorTokenProvider, never()).generateToken(any());
     }
 
