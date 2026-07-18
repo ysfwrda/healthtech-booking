@@ -64,13 +64,13 @@ Notification Service consumes.
 
 ## Services
 
-| Service                | Port | Responsibility                                                                                                                      |
-|------------------------|------|-------------------------------------------------------------------------------------------------------------------------------------|
-| `api-gateway`          | 8080 | Single entry point for all client traffic; routes each path prefix to the owning service                                            |
-| `appointment-service`  | 8081 | Booking, cancellation, availability/slot computation, read-model of valid patients/doctors, JWT validation, publishes domain events |
-| `notification-service` | 8082 | Consumes appointment events from Kafka and persists notification records independently                                              |
-| `patient-service`      | 8083 | Patient registration, login, JWT issuance (RS256), profile management                                                               |
-| `doctor-service`       | 8084 | Doctor self-registration, login, JWT issuance (RS256), specialty and language filtering, opening hours, registration event publishing |
+| Service                | Port | Responsibility                                                                                                                                                              |
+|------------------------|------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `api-gateway`          | 8080 | Single entry point for all client traffic; routes each path prefix to the owning service                                                                                    |
+| `appointment-service`  | 8081 | Booking, cancellation, availability/slot computation, read-model of valid patients/doctors, JWT validation, publishes domain events                                         |
+| `notification-service` | 8082 | Consumes appointment events from Kafka and persists notification records independently                                                                                      |
+| `patient-service`      | 8083 | Patient registration, login, JWT issuance (RS256), profile management                                                                                                       |
+| `doctor-service`       | 8084 | Doctor self-registration, login, JWT issuance (RS256), specialty and language filtering, opening hours, registration event publishing                                       |
 | `frontend`             | 5173 | React (Vite, TypeScript) client. Talks to every service exclusively through the API Gateway. Not yet containerized in `docker-compose.yml`; run separately, see Local Setup |
 
 ---
@@ -163,8 +163,15 @@ Duplicate detection (username, email, double-booking) is enforced by database un
 
 Every service, including the gateway, generates or propagates a correlation ID via a `CorrelationIdFilter` and logs
 it through MDC (`%5p [%X{correlationId}]` in the log pattern). The gateway resolves or generates the id first, then
-overwrites the outbound header before proxying, so the same id threads through the gateway and every downstream
-service call for a single request.
+overwrites the outbound header before proxying, so the same id threads through the gateway and the service handling
+the request.
+
+The id also crosses the Kafka boundary: producers attach it to the message as an `X-Correlation-Id` header, and
+consumers read it back into their own MDC before processing. Because cross-service work here is asynchronous rather
+than synchronous ([ADR-005](docs/adr/ADR-005-cross-service-validation.md)), this is the hop that matters: a single
+grep for one id relates a registration request to the read-model projection it triggered in another service. Events
+published outside a request context, such as the demo seeder, fall back to a generated id rather than failing.
+See [ADR-007](docs/adr/ADR-007-correlation-id-propagation.md) for the trade-off against distributed tracing.
 
 Metrics, distributed tracing (spans), retries, and a dead-letter queue for Kafka consumers are not implemented yet
 and remain Phase 3 work; see Current Limitations.
@@ -182,8 +189,9 @@ Documented in [`docs/adr/`](docs/adr/):
   identity)
 * [ADR-005](docs/adr/ADR-005-cross-service-validation.md) — Cross-Service Validation via event-driven read-model
 * [ADR-006](docs/adr/ADR-006-service-discovery.md) — Static Service discovery
-
-Each ADR includes context, alternatives, trade-offs, and rationale.
+* [ADR-007](docs/adr/ADR-007-correlation-id-propagation.md) — Correlation ID Propagation for Log Correlation
+ 
+* Each ADR includes context, alternatives, trade-offs, and rationale.
 
 ---
 
@@ -232,12 +240,14 @@ Service decomposition · Kafka-based events · database-per-service · API Gatew
 Patient auth (JWT RS256) · Doctor profiles, specialties, language filtering · availability/slot computation · race-safe
 booking (partial unique index) · soft-delete cancellation · cross-service validation via event-driven read-model ·
 per-service JWT validation with token-derived identity and ownership checks · RFC 9457 error handling across services ·
-gateway routing for all services · Testcontainers integration coverage (concurrency-verified booking, cross-service JWT rejection, read-model projection, ownership enforcement)
+gateway routing for all services · Testcontainers integration coverage (concurrency-verified booking, cross-service JWT
+rejection, read-model projection, ownership enforcement)
 
 ### Phase 3: Production & Intelligence Layer (in progress)
 
 Correlation-ID propagation and structured logging (done, see Observability) · metrics and distributed tracing ·
-reliability (idempotency, retries, DLQ, event versioning) · gateway-level JWT edge validation · service discovery · AI-assisted symptom-to-specialty triage
+reliability (idempotency, retries, DLQ, event versioning) · gateway-level JWT edge validation · service discovery ·
+AI-assisted symptom-to-specialty triage
 
 ---
 
@@ -342,11 +352,11 @@ without regenerating it locally), token verification fails closed with a signatu
 Each service reads its key path from an environment variable with a local-host default, matching the existing
 `${VAR:default}` pattern used for database and Kafka settings elsewhere in this project:
 
-| Service              | Env var                | Default (host)              |
-|----------------------|-------------------------|------------------------------|
-| patient-service      | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `file:../keys/private.pem`, `file:../keys/public.pem` |
-| doctor-service        | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `file:../keys/private.pem`, `file:../keys/public.pem` |
-| appointment-service   | `JWT_PUBLIC_KEY_PATH`   | `file:../keys/public.pem`    |
+| Service             | Env var                                       | Default (host)                                        |
+|---------------------|-----------------------------------------------|-------------------------------------------------------|
+| patient-service     | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `file:../keys/private.pem`, `file:../keys/public.pem` |
+| doctor-service      | `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH` | `file:../keys/private.pem`, `file:../keys/public.pem` |
+| appointment-service | `JWT_PUBLIC_KEY_PATH`                         | `file:../keys/public.pem`                             |
 
 The host defaults assume the process runs from within its own module directory (`cd patient-service && mvn
 spring-boot:run`, matching Step 3 below), so `../keys/` resolves to the repo-root `keys/` directory. Under Docker
@@ -378,6 +388,7 @@ falls back to `localhost` addresses by default):
 ```bash
 cd appointment-service && mvn spring-boot:run
 ```
+
 ### Step 4 — Exercise the Flow
 
 Convenience path: run the full pipeline in one command (requires `curl` and `jq`):
@@ -476,14 +487,14 @@ bookable through the normal flow.
 
 All seeded doctors share one password: **`demo12345`**. Log in as any of them via `POST /api/doctors/login`:
 
-| Email                              | Specialties                              | Languages                  |
-|-------------------------------------|-------------------------------------------|-----------------------------|
-| `anna.weber@demo.healthtech.com`     | General Practice, Cardiology              | German, English             |
-| `mehmet.yilmaz@demo.healthtech.com`  | Cardiology, Orthopedics                   | Turkish, German              |
-| `sophie.dubois@demo.healthtech.com`  | Dermatology, Gynecology                   | French, English              |
-| `elena.rossi@demo.healthtech.com`    | Pediatrics, Dermatology, Gynecology       | Italian, Spanish             |
-| `omar.haddad@demo.healthtech.com`    | Neurology, General Practice               | Arabic, Persian, English     |
-| `katarina.petrov@demo.healthtech.com`| Orthopedics, Neurology, Pediatrics        | Russian, English             |
+| Email                                 | Specialties                         | Languages                |
+|---------------------------------------|-------------------------------------|--------------------------|
+| `anna.weber@demo.healthtech.com`      | General Practice, Cardiology        | German, English          |
+| `mehmet.yilmaz@demo.healthtech.com`   | Cardiology, Orthopedics             | Turkish, German          |
+| `sophie.dubois@demo.healthtech.com`   | Dermatology, Gynecology             | French, English          |
+| `elena.rossi@demo.healthtech.com`     | Pediatrics, Dermatology, Gynecology | Italian, Spanish         |
+| `omar.haddad@demo.healthtech.com`     | Neurology, General Practice         | Arabic, Persian, English |
+| `katarina.petrov@demo.healthtech.com` | Orthopedics, Neurology, Pediatrics  | Russian, English         |
 
 ```bash
 curl -X POST http://localhost:8080/api/doctors/login \
