@@ -13,6 +13,7 @@ import com.healthtech.doctor.dto.OpeningHoursDto;
 import com.healthtech.doctor.event.DoctorRegistered;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,7 +37,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.verify;
 
@@ -139,9 +139,11 @@ public class DoctorIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         UUID doctorId = response.getBody().getId();
 
-        var captor = org.mockito.ArgumentCaptor.forClass(DoctorRegistered.class);
-        verify(kafkaTemplate).send(eq("doctor.registered"), captor.capture());
-        DoctorRegistered event = captor.getValue();
+        var captor = org.mockito.ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(captor.capture());
+        ProducerRecord<String, DoctorRegistered> record = captor.getValue();
+        assertThat(record.topic()).isEqualTo("doctor.registered");
+        DoctorRegistered event = record.value();
 
         assertThat(event.getDoctorId()).isEqualTo(doctorId);
         assertThat(event.getFirstName()).isEqualTo("John");

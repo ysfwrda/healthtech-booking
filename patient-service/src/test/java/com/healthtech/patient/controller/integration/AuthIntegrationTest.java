@@ -7,6 +7,7 @@ import com.healthtech.patient.dto.AuthResponse;
 import com.healthtech.patient.dto.RegisterRequest;
 import com.healthtech.patient.event.PatientRegistered;
 import com.healthtech.patient.repository.PatientRepository;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,7 +25,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -99,9 +99,11 @@ public class AuthIntegrationTest {
 
         var patient = patientRepository.findByUsername("eventuser").orElseThrow();
 
-        var captor = org.mockito.ArgumentCaptor.forClass(PatientRegistered.class);
-        verify(kafkaTemplate).send(eq("patient.registered"), captor.capture());
-        PatientRegistered event = captor.getValue();
+        var captor = org.mockito.ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(kafkaTemplate).send(captor.capture());
+        ProducerRecord<String, PatientRegistered> record = captor.getValue();
+        assertThat(record.topic()).isEqualTo("patient.registered");
+        PatientRegistered event = record.value();
 
         assertThat(event.getPatientId()).isEqualTo(patient.getId());
         assertThat(event.getFirstName()).isEqualTo("Jane");

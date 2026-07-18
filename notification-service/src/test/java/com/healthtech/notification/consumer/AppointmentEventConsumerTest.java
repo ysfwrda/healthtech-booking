@@ -42,7 +42,7 @@ class AppointmentEventConsumerTest {
                 .build();
 
         // Act
-        consumer.consumeBookedEvent(event);
+        consumer.consumeBookedEvent(event, null);
 
         // Assert
         verify(notificationService).createForBookedAppointment(event);
@@ -63,7 +63,7 @@ class AppointmentEventConsumerTest {
                 .build();
 
         // Act
-        consumer.consumeCancelledEvent(event);
+        consumer.consumeCancelledEvent(event, null);
 
         // Assert
         verify(notificationService).createForCancelledAppointment(event);
@@ -82,7 +82,7 @@ class AppointmentEventConsumerTest {
                 .build();
 
         // Act
-        consumer.consumeBookedEvent(event);
+        consumer.consumeBookedEvent(event, null);
 
         // Assert
         verify(notificationService).createForBookedAppointment(event);
@@ -101,7 +101,7 @@ class AppointmentEventConsumerTest {
                 .build();
 
         // Act
-        consumer.consumeCancelledEvent(event);
+        consumer.consumeCancelledEvent(event, null);
 
         // Assert
         verify(notificationService).createForCancelledAppointment(event);

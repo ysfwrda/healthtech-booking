@@ -18,10 +18,12 @@ import com.healthtech.appointment.readmodel.ValidDoctorRepository;
 import com.healthtech.appointment.readmodel.ValidPatient;
 import com.healthtech.appointment.readmodel.ValidPatientRepository;
 import com.healthtech.appointment.repository.AppointmentRepository;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatcher;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -128,7 +130,10 @@ class AppointmentServiceTest {
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
         assertThat(result.getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
         verify(appointmentRepository, times(1)).save(appointment);
-        verify(bookedEventKafkaTemplate, times(1)).send(eq("appointment.booked"), any(AppointmentBooked.class));    }
+        ArgumentMatcher<ProducerRecord<String, AppointmentBooked>> matchesBookedRecord = record ->
+                record.topic().equals("appointment.booked") && record.value() instanceof AppointmentBooked;
+        verify(bookedEventKafkaTemplate, times(1)).send(argThat(matchesBookedRecord));
+    }
 
     @Test
     void bookAppointment_shouldSetPatientIdFromTokenParameterNotFromMappedRequest() {
@@ -192,7 +197,9 @@ class AppointmentServiceTest {
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
         assertThat(result.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
         verify(appointmentRepository, times(1)).save(appointment);
-        verify(cancelledEventKafkaTemplate, times(1)).send(eq("appointment.cancelled"), any(AppointmentCancelled.class));
+        ArgumentMatcher<ProducerRecord<String, AppointmentCancelled>> matchesCancelledRecord = record ->
+                record.topic().equals("appointment.cancelled") && record.value() instanceof AppointmentCancelled;
+        verify(cancelledEventKafkaTemplate, times(1)).send(argThat(matchesCancelledRecord));
     }
 
     @Test
@@ -215,7 +222,7 @@ class AppointmentServiceTest {
 
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
         verify(appointmentRepository, never()).save(any());
-        verify(cancelledEventKafkaTemplate, never()).send(any(), any());
+        verify(cancelledEventKafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 
     @Test
@@ -230,7 +237,7 @@ class AppointmentServiceTest {
                 .hasMessage("Appointment not found: " + appointmentId);
 
         verify(appointmentRepository, never()).save(any());
-        verify(cancelledEventKafkaTemplate, never()).send(any(), any());
+        verify(cancelledEventKafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 
     @Test
@@ -265,7 +272,7 @@ class AppointmentServiceTest {
         assertThatThrownBy(() -> appointmentService.bookAppointment(request, patientId))
                 .isInstanceOf(SlotAlreadyBookedException.class);
 
-        verify(bookedEventKafkaTemplate, never()).send(any(), any());
+        verify(bookedEventKafkaTemplate, never()).send(any(ProducerRecord.class));
     }
 
     @Test
@@ -299,9 +306,10 @@ class AppointmentServiceTest {
         appointmentService.bookAppointment(request, patientId);
 
         // Assert: event carries the saved appointment's IDs
-        ArgumentCaptor<AppointmentBooked> eventCaptor = ArgumentCaptor.forClass(AppointmentBooked.class);
-        verify(bookedEventKafkaTemplate).send(eq("appointment.booked"), eventCaptor.capture());
-        AppointmentBooked event = eventCaptor.getValue();
+        ArgumentCaptor<ProducerRecord<String, AppointmentBooked>> recordCaptor = ArgumentCaptor.forClass(ProducerRecord.class);
+        verify(bookedEventKafkaTemplate).send(recordCaptor.capture());
+        assertThat(recordCaptor.getValue().topic()).isEqualTo("appointment.booked");
+        AppointmentBooked event = recordCaptor.getValue().value();
         assertThat(event.getAppointmentId()).isEqualTo(appointment.getId());
         assertThat(event.getPatientId()).isEqualTo(patientId);
         assertThat(event.getDoctorId()).isEqualTo(doctorId);
@@ -366,7 +374,9 @@ class AppointmentServiceTest {
 
         // Assert
         assertThat(result.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
-        verify(cancelledEventKafkaTemplate, times(1)).send(eq("appointment.cancelled"), any(AppointmentCancelled.class));
+        ArgumentMatcher<ProducerRecord<String, AppointmentCancelled>> matchesCancelledRecord = record ->
+                record.topic().equals("appointment.cancelled") && record.value() instanceof AppointmentCancelled;
+        verify(cancelledEventKafkaTemplate, times(1)).send(argThat(matchesCancelledRecord));
     }
 
     @Test
