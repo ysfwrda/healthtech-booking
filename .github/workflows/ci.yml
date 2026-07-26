@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [ main ]
   push:
-    branches: [main]
+    branches: [ main ]
 
 jobs:
   test:
@@ -47,3 +47,33 @@ jobs:
       - name: Test ${{ matrix.service }}
         working-directory: ${{ matrix.service }}
         run: mvn -B test ${{ matrix.test_args }}
+  build-and-push:
+    name: push ${{ matrix.service }}
+    needs: test                 # waits for every test-matrix leg to pass
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write           # lets GITHUB_TOKEN push to ghcr
+    strategy:
+      matrix:
+        service: [ api-gateway, appointment-service, doctor-service, notification-service, patient-service ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to ghcr
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # injected automatically, no setup
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}         # each service's Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:latest
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
