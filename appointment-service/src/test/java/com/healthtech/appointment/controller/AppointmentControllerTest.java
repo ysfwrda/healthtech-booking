@@ -5,7 +5,6 @@ import com.healthtech.appointment.domain.AppointmentType;
 import com.healthtech.appointment.dto.AppointmentRequest;
 import com.healthtech.appointment.dto.AppointmentResponse;
 import com.healthtech.appointment.exception.AppointmentNotFoundException;
-import com.healthtech.appointment.exception.WrongTokenTypeException;
 import com.healthtech.appointment.service.AppointmentService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,7 +30,11 @@ import static org.mockito.Mockito.*;
 // @AuthenticationPrincipal Jwt, and a mocked Jwt passed directly as a method argument is
 // enough to exercise the controller's own authorization logic without standing up a real
 // Spring Security filter chain (JWT signature validation is Spring Security's concern,
-// covered by SecurityConfig, not this class).
+// covered by SecurityConfig, not this class). Role enforcement (PATIENT vs DOCTOR) is no
+// longer this controller's concern either - SecurityConfig's hasRole("PATIENT") rejects a
+// DOCTOR token before the controller is ever invoked, so that behavior is covered by
+// AppointmentSecurityTest (MockMvc slice) and AppointmentIntegrationTest (real tokens
+// signed under the shared key), not here.
 @ExtendWith(MockitoExtension.class)
 class AppointmentControllerTest {
 
@@ -63,7 +66,6 @@ class AppointmentControllerTest {
         UUID appointmentId = UUID.randomUUID();
         AppointmentRequest request = sampleRequest();
 
-        when(jwt.getClaimAsString("role")).thenReturn("PATIENT");
         when(jwt.getSubject()).thenReturn(patientId.toString());
 
         AppointmentResponse response = AppointmentResponse.builder()
@@ -91,7 +93,6 @@ class AppointmentControllerTest {
         UUID patientId = UUID.randomUUID();
         AppointmentRequest request = sampleRequest();
 
-        when(jwt.getClaimAsString("role")).thenReturn("PATIENT");
         when(jwt.getSubject()).thenReturn(patientId.toString());
         when(appointmentService.bookAppointment(any(), any())).thenReturn(AppointmentResponse.builder().build());
 
@@ -106,24 +107,10 @@ class AppointmentControllerTest {
     }
 
     @Test
-    void bookAppointment_nonPatientToken_shouldThrowWrongTokenExceptionAndNeverCallService() {
-        // Arrange
-        AppointmentRequest request = sampleRequest();
-        when(jwt.getClaimAsString("role")).thenReturn("DOCTOR");
-
-        // Act and Assert: the critical "rejected" direction of the role check.
-        assertThatThrownBy(() -> appointmentController.bookAppointment(request, jwt))
-                .isInstanceOf(WrongTokenTypeException.class);
-
-        verifyNoInteractions(appointmentService);
-    }
-
-    @Test
     void cancelAppointment_shouldReturn200AndPassPatientIdFromTokenSubject() {
         // Arrange
         UUID appointmentId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
-        when(jwt.getClaimAsString("role")).thenReturn("PATIENT");
         when(jwt.getSubject()).thenReturn(patientId.toString());
 
         AppointmentResponse response = AppointmentResponse.builder()
@@ -145,23 +132,9 @@ class AppointmentControllerTest {
     }
 
     @Test
-    void cancelAppointment_nonPatientToken_shouldThrowWrongTokenExceptionAndNeverCallService() {
-        // Arrange
-        UUID appointmentId = UUID.randomUUID();
-        when(jwt.getClaimAsString("role")).thenReturn("DOCTOR");
-
-        // Act and Assert
-        assertThatThrownBy(() -> appointmentController.cancelAppointment(appointmentId, jwt))
-                .isInstanceOf(WrongTokenTypeException.class);
-
-        verifyNoInteractions(appointmentService);
-    }
-
-    @Test
     void getMyAppointments_patientToken_shouldReturn200WithPatientIdFromTokenSubject() {
         // Arrange
         UUID patientId = UUID.randomUUID();
-        when(jwt.getClaimAsString("role")).thenReturn("PATIENT");
         when(jwt.getSubject()).thenReturn(patientId.toString());
 
         List<AppointmentResponse> responses = List.of(
@@ -178,23 +151,10 @@ class AppointmentControllerTest {
     }
 
     @Test
-    void getMyAppointments_nonPatientToken_shouldThrowWrongTokenExceptionAndNeverCallService() {
-        // Arrange
-        when(jwt.getClaimAsString("role")).thenReturn("DOCTOR");
-
-        // Act and Assert
-        assertThatThrownBy(() -> appointmentController.getMyAppointments(jwt))
-                .isInstanceOf(WrongTokenTypeException.class);
-
-        verifyNoInteractions(appointmentService);
-    }
-
-    @Test
     void cancelAppointment_whenNotFound_shouldPropagateAppointmentNotFoundException() {
         // Arrange
         UUID appointmentId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
-        when(jwt.getClaimAsString("role")).thenReturn("PATIENT");
         when(jwt.getSubject()).thenReturn(patientId.toString());
         when(appointmentService.cancelAppointment(appointmentId, patientId))
                 .thenThrow(new AppointmentNotFoundException("Appointment not found: " + appointmentId));

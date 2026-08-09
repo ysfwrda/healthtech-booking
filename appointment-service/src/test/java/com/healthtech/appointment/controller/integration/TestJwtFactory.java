@@ -30,6 +30,20 @@ public final class TestJwtFactory {
                 .compact();
     }
 
+    // Signed under the same shared key pair as patientToken (ADR-004): only the role claim
+    // distinguishes it. Used to prove a DOCTOR token is rejected by role, not by signature.
+    public static String doctorToken(UUID doctorId, RSAPrivateKey privateKey) {
+        Instant now = Instant.now();
+        Instant expiry = now.plus(1, ChronoUnit.HOURS);
+        return Jwts.builder()
+                .subject(doctorId.toString())
+                .claim("role", "DOCTOR")
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(expiry))
+                .signWith(privateKey)
+                .compact();
+    }
+
     public static RSAPrivateKey loadPrivateKey(Path pemPath) throws Exception {
         String pem = Files.readString(pemPath)
                 .replace("-----BEGIN PRIVATE KEY-----", "")

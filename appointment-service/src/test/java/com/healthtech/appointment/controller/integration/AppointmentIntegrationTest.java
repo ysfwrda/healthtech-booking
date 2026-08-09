@@ -183,6 +183,46 @@ public class AppointmentIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    // The full-stack proof for ADR-004's role enforcement: a DOCTOR token is signed by the
+    // same private key as a PATIENT token (shared key pair), so signature validation alone
+    // cannot reject it. Only SecurityConfig's hasRole("PATIENT") - driven by the role claim -
+    // does, and this hits it through the real filter chain rather than a mocked Jwt.
+    @Test
+    void createAppointment_doctorToken_returns403() {
+        LocalDate target = LocalDate.now().plusWeeks(1);
+        Set<OpeningHours> openingHours = new HashSet<OpeningHours>();
+        openingHours.add(OpeningHours.builder()
+                .dayOfWeek(target.getDayOfWeek())
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(17, 0)).build());
+
+        final ValidDoctor seededDoctor = ValidDoctor.builder()
+                .doctorId(UUID.randomUUID())
+                .firstName("Valid")
+                .lastName("Doctor")
+                .openingHours(openingHours)
+                .build();
+        validDoctorRepository.save(seededDoctor);
+
+        String token = TestJwtFactory.doctorToken(UUID.randomUUID(), (RSAPrivateKey) KEY_PAIR.getPrivate());
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        AppointmentRequest appointmentRequest = AppointmentRequest.builder()
+                .doctorId(seededDoctor.getDoctorId())
+                .dateTime(LocalDateTime.of(target, LocalTime.of(9, 0)))
+                .notes("Test Notes")
+                .type(AppointmentType.VACCINATION)
+                .build();
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/appointments", HttpMethod.POST,
+                new HttpEntity<>(appointmentRequest, headers),
+                String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
     @Test
     void cancelAppointment_notOwner_returns403() throws Exception {
         LocalDate target = LocalDate.now().plusWeeks(1);
