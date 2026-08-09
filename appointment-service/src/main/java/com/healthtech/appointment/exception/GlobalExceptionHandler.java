@@ -94,12 +94,4 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         pd.setTitle("Not Resource Owner");
         return pd;
     }
-
-    @ExceptionHandler(WrongTokenTypeException.class)
-    public ProblemDetail handleWrongTokenTypeException(WrongTokenTypeException ex) {
-        log.warn("{}, status 403", ex.getMessage());
-        ProblemDetail pd = forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
-        pd.setTitle("Wrong Token Type");
-        return pd;
-    }
 }
