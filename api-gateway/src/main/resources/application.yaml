@@ -7,6 +7,8 @@ app:
     appointment-service-uri: ${APPOINTMENT_SERVICE_URI:http://localhost:8081}
     patient-service-uri: ${PATIENT_SERVICE_URI:http://localhost:8083}
     doctor-service-uri: ${DOCTOR_SERVICE_URI:http://localhost:8084}
+  jwt:
+    public-key: ${JWT_PUBLIC_KEY_PATH:file:../keys/public.pem}
 
 cors:
   allowed-origins: ${FRONTEND_URL:http://localhost:5173}
