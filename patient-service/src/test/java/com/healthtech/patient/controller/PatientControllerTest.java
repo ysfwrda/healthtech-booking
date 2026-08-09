@@ -10,11 +10,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -44,6 +48,11 @@ class PatientControllerTest {
     @MockitoBean
     private org.springframework.security.oauth2.jwt.JwtDecoder jwtDecoder;
 
+    // The real mapping from SecurityConfig, not a reimplementation, so these tests exercise
+    // exactly what hasRole("PATIENT") sees in production and can't drift from it.
+    private static final Converter<Jwt, Collection<GrantedAuthority>> ROLE_AUTHORITIES =
+            new SecurityConfig().roleAuthoritiesConverter();
+
     // ── GET /api/patients/{id} ────────────────────────────────────────────────
 
     @Test
@@ -70,7 +79,8 @@ class PatientControllerTest {
         when(patientService.getPatientProfileById(patientId, patientId)).thenReturn(patientResponse);
 
         mockMvc.perform(get("/api/patients/" + patientId)
-                        .with(jwt().jwt(builder -> builder.subject(patientId.toString()))))
+                        .with(jwt().jwt(builder -> builder.subject(patientId.toString()).claim("role", "PATIENT"))
+                                .authorities(ROLE_AUTHORITIES)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.firstName").value("John"));
     }
@@ -84,7 +94,8 @@ class PatientControllerTest {
         when(patientService.getPatientProfileById(patientId, anotherId))
                 .thenThrow(new PatientAccessDeniedException(patientId));
         mockMvc.perform(get("/api/patients/" + patientId)
-                        .with(jwt().jwt(builder -> builder.subject(anotherId.toString()))))
+                        .with(jwt().jwt(builder -> builder.subject(anotherId.toString()).claim("role", "PATIENT"))
+                                .authorities(ROLE_AUTHORITIES)))
                 .andExpect(status().isForbidden());
     }
 
@@ -93,7 +104,24 @@ class PatientControllerTest {
         UUID patientId = UUID.randomUUID();
         when(patientService.getPatientProfileById(patientId, patientId)).thenThrow(new PatientNotFoundException(patientId));
         mockMvc.perform(get("/api/patients/" + patientId)
-                        .with(jwt().jwt(builder -> builder.subject(patientId.toString()))))
+                        .with(jwt().jwt(builder -> builder.subject(patientId.toString()).claim("role", "PATIENT"))
+                                .authorities(ROLE_AUTHORITIES)))
                 .andExpect(status().isNotFound());
+    }
+
+    // ── Role enforcement (ADR-004) ──────────────────────────────────────────────
+    // These exercise SecurityConfig's own hasRole("PATIENT") rule, not PatientController's
+    // ownership logic covered above. A DOCTOR token is signed under the same shared key pair,
+    // so authenticity alone can't tell the two apart; only the role claim, mapped to a ROLE_
+    // authority by SecurityConfig.roleAuthoritiesConverter(), does.
+
+    @Test
+    void getPatientProfile_wrongRoleToken_returns403() throws Exception {
+        UUID patientId = UUID.randomUUID();
+        mockMvc.perform(get("/api/patients/" + patientId)
+                        .with(jwt().jwt(builder -> builder.subject(patientId.toString()).claim("role", "DOCTOR"))
+                                .authorities(ROLE_AUTHORITIES)))
+                .andExpect(status().isForbidden());
+        verify(patientService, never()).getPatientProfileById(any(), any());
     }
 }
