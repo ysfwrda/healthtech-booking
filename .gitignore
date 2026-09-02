@@ -1,6 +1,7 @@
 # IDE
 .idea/
-.claude/
+.claude/*
+!.claude/agents/
 
 # Build output
 out/
