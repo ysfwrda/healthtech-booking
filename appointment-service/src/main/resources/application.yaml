@@ -21,7 +21,7 @@ spring:
   sql:
     init:
       mode: always
-      platform: postgres
+      platform: postgresql
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -32,6 +32,17 @@ spring:
 app:
   jwt:
     public-key: ${JWT_PUBLIC_KEY_PATH:file:../keys/public.pem}
+
+outbox:
+  relay:
+    fixed-delay-ms: 1000
+    batch-size: 100
+    max-block-ms: 15000
+    request-timeout-ms: 30000
+    delivery-timeout-ms: 120000
+  pruning:
+    cron: "0 0 3 * * *"
+    retention-days: 7
 
 management:
   endpoints:
