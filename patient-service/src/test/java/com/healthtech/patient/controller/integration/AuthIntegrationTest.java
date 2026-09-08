@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.patient.domain.InsuranceType;
 import com.healthtech.patient.dto.AuthResponse;
 import com.healthtech.patient.dto.RegisterRequest;
-import com.healthtech.patient.outbox.OutboxMessage;
 import com.healthtech.patient.outbox.OutboxRepository;
 import com.healthtech.patient.repository.PatientRepository;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -30,7 +29,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.ConfluentKafkaContainer;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.HashMap;

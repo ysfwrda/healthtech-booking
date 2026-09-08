@@ -110,13 +110,7 @@ public class AppointmentService {
                 .bookedAt(saved.getCreatedAt())
                 .build();
 
-        outboxRepository.save(OutboxMessage.builder()
-                .id(event.getEventId())
-                .aggregateId(saved.getId().toString())
-                .topic("appointment.booked")
-                .payload(serialize(event))
-                .correlationId(correlationIdOrGenerate())
-                .build());
+        saveOutboxRow(event.getEventId(), saved.getId(), "appointment.booked", event);
         log.info("Appointment booked, appointmentId {}", saved.getId());
         return appointmentMapper.toResponse(saved);
     }
@@ -141,13 +135,7 @@ public class AppointmentService {
                 .cancelledAt(LocalDateTime.now())
                 .build();
 
-        outboxRepository.save(OutboxMessage.builder()
-                .id(event.getEventId())
-                .aggregateId(saved.getId().toString())
-                .topic("appointment.cancelled")
-                .payload(serialize(event))
-                .correlationId(correlationIdOrGenerate())
-                .build());
+        saveOutboxRow(event.getEventId(), saved.getId(), "appointment.cancelled", event);
         log.info("Appointment cancelled, appointmentId {}", saved.getId());
         return appointmentMapper.toResponse(saved);
     }
@@ -214,5 +202,15 @@ public class AppointmentService {
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to serialize " + event.getClass().getSimpleName() + " event", ex);
         }
+    }
+
+    private void saveOutboxRow(UUID eventId, UUID aggregateId, String topic, Object event) {
+        outboxRepository.save(OutboxMessage.builder()
+                .id(eventId)
+                .aggregateId(aggregateId.toString())
+                .topic(topic)
+                .payload(serialize(event))
+                .correlationId(correlationIdOrGenerate())
+                .build());
     }
 }

@@ -15,7 +15,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(properties = "outbox.pruning.retention-days=7")
+// outbox.relay.fixed-delay-ms is pushed out to an hour: without it, the live scheduler would
+// claim the seeded rows and attempt real Kafka sends against an unreachable default broker
+// every second, which is irrelevant to pruning and just adds noise and pointless blocking.
+@SpringBootTest(properties = {"outbox.pruning.retention-days=7", "outbox.relay.fixed-delay-ms=3600000"})
 @Testcontainers
 @DirtiesContext
 class OutboxPruningJobTest {
