@@ -187,3 +187,25 @@ table is a foreseeable production failure.
 * The revisit trigger for the relay is production traffic or horizontal scaling: when polling
   load on the database or delivery latency becomes measurable, Debezium replaces the relay
   against the same table.
+
+#### Duplicated outbox implementation
+
+Three near-identical copies of the outbox entity, repository, relay and pruning job now exist,
+one per publishing service (`patient-service`, `doctor-service`, `appointment-service`). This is
+a known cost, accepted deliberately rather than left as an implicit finding.
+
+Extraction into a shared module is intended, not rejected. It is deferred because it requires
+either a multi-module Maven build (an aggregator POM) or a versioned artifact published somewhere
+all five independent builds can resolve it, and either option changes how CI works and has
+consequences for the independent-deployability property ADR-001 claims for this system. Bundling
+that restructuring into this decision would couple an architectural change to a correctness fix
+and roughly double the size of this PR.
+
+The scope of that future decision is wider than the outbox: `CorrelationIdFilter` exists in five
+services, `RsaKeyProperties` and `JwtDecoderConfig` in four, `GlobalExceptionHandler` in four, the
+JWT role converter in three, and the Spring Boot version is pinned five times with no BOM. A
+shared module for the outbox alone would address one instance of a pattern that already recurs
+across the codebase.
+
+The revisit trigger is the next piece of infrastructure code that would be copied a fourth or
+fifth time.
