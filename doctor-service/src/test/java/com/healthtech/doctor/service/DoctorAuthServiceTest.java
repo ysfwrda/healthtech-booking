@@ -9,22 +9,22 @@ import com.healthtech.doctor.dto.AddressDto;
 import com.healthtech.doctor.dto.DoctorAuthResponse;
 import com.healthtech.doctor.dto.DoctorLoginRequest;
 import com.healthtech.doctor.dto.DoctorRegistrationRequest;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.doctor.dto.OpeningHoursDto;
-import com.healthtech.doctor.event.DoctorRegistered;
 import com.healthtech.doctor.exception.EmailAlreadyExistsException;
 import com.healthtech.doctor.exception.InvalidCredentialsException;
 import com.healthtech.doctor.exception.SpecialtyNotFoundException;
 import com.healthtech.doctor.mapper.DoctorMapper;
+import com.healthtech.doctor.outbox.OutboxRepository;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
 import com.healthtech.doctor.security.DoctorTokenProvider;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentMatcher;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -49,7 +49,8 @@ class DoctorAuthServiceTest {
     @Mock private DoctorMapper doctorMapper;
     @Mock private DoctorTokenProvider doctorTokenProvider;
     @Mock private PasswordEncoder passwordEncoder;
-    @Mock private org.springframework.kafka.core.KafkaTemplate<String, DoctorRegistered> kafkaTemplate;
+    @Mock private OutboxRepository outboxRepository;
+    @Spy private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @InjectMocks
     private DoctorAuthService doctorAuthService;
@@ -123,9 +124,10 @@ class DoctorAuthServiceTest {
         assertThat(response.getToken()).isEqualTo("jwt-token");
         assertThat(response.getExpiresIn()).isEqualTo(3600L);
         verify(doctorRepository).saveAndFlush(doctor);
-        ArgumentMatcher<ProducerRecord<String, DoctorRegistered>> matchesRegisteredRecord = record ->
-                record.topic().equals("doctor.registered") && record.value() instanceof DoctorRegistered;
-        verify(kafkaTemplate, times(1)).send(argThat(matchesRegisteredRecord));
+        verify(outboxRepository, times(1)).save(argThat(row ->
+                row.getTopic().equals("doctor.registered")
+                        && row.getAggregateId().equals(doctorId.toString())
+                        && row.getPayload() != null));
     }
 
     @Test
@@ -158,7 +160,7 @@ class DoctorAuthServiceTest {
                 .isInstanceOf(SpecialtyNotFoundException.class);
 
         verify(doctorRepository, never()).saveAndFlush(any());
-        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        verify(outboxRepository, never()).save(any());
     }
 
     @Test
@@ -176,7 +178,7 @@ class DoctorAuthServiceTest {
                 .isInstanceOf(EmailAlreadyExistsException.class)
                 .hasMessageContaining("anna.mueller@example.com");
 
-        verify(kafkaTemplate, never()).send(any(ProducerRecord.class));
+        verify(outboxRepository, never()).save(any());
         verify(doctorTokenProvider, never()).generateToken(any());
     }
 

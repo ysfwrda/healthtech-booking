@@ -11,9 +11,14 @@ import com.healthtech.doctor.dto.DoctorRegistrationRequest;
 import com.healthtech.doctor.dto.DoctorResponse;
 import com.healthtech.doctor.dto.OpeningHoursDto;
 import com.healthtech.doctor.event.DoctorRegistered;
+import com.healthtech.doctor.outbox.OutboxRepository;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
-import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,23 +29,35 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.kafka.ConfluentKafkaContainer;
 
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.clearInvocations;
-import static org.mockito.Mockito.verify;
 
+// @DirtiesContext: the outbox relay's background scheduler would otherwise keep polling (and
+// failing against a torn-down container) after this class's containers are stopped.
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Testcontainers
+@DirtiesContext
 public class DoctorIntegrationTest {
 
     @Container
@@ -48,8 +65,20 @@ public class DoctorIntegrationTest {
     static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16-alpine")
             .withStartupTimeout(Duration.ofMinutes(2));
 
-    // DoctorSeeder also sends through this mock at context startup; each test clears that
-    // (and any prior test's) invocation history first so assertions only see their own send.
+    @Container
+    @ServiceConnection
+    static ConfluentKafkaContainer kafkaContainer = new ConfluentKafkaContainer("confluentinc/cp-kafka:7.7.0")
+            .withStartupTimeout(Duration.ofMinutes(3));
+
+    // OutboxKafkaConfig builds its ProducerFactory from the literal "spring.kafka.bootstrap-servers"
+    // property via @Value, bypassing the KafkaConnectionDetails bean that @ServiceConnection relies on.
+    @DynamicPropertySource
+    static void kafkaProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.kafka.bootstrap-servers", kafkaContainer::getBootstrapServers);
+    }
+
+    // DoctorSeeder still sends directly through this mock at context startup (out of scope for
+    // the outbox); each test clears that invocation history so it never leaks between tests.
     @MockitoBean
     KafkaTemplate<String, DoctorRegistered> kafkaTemplate;
 
@@ -58,11 +87,25 @@ public class DoctorIntegrationTest {
     @Autowired
     SpecialtyRepository specialtyRepository;
     @Autowired
+    OutboxRepository outboxRepository;
+    @Autowired
     TestRestTemplate restTemplate;
 
     @BeforeEach
     void resetKafkaMock() {
         clearInvocations(kafkaTemplate);
+    }
+
+    private Consumer<String, String> testConsumer(String topic) {
+        Map<String, Object> props = new HashMap<>();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-" + UUID.randomUUID());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        Consumer<String, String> consumer = new DefaultKafkaConsumerFactory<String, String>(props).createConsumer();
+        consumer.subscribe(List.of(topic));
+        return consumer;
     }
 
     private DoctorRegistrationRequest.DoctorRegistrationRequestBuilder validRequestBuilder(String email) {
@@ -131,24 +174,35 @@ public class DoctorIntegrationTest {
     }
 
     @Test
-    void register_publishesDoctorRegisteredEvent() {
+    void register_publishesDoctorRegisteredEvent() throws Exception {
         DoctorRegistrationRequest request = validRequestBuilder("event.doctor@example.com").build();
 
-        ResponseEntity<DoctorAuthResponse> response = restTemplate.postForEntity(
-                "/api/doctors/register", request, DoctorAuthResponse.class);
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        UUID doctorId = response.getBody().getId();
+        try (Consumer<String, String> consumer = testConsumer("doctor.registered")) {
+            ResponseEntity<DoctorAuthResponse> response = restTemplate.postForEntity(
+                    "/api/doctors/register", request, DoctorAuthResponse.class);
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+            UUID doctorId = response.getBody().getId();
 
-        var captor = org.mockito.ArgumentCaptor.forClass(ProducerRecord.class);
-        verify(kafkaTemplate).send(captor.capture());
-        ProducerRecord<String, DoctorRegistered> record = captor.getValue();
-        assertThat(record.topic()).isEqualTo("doctor.registered");
-        DoctorRegistered event = record.value();
+            ConsumerRecord<String, String> record = org.awaitility.Awaitility.await()
+                    .atMost(Duration.ofSeconds(10))
+                    .until(() -> {
+                        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
+                        for (ConsumerRecord<String, String> r : records) {
+                            if (doctorId.toString().equals(r.key())) {
+                                return r;
+                            }
+                        }
+                        return null;
+                    }, java.util.Objects::nonNull);
 
-        assertThat(event.getDoctorId()).isEqualTo(doctorId);
-        assertThat(event.getFirstName()).isEqualTo("John");
-        assertThat(event.getLastName()).isEqualTo("Smith");
-        assertThat(event.getOpeningHours()).hasSize(1);
+            assertThat(record.topic()).isEqualTo("doctor.registered");
+            JsonNode event = new ObjectMapper().readTree(record.value());
+
+            assertThat(event.get("doctorId").asText()).isEqualTo(doctorId.toString());
+            assertThat(event.get("firstName").asText()).isEqualTo("John");
+            assertThat(event.get("lastName").asText()).isEqualTo("Smith");
+            assertThat(event.get("openingHours")).hasSize(1);
+        }
     }
 
     @Test

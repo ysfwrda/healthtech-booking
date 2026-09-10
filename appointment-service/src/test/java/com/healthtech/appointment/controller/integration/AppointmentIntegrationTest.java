@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.appointment.domain.AppointmentType;
 import com.healthtech.appointment.dto.AppointmentRequest;
 import com.healthtech.appointment.dto.AppointmentResponse;
-import com.healthtech.appointment.event.AppointmentBooked;
 import com.healthtech.appointment.readmodel.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,10 +16,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.*;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 
@@ -43,7 +40,13 @@ import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// outbox.relay.fixed-delay-ms is pushed out to an hour: this class no longer mocks a
+// KafkaTemplate (AppointmentService now uses the outbox instead), so without this the live
+// OutboxRelay would fire every second against an unreachable default broker, contending with
+// the concurrent-booking test's own DB connections for no reason - these tests don't assert on
+// Kafka delivery at all.
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "outbox.relay.fixed-delay-ms=3600000")
 @Import(AppointmentIntegrationTest.TestSecurityConfig.class)
 public class AppointmentIntegrationTest {
     // generated once, in a static initializer, so it exists before the context builds
@@ -63,8 +66,6 @@ public class AppointmentIntegrationTest {
         }
     }
 
-    @MockitoBean
-    KafkaTemplate<String, AppointmentBooked> kafkaTemplate;
     @Autowired
     ValidPatientRepository validPatientRepository;
     @Autowired

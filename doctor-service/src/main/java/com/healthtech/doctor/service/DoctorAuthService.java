@@ -1,5 +1,7 @@
 package com.healthtech.doctor.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.doctor.domain.Doctor;
 import com.healthtech.doctor.domain.Specialty;
 import com.healthtech.doctor.dto.DoctorAuthResponse;
@@ -12,19 +14,18 @@ import com.healthtech.doctor.exception.InvalidCredentialsException;
 import com.healthtech.doctor.exception.SpecialtyNotFoundException;
 import com.healthtech.doctor.filter.CorrelationIdFilter;
 import com.healthtech.doctor.mapper.DoctorMapper;
+import com.healthtech.doctor.outbox.OutboxMessage;
+import com.healthtech.doctor.outbox.OutboxRepository;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
 import com.healthtech.doctor.security.DoctorTokenProvider;
 import lombok.RequiredArgsConstructor;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -38,7 +39,8 @@ public class DoctorAuthService {
     private final DoctorMapper doctorMapper;
     private final DoctorTokenProvider doctorTokenProvider;
     private final PasswordEncoder passwordEncoder;
-    private final KafkaTemplate<String, DoctorRegistered> kafkaTemplate;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public DoctorAuthResponse register(DoctorRegistrationRequest request) {
@@ -76,11 +78,13 @@ public class DoctorAuthService {
                 .openingHours(openingHours)
                 .registeredAt(savedDoctor.getRegisteredAt())
                 .build();
-        ProducerRecord<String, DoctorRegistered> record =
-                new ProducerRecord<>("doctor.registered", event);
-        record.headers().add(CorrelationIdFilter.CORRELATION_ID_HEADER,
-                correlationIdOrGenerate().getBytes(StandardCharsets.UTF_8));
-        kafkaTemplate.send(record);
+        outboxRepository.save(OutboxMessage.builder()
+                .id(event.getEventId())
+                .aggregateId(savedDoctor.getId().toString())
+                .topic("doctor.registered")
+                .payload(serialize(event))
+                .correlationId(correlationIdOrGenerate())
+                .build());
 
         String token = doctorTokenProvider.generateToken(savedDoctor.getId());
         return DoctorAuthResponse.builder()
@@ -114,5 +118,13 @@ public class DoctorAuthService {
     private String correlationIdOrGenerate() {
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         return correlationId != null ? correlationId : UUID.randomUUID().toString();
+    }
+
+    private String serialize(DoctorRegistered event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize DoctorRegistered event", ex);
+        }
     }
 }
