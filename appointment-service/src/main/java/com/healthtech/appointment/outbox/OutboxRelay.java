@@ -64,6 +64,15 @@ public class OutboxRelay {
         try {
             outboxKafkaTemplate.send(record).get();
             return true;
+        } catch (InterruptedException ie) {
+            // Restore the interrupt status: swallowing it here would hide a shutdown/cancellation
+            // signal from the rest of the batch loop, which would otherwise keep blocking on
+            // further sends (each still bounded by max.block.ms/delivery.timeout.ms) instead of
+            // unwinding promptly. The row is correctly left unpublished either way and retried
+            // on the next poll.
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while publishing outbox row {} to topic {}", message.getId(), message.getTopic(), ie);
+            return false;
         } catch (Exception ex) {
             log.warn("Failed to publish outbox row {} to topic {}", message.getId(), message.getTopic(), ex);
             return false;
