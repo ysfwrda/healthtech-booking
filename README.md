@@ -71,7 +71,7 @@ Notification Service consumes.
 | `notification-service` | 8082 | Consumes appointment events from Kafka and persists notification records independently                                                                                      |
 | `patient-service`      | 8083 | Patient registration, login, JWT issuance (RS256), profile management                                                                                                       |
 | `doctor-service`       | 8084 | Doctor self-registration, login, JWT issuance (RS256), specialty and language filtering, opening hours, registration event publishing                                       |
-| `frontend`             | 5173 | React (Vite, TypeScript) client. Talks to every service exclusively through the API Gateway. Not yet containerized in `docker-compose.yml`; run separately, see Local Setup |
+| `frontend`             | 5173 | React (Vite, TypeScript) client. Talks to every service exclusively through the API Gateway. Containerized (nginx) in `docker-compose.yml` on `localhost:5173`; see Step 6 |
 
 ---
 
@@ -574,7 +574,10 @@ curl -X POST http://localhost:8080/api/doctors/login \
 ### Step 6 — Run the Frontend
 
 The frontend is a React (Vite, TypeScript) client that talks to every service exclusively through the API Gateway.
-It is not containerized, so run it on the host against the Docker Compose stack from Step 3:
+It is built and served by nginx as the `frontend` service in `docker-compose.yml`, so `docker compose up -d --build`
+already starts it at `http://localhost:5173`. `VITE_API_BASE` is baked in at image build time (build arg, default
+`http://localhost:8080`). To run on another host, set `FRONTEND_URL` (gateway CORS origin) and `VITE_API_BASE` in your
+environment or a root `.env` before `docker compose up -d --build`. For hot reload, run it on the host instead against the Compose stack from Step 3:
 
 ```bash
 cd frontend
@@ -583,7 +586,7 @@ npm install
 npm run dev
 ```
 
-Opens at `http://localhost:5173`. Covers both patient and doctor self-service flows end to end: patient
+The dev server also opens at `http://localhost:5173` (stop the container first to free the port). Covers both patient and doctor self-service flows end to end: patient
 register/login, doctor search with specialty/language filters, doctor detail with formatted opening hours and
 live availability, appointment booking/cancellation, and doctor register/login (`/doctors/register`,
 `/doctors/login`), mirroring the API described in Step 4.

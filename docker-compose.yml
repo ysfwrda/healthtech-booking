@@ -230,12 +230,29 @@ services:
       PATIENT_SERVICE_URI: http://patient-service:8083
       DOCTOR_SERVICE_URI: http://doctor-service:8084
       JWT_PUBLIC_KEY_PATH: file:/run/keys/public.pem
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}   # CORS origin; must match the URL the browser opens the frontend at
     volumes:
       - ./keys:/run/keys:ro
     depends_on:
       - appointment-service
       - patient-service
       - doctor-service
+    networks:
+      - healthtech-net
+
+  # ── Frontend ─────────────────────────────────────────────────
+  # React/Vite SPA served by nginx. VITE_API_BASE is baked in at build time and
+  # is called by the browser, so it points at the host-published gateway.
+  # Override both FRONTEND_URL (gateway CORS) and VITE_API_BASE for a non-local host.
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8080}
+    ports:
+      - "5173:80"
+    depends_on:
+      - api-gateway
     networks:
       - healthtech-net
 
