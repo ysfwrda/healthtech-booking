@@ -11,7 +11,7 @@
 #   - an OPTIONS preflight on a public POST route is not blocked (401/403)
 #
 # Requires: curl, jq. Services and infra (Kafka, Postgres) must be running
-# (docker-compose up -d), same precondition as scripts/test-flow.sh.
+# (docker compose up -d), same precondition as scripts/test-flow.sh.
 
 set -euo pipefail
 

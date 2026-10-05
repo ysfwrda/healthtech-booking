@@ -1,20 +1,28 @@
-version: '3.8'
-
 # ─────────────────────────────────────────────────────────────
-# HealthTech Booking Platform — Local Infrastructure
+# HealthTech Booking Platform — Local Stack
 #
 # Starts:
 #   - Zookeeper          (required by Kafka)
 #   - Kafka              (event broker)
-#   - PostgreSQL x3      (one DB per service — DB per Service pattern)
+#   - PostgreSQL x4      (one DB per service — DB per Service pattern)
 #   - Kafka UI           (optional: browse topics at localhost:8090)
+#   - The five application services (appointment, patient, doctor,
+#     notification, api-gateway)
+#
+# By default the five application services are BUILT FROM THIS WORKING TREE.
+# To run the prebuilt images that CI publishes to ghcr instead, add the
+# override file (see README, Local Setup). Generate the JWT keys in ./keys
+# first.
 #
 # Usage:
-#   docker-compose up -d              → start everything
-#   docker-compose ps                 → check status
-#   docker-compose logs -f kafka      → follow Kafka logs
-#   docker-compose down               → stop and remove containers
-#   docker-compose down -v            → also remove volumes (reset data)
+#   docker compose up -d --build      → build the services from source and start everything
+#   docker compose -f docker-compose.yml -f docker-compose.images.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+#                                     → run the prebuilt ghcr images, no build
+#   docker compose ps                 → check status
+#   docker compose logs -f kafka      → follow Kafka logs
+#   docker compose down               → stop and remove containers
+#   docker compose down -v            → also remove volumes (reset data)
 # ─────────────────────────────────────────────────────────────
 
 services:
@@ -233,7 +241,7 @@ services:
 
 # ── Volumes ───────────────────────────────────────────────────
 # Named volumes persist data between container restarts.
-# Use `docker-compose down -v` to wipe them (full reset).
+# Use `docker compose down -v` to wipe them (full reset).
 volumes:
   postgres-appointment-data:
   postgres-notification-data:
