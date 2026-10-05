@@ -83,12 +83,15 @@ class OutboxAtomicityIntegrationTest {
 
     @Test
     void register_success_writesExactlyOneUnpublishedOutboxRow() {
+        // Arrange
         DoctorRegistrationRequest request = validRequestBuilder("atomicity.doctor@example.com").build();
 
+        // Act
         ResponseEntity<DoctorAuthResponse> response = restTemplate.postForEntity(
                 "/api/doctors/register", request, DoctorAuthResponse.class);
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         var doctorId = response.getBody().getId();
         var rows = outboxRepository.findAll().stream()
                 .filter(m -> m.getAggregateId().equals(doctorId.toString()))
@@ -101,18 +104,20 @@ class OutboxAtomicityIntegrationTest {
 
     @Test
     void register_rollsBackOnDuplicateEmail_writesNoAdditionalOutboxRow() {
+        // Arrange: a doctor already registered under "dupe.doctor@example.com"
         DoctorRegistrationRequest first = validRequestBuilder("dupe.doctor@example.com").build();
         ResponseEntity<DoctorAuthResponse> firstResponse = restTemplate.postForEntity(
                 "/api/doctors/register", first, DoctorAuthResponse.class);
         assertThat(firstResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-
         long countAfterFirst = outboxRepository.count();
-
         DoctorRegistrationRequest duplicate = validRequestBuilder("dupe.doctor@example.com").build();
+
+        // Act
         ResponseEntity<String> secondResponse = restTemplate.postForEntity(
                 "/api/doctors/register", duplicate, String.class);
-        assertThat(secondResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
 
+        // Assert
+        assertThat(secondResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(outboxRepository.count()).isEqualTo(countAfterFirst);
     }
 }

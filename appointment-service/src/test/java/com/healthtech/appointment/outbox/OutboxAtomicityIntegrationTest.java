@@ -106,22 +106,24 @@ class OutboxAtomicityIntegrationTest {
 
     @Test
     void bookAppointment_success_writesExactlyOneUnpublishedOutboxRow() {
+        // Arrange
         LocalDate target = LocalDate.now().plusWeeks(1);
         ValidDoctor doctor = seedDoctor(target);
         ValidPatient patient = seedPatient();
-
         AppointmentRequest request = AppointmentRequest.builder()
                 .doctorId(doctor.getDoctorId())
                 .dateTime(LocalDateTime.of(target, LocalTime.of(9, 0)))
                 .type(AppointmentType.VACCINATION)
                 .build();
 
+        // Act
         ResponseEntity<AppointmentResponse> response = restTemplate.exchange(
                 "/api/appointments", HttpMethod.POST,
                 new HttpEntity<>(request, authHeaders(patient.getPatientId())),
                 AppointmentResponse.class);
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         UUID appointmentId = response.getBody().getId();
         var rows = outboxRepository.findAll().stream()
                 .filter(m -> m.getAggregateId().equals(appointmentId.toString()))
@@ -134,46 +136,45 @@ class OutboxAtomicityIntegrationTest {
 
     @Test
     void bookAppointment_rollsBackOnSlotConflict_writesNoAdditionalOutboxRow() {
+        // Arrange: the 10:00 slot is already booked by another patient
         LocalDate target = LocalDate.now().plusWeeks(1);
         ValidDoctor doctor = seedDoctor(target);
         ValidPatient firstPatient = seedPatient();
         ValidPatient secondPatient = seedPatient();
-
         AppointmentRequest request = AppointmentRequest.builder()
                 .doctorId(doctor.getDoctorId())
                 .dateTime(LocalDateTime.of(target, LocalTime.of(10, 0)))
                 .type(AppointmentType.VACCINATION)
                 .build();
-
         ResponseEntity<AppointmentResponse> firstResponse = restTemplate.exchange(
                 "/api/appointments", HttpMethod.POST,
                 new HttpEntity<>(request, authHeaders(firstPatient.getPatientId())),
                 AppointmentResponse.class);
         assertThat(firstResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-
         long countAfterFirst = outboxRepository.count();
 
+        // Act
         ResponseEntity<String> secondResponse = restTemplate.exchange(
                 "/api/appointments", HttpMethod.POST,
                 new HttpEntity<>(request, authHeaders(secondPatient.getPatientId())),
                 String.class);
-        assertThat(secondResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
 
+        // Assert
+        assertThat(secondResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(outboxRepository.count()).isEqualTo(countAfterFirst);
     }
 
     @Test
     void cancelAppointment_success_writesOutboxRowForCancelledEvent() {
+        // Arrange: a booked appointment
         LocalDate target = LocalDate.now().plusWeeks(1);
         ValidDoctor doctor = seedDoctor(target);
         ValidPatient patient = seedPatient();
-
         AppointmentRequest request = AppointmentRequest.builder()
                 .doctorId(doctor.getDoctorId())
                 .dateTime(LocalDateTime.of(target, LocalTime.of(11, 0)))
                 .type(AppointmentType.VACCINATION)
                 .build();
-
         ResponseEntity<AppointmentResponse> bookingResponse = restTemplate.exchange(
                 "/api/appointments", HttpMethod.POST,
                 new HttpEntity<>(request, authHeaders(patient.getPatientId())),
@@ -181,12 +182,14 @@ class OutboxAtomicityIntegrationTest {
         assertThat(bookingResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         UUID appointmentId = bookingResponse.getBody().getId();
 
+        // Act
         ResponseEntity<AppointmentResponse> cancelResponse = restTemplate.exchange(
                 "/api/appointments/" + appointmentId + "/cancel", HttpMethod.PUT,
                 new HttpEntity<>(authHeaders(patient.getPatientId())),
                 AppointmentResponse.class);
-        assertThat(cancelResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
 
+        // Assert
+        assertThat(cancelResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         var cancelledRows = outboxRepository.findAll().stream()
                 .filter(m -> m.getAggregateId().equals(appointmentId.toString())
                         && m.getTopic().equals("appointment.cancelled"))

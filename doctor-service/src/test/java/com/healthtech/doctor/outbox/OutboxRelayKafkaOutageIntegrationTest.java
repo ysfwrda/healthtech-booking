@@ -79,38 +79,40 @@ class OutboxRelayKafkaOutageIntegrationTest {
 
     @Test
     void register_survivesKafkaOutage_thenDrainsOnRecovery() throws Exception {
+        // Arrange: the broker is paused before the request, simulating an outage
         String containerId = kafkaContainer.getContainerId();
         var dockerClient = DockerClientFactory.instance().client();
+        var specialty = specialtyRepository.findByName("General Practice").orElseThrow();
+        DoctorRegistrationRequest request = DoctorRegistrationRequest.builder()
+                .firstName("Kaf")
+                .lastName("Outage")
+                .email("kaf.outage@example.com")
+                .password("secret123")
+                .phoneNumber("+491234567")
+                .address(AddressDto.builder()
+                        .street("Main St")
+                        .houseNumber("1")
+                        .postalCode("12345")
+                        .city("Berlin")
+                        .country("Germany")
+                        .build())
+                .specialtyIds(Set.of(specialty.getId()))
+                .openingHours(Set.of(OpeningHoursDto.builder()
+                        .dayOfWeek(DayOfWeek.MONDAY)
+                        .startTime(LocalTime.of(9, 0))
+                        .endTime(LocalTime.of(17, 0))
+                        .build()))
+                .languages(Set.of(Language.ENGLISH))
+                .build();
 
         dockerClient.pauseContainerCmd(containerId).exec();
         try {
-            var specialty = specialtyRepository.findByName("General Practice").orElseThrow();
-            DoctorRegistrationRequest request = DoctorRegistrationRequest.builder()
-                    .firstName("Kaf")
-                    .lastName("Outage")
-                    .email("kaf.outage@example.com")
-                    .password("secret123")
-                    .phoneNumber("+491234567")
-                    .address(AddressDto.builder()
-                            .street("Main St")
-                            .houseNumber("1")
-                            .postalCode("12345")
-                            .city("Berlin")
-                            .country("Germany")
-                            .build())
-                    .specialtyIds(Set.of(specialty.getId()))
-                    .openingHours(Set.of(OpeningHoursDto.builder()
-                            .dayOfWeek(DayOfWeek.MONDAY)
-                            .startTime(LocalTime.of(9, 0))
-                            .endTime(LocalTime.of(17, 0))
-                            .build()))
-                    .languages(Set.of(Language.ENGLISH))
-                    .build();
-
+            // Act: register while Kafka is unreachable
             ResponseEntity<DoctorAuthResponse> response = restTemplate.postForEntity(
                     "/api/doctors/register", request, DoctorAuthResponse.class);
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
+            // Assert: the request still succeeds, with an unpublished outbox row left behind
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
             var doctor = doctorRepository.findByEmail("kaf.outage@example.com").orElseThrow();
             OutboxMessage row = outboxRepository.findAll().stream()
                     .filter(m -> m.getAggregateId().equals(doctor.getId().toString()))
@@ -131,6 +133,7 @@ class OutboxRelayKafkaOutageIntegrationTest {
 
             var doctor = doctorRepository.findByEmail("kaf.outage@example.com").orElseThrow();
 
+            // Act & Assert: once the broker recovers, the relay drains the row and it reaches the topic
             Awaitility.await()
                     .atMost(Duration.ofSeconds(60))
                     .pollInterval(Duration.ofSeconds(1))

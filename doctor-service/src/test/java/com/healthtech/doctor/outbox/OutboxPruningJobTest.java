@@ -54,12 +54,15 @@ class OutboxPruningJobTest {
 
     @Test
     void prune_deletesOnlyPublishedRowsPastRetention() {
+        // Arrange
         OutboxMessage publishedOld = outboxRepository.save(row(LocalDateTime.now().minusDays(10)));
         OutboxMessage publishedRecent = outboxRepository.save(row(LocalDateTime.now().minusDays(1)));
         OutboxMessage unpublishedOld = outboxRepository.save(row(null));
 
+        // Act
         outboxPruningJob.prune();
 
+        // Assert
         assertThat(outboxRepository.findById(publishedOld.getId())).isEmpty();
         assertThat(outboxRepository.findById(publishedRecent.getId())).isPresent();
         assertThat(outboxRepository.findById(unpublishedOld.getId())).isPresent();

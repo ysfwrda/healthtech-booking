@@ -95,45 +95,51 @@ public class AuthIntegrationTest {
 
     @Test
     void register_duplicateUsername_returns409AndSingleRow() throws Exception {
+        // Arrange: a patient already registered under "janedoe"
         RegisterRequest first = validRequestBuilder("janedoe", "jane.doe@example.com").build();
         ResponseEntity<AuthResponse> firstResponse = restTemplate.postForEntity("/api/auth/register", first, AuthResponse.class);
         assertThat(firstResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-
         RegisterRequest duplicate = validRequestBuilder("janedoe", "different.email@example.com").build();
+
+        // Act
         ResponseEntity<String> secondResponse = restTemplate.postForEntity("/api/auth/register", duplicate, String.class);
 
+        // Assert
         assertThat(secondResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         JsonNode problem = new ObjectMapper().readTree(secondResponse.getBody());
         assertThat(problem.get("status").asInt()).isEqualTo(409);
         assertThat(problem.get("title").asText()).isEqualTo("Username Already Taken");
         assertThat(problem.get("detail").asText()).isEqualTo("janedoe");
-
         assertThat(patientRepository.findAll().stream().filter(p -> p.getUsername().equals("janedoe")).count()).isEqualTo(1);
     }
 
     @Test
     void register_duplicateEmail_returns409AndSingleRow() throws Exception {
+        // Arrange: a patient already registered under "shared@example.com"
         RegisterRequest first = validRequestBuilder("firstuser", "shared@example.com").build();
         ResponseEntity<AuthResponse> firstResponse = restTemplate.postForEntity("/api/auth/register", first, AuthResponse.class);
         assertThat(firstResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-
         RegisterRequest duplicate = validRequestBuilder("seconduser", "shared@example.com").build();
+
+        // Act
         ResponseEntity<String> secondResponse = restTemplate.postForEntity("/api/auth/register", duplicate, String.class);
 
+        // Assert
         assertThat(secondResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         JsonNode problem = new ObjectMapper().readTree(secondResponse.getBody());
         assertThat(problem.get("status").asInt()).isEqualTo(409);
         assertThat(problem.get("title").asText()).isEqualTo("Email Already Registered");
         assertThat(problem.get("detail").asText()).isEqualTo("shared@example.com");
-
         assertThat(patientRepository.findAll().stream().filter(p -> p.getEmail().equals("shared@example.com")).count()).isEqualTo(1);
     }
 
     @Test
     void register_publishesPatientRegisteredEvent() {
+        // Arrange
         RegisterRequest request = validRequestBuilder("eventuser", "event.user@example.com").build();
 
         try (Consumer<String, String> consumer = testConsumer("patient.registered")) {
+            // Act
             ResponseEntity<AuthResponse> response = restTemplate.postForEntity("/api/auth/register", request, AuthResponse.class);
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
@@ -151,6 +157,7 @@ public class AuthIntegrationTest {
                         return null;
                     }, java.util.Objects::nonNull);
 
+            // Assert: the relay published the event with the right key, body, and correlation header
             assertThat(record.topic()).isEqualTo("patient.registered");
             assertThat(record.key()).isEqualTo(patient.getId().toString());
             JsonNode event = new ObjectMapper().readTree(record.value());

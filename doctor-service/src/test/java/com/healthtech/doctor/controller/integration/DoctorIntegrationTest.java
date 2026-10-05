@@ -154,30 +154,34 @@ public class DoctorIntegrationTest {
 
     @Test
     void register_duplicateEmail_returns409AndSingleRow() throws Exception {
+        // Arrange: a doctor already registered under "john.smith.dup@example.com"
         DoctorRegistrationRequest first = validRequestBuilder("john.smith.dup@example.com").build();
         ResponseEntity<DoctorAuthResponse> firstResponse = restTemplate.postForEntity(
                 "/api/doctors/register", first, DoctorAuthResponse.class);
         assertThat(firstResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-
         DoctorRegistrationRequest duplicate = validRequestBuilder("john.smith.dup@example.com").build();
+
+        // Act
         ResponseEntity<String> secondResponse = restTemplate.postForEntity(
                 "/api/doctors/register", duplicate, String.class);
 
+        // Assert
         assertThat(secondResponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         JsonNode problem = new ObjectMapper().readTree(secondResponse.getBody());
         assertThat(problem.get("status").asInt()).isEqualTo(409);
         assertThat(problem.get("title").asText()).isEqualTo("Email Already Registered");
         assertThat(problem.get("detail").asText()).contains("john.smith.dup@example.com");
-
         assertThat(doctorRepository.findAll().stream()
                 .filter(d -> d.getEmail().equals("john.smith.dup@example.com")).count()).isEqualTo(1);
     }
 
     @Test
     void register_publishesDoctorRegisteredEvent() throws Exception {
+        // Arrange
         DoctorRegistrationRequest request = validRequestBuilder("event.doctor@example.com").build();
 
         try (Consumer<String, String> consumer = testConsumer("doctor.registered")) {
+            // Act
             ResponseEntity<DoctorAuthResponse> response = restTemplate.postForEntity(
                     "/api/doctors/register", request, DoctorAuthResponse.class);
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
@@ -195,6 +199,7 @@ public class DoctorIntegrationTest {
                         return null;
                     }, java.util.Objects::nonNull);
 
+            // Assert
             assertThat(record.topic()).isEqualTo("doctor.registered");
             JsonNode event = new ObjectMapper().readTree(record.value());
 

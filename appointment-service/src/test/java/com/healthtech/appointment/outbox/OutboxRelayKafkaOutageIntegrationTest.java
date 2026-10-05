@@ -105,6 +105,7 @@ class OutboxRelayKafkaOutageIntegrationTest {
 
     @Test
     void bookAppointment_survivesKafkaOutage_thenDrainsOnRecovery() throws Exception {
+        // Arrange: the broker is paused before the request, simulating an outage
         String containerId = kafkaContainer.getContainerId();
         var dockerClient = DockerClientFactory.instance().client();
 
@@ -125,24 +126,26 @@ class OutboxRelayKafkaOutageIntegrationTest {
                 .lastName("Outage")
                 .build());
 
+        String token = TestJwtFactory.patientToken(patient.getPatientId(), (RSAPrivateKey) KEY_PAIR.getPrivate());
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        AppointmentRequest request = AppointmentRequest.builder()
+                .doctorId(doctor.getDoctorId())
+                .dateTime(LocalDateTime.of(target, LocalTime.of(9, 0)))
+                .type(AppointmentType.VACCINATION)
+                .build();
+
         dockerClient.pauseContainerCmd(containerId).exec();
         UUID appointmentId;
         try {
-            String token = TestJwtFactory.patientToken(patient.getPatientId(), (RSAPrivateKey) KEY_PAIR.getPrivate());
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(token);
-            headers.setContentType(MediaType.APPLICATION_JSON);
-
-            AppointmentRequest request = AppointmentRequest.builder()
-                    .doctorId(doctor.getDoctorId())
-                    .dateTime(LocalDateTime.of(target, LocalTime.of(9, 0)))
-                    .type(AppointmentType.VACCINATION)
-                    .build();
-
+            // Act: book while Kafka is unreachable
             ResponseEntity<AppointmentResponse> response = restTemplate.exchange(
                     "/api/appointments", HttpMethod.POST,
                     new HttpEntity<>(request, headers),
                     AppointmentResponse.class);
+
+            // Assert: the request still succeeds, with an unpublished outbox row left behind
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
             appointmentId = response.getBody().getId();
 
@@ -164,6 +167,8 @@ class OutboxRelayKafkaOutageIntegrationTest {
             consumer.subscribe(List.of("appointment.booked"));
 
             UUID finalAppointmentId = appointmentId;
+
+            // Act & Assert: once the broker recovers, the relay drains the row and it reaches the topic
             Awaitility.await()
                     .atMost(Duration.ofSeconds(60))
                     .pollInterval(Duration.ofSeconds(1))

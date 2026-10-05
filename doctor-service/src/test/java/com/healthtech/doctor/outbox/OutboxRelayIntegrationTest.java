@@ -97,13 +97,16 @@ class OutboxRelayIntegrationTest {
 
     @Test
     void relay_publishesCorrelationIdFromStoredColumn_notFreshlyGenerated() {
+        // Arrange
         String topic = "relay-correlation-test";
         String storedCorrelationId = "stored-correlation-" + UUID.randomUUID();
         OutboxMessage row = outboxRepository.save(pendingRow(topic, storedCorrelationId));
 
         try (Consumer<String, String> consumer = testConsumer(topic)) {
+            // Act
             outboxRelay.relayBatch();
 
+            // Assert
             ConsumerRecord<String, String> record = Awaitility.await()
                     .atMost(Duration.ofSeconds(10))
                     .until(() -> firstMatching(consumer, row.getAggregateId()),
@@ -120,12 +123,15 @@ class OutboxRelayIntegrationTest {
 
     @Test
     void relay_skipsHeader_whenCorrelationIdColumnIsNull() {
+        // Arrange
         String topic = "relay-no-correlation-test";
         OutboxMessage row = outboxRepository.save(pendingRow(topic, null));
 
         try (Consumer<String, String> consumer = testConsumer(topic)) {
+            // Act
             outboxRelay.relayBatch();
 
+            // Assert
             ConsumerRecord<String, String> record = Awaitility.await()
                     .atMost(Duration.ofSeconds(10))
                     .until(() -> firstMatching(consumer, row.getAggregateId()),
@@ -141,6 +147,7 @@ class OutboxRelayIntegrationTest {
     // topic's record count must equal N, proving concurrent relays claim disjoint batches.
     @Test
     void relay_concurrentInvocations_publishEachRowExactlyOnce() throws Exception {
+        // Arrange
         String topic = "relay-concurrency-test";
         int rowCount = 40;
         List<OutboxMessage> seeded = IntStream.range(0, rowCount)
@@ -153,6 +160,7 @@ class OutboxRelayIntegrationTest {
             // from the beginning rather than missing ones produced before the first assignment.
             consumer.poll(Duration.ofMillis(500));
 
+            // Act
             List<java.util.concurrent.Future<?>> futures = List.of(
                     executor.submit(outboxRelay::relayBatch),
                     executor.submit(outboxRelay::relayBatch));
@@ -160,6 +168,7 @@ class OutboxRelayIntegrationTest {
                 future.get(30, TimeUnit.SECONDS);
             }
 
+            // Assert
             // Polled from this thread in a plain loop rather than via Awaitility: KafkaConsumer
             // is not thread-safe, and Awaitility evaluates its condition on its own background
             // thread, which risks a second poll() call overlapping the test thread's under load.
@@ -196,6 +205,7 @@ class OutboxRelayIntegrationTest {
     // first to release its locks.
     @Test
     void claimBatch_doesNotBlockOnRowsLockedByAnotherTransaction() throws Exception {
+        // Arrange
         String topic = "relay-lock-contention-test";
         int rowCount = 10;
         IntStream.range(0, rowCount).forEach(i -> outboxRepository.save(pendingRow(topic, null)));
@@ -215,15 +225,16 @@ class OutboxRelayIntegrationTest {
                         }
                         return claimed;
                     }));
-
             assertThat(holderHasClaimed.await(5, TimeUnit.SECONDS)).isTrue();
 
+            // Act
             long start = System.nanoTime();
             Future<Integer> waiterFuture = executor.submit(() -> new TransactionTemplate(transactionManager)
                     .execute(status -> outboxRepository.claimBatch(rowCount).size()));
             int waiterClaimed = waiterFuture.get(2, TimeUnit.SECONDS);
             long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
+            // Assert
             // The holder sleeps for up to 10s while holding its locks; a waiter that blocked on
             // them would take that long too, so completing in well under a second proves it
             // skipped rather than waited.

@@ -72,24 +72,26 @@ class OutboxRelayKafkaOutageIntegrationTest {
 
     @Test
     void register_survivesKafkaOutage_thenDrainsOnRecovery() throws Exception {
+        // Arrange: the broker is paused before the request, simulating an outage
         String containerId = kafkaContainer.getContainerId();
         var dockerClient = DockerClientFactory.instance().client();
+        RegisterRequest request = RegisterRequest.builder()
+                .firstName("Kaf")
+                .lastName("Outage")
+                .username("kafoutage")
+                .password("Sup3rSecret!")
+                .dateOfBirth(LocalDate.of(1990, 1, 1))
+                .email("kaf.outage@example.com")
+                .insuranceType(InsuranceType.STATUTORY)
+                .build();
 
         dockerClient.pauseContainerCmd(containerId).exec();
         try {
-            RegisterRequest request = RegisterRequest.builder()
-                    .firstName("Kaf")
-                    .lastName("Outage")
-                    .username("kafoutage")
-                    .password("Sup3rSecret!")
-                    .dateOfBirth(LocalDate.of(1990, 1, 1))
-                    .email("kaf.outage@example.com")
-                    .insuranceType(InsuranceType.STATUTORY)
-                    .build();
-
+            // Act: register while Kafka is unreachable
             ResponseEntity<AuthResponse> response = restTemplate.postForEntity("/api/auth/register", request, AuthResponse.class);
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
+            // Assert: the request still succeeds, with an unpublished outbox row left behind
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
             var patient = patientRepository.findByUsername("kafoutage").orElseThrow();
             OutboxMessage row = outboxRepository.findAll().stream()
                     .filter(m -> m.getAggregateId().equals(patient.getId().toString()))
@@ -110,6 +112,7 @@ class OutboxRelayKafkaOutageIntegrationTest {
 
             var patient = patientRepository.findByUsername("kafoutage").orElseThrow();
 
+            // Act & Assert: once the broker recovers, the relay drains the row and it reaches the topic
             Awaitility.await()
                     .atMost(Duration.ofSeconds(60))
                     .pollInterval(Duration.ofSeconds(1))
