@@ -9,16 +9,16 @@
 #   - The five application services (appointment, patient, doctor,
 #     notification, api-gateway)
 #
-# The services run from prebuilt images published to ghcr by CI
-# (ghcr.io/ysfwrda/<service>:latest, built from main). Generate the JWT
-# keys in ./keys first (see README, Local Setup). Overrides:
-#   IMAGE_TAG=<full-commit-sha>   pin a published build (full 40-char SHA)
-#   IMAGE_REGISTRY=ghcr.io/<owner>   use a fork's images
+# By default the five application services are BUILT FROM THIS WORKING TREE.
+# To run the prebuilt images that CI publishes to ghcr instead, add the
+# override file (see README, Local Setup). Generate the JWT keys in ./keys
+# first.
 #
 # Usage:
-#   docker compose pull               → fetch the prebuilt service images
-#   docker compose up -d              → start everything
-#   docker compose up -d --build      → build the service images locally instead
+#   docker compose up -d --build      → build the services from source and start everything
+#   docker compose -f docker-compose.yml -f docker-compose.images.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+#                                     → run the prebuilt ghcr images, no build
 #   docker compose ps                 → check status
 #   docker compose logs -f kafka      → follow Kafka logs
 #   docker compose down               → stop and remove containers
@@ -147,7 +147,6 @@ services:
 
   # ── Appointment Service ──────────────────────
   appointment-service:
-    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/appointment-service:${IMAGE_TAG:-latest}
     build: ./appointment-service
     ports:
       - "8081:8081"
@@ -167,7 +166,6 @@ services:
 
   # ── Patient Service ──────────────────────────
   patient-service:
-    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/patient-service:${IMAGE_TAG:-latest}
     build: ./patient-service
     ports:
       - "8083:8083"
@@ -188,7 +186,6 @@ services:
 
   # ── Doctor Service ───────────────────────────
   doctor-service:
-    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/doctor-service:${IMAGE_TAG:-latest}
     build: ./doctor-service
     ports:
       - "8084:8084"
@@ -209,7 +206,6 @@ services:
 
   # ── Notification Service ─────────────────────
   notification-service:
-    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/notification-service:${IMAGE_TAG:-latest}
     build: ./notification-service
     ports:
       - "8082:8082"
@@ -226,7 +222,6 @@ services:
 
   # ── API Gateway ───────────────────────────────
   api-gateway:
-    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/api-gateway:${IMAGE_TAG:-latest}
     build: ./api-gateway
     ports:
       - "8080:8080"

@@ -309,7 +309,7 @@ to point at a mounted secret instead (see the Docker Compose table below).
 
 ### Requirements
 
-* Docker and Docker Compose v2 (primary; runs the whole system from prebuilt images, no local build needed)
+* Docker and Docker Compose v2 (primary; runs the whole system, from prebuilt images or built from source)
 * Java 21 and Maven 3.9+ (optional; only to run a service on the host or to build the images yourself)
 * `openssl` (to generate the JWT key pair, see Step 2)
 * `curl` and `jq` (for the test script)
@@ -321,8 +321,8 @@ git clone https://github.com/ysfwrda/healthtech-booking.git
 cd healthtech-booking
 ```
 
-The repository supplies `docker-compose.yml`, the committed public key, and the scripts. The service images themselves
-are pulled from the container registry in Step 3, so nothing needs to be built.
+The repository supplies `docker-compose.yml`, the committed public key, and the scripts. Step 3 builds the service images
+from this checkout or, optionally, pulls prebuilt ones.
 
 ### Step 2 — JWT Keys
 
@@ -375,31 +375,41 @@ Authentication section below and ADR-004.
 
 ### Step 3 — Start the Services
 
-All services are containerized, and CI publishes a prebuilt image for each of them to the GitHub Container Registry
-(`ghcr.io/ysfwrda/<service>:latest`, built from `main` after the tests pass). The images are public, so no login is
-needed. Make sure the keys from Step 2 exist, then bring up the entire system (infrastructure plus all five services):
+All services are containerized. There are two ways to run the whole system (infrastructure plus all five services);
+make sure the keys from Step 2 exist first.
 
-```bash
-docker compose pull
-docker compose up -d
-```
-
-This starts the five services alongside Kafka, Zookeeper, Kafka UI (`http://localhost:8090`), and the four PostgreSQL
-instances, all on a shared Docker network. The services connect to Kafka and their databases by container name. The
-images contain no keys; `./keys` is mounted into the containers at runtime (see Step 2).
-
-Two optional environment variables control which images are used:
-
-| Variable         | Default           | Use                                                           |
-|------------------|-------------------|---------------------------------------------------------------|
-| `IMAGE_TAG`      | `latest`          | Pin a published build by its full 40-character commit SHA   |
-| `IMAGE_REGISTRY` | `ghcr.io/ysfwrda` | Pull from a fork's registry, e.g. `ghcr.io/<your-user>`      |
-
-To build the images from your working tree instead (for example, to try local changes), use:
+**Option A: build from your working tree (default, for development).** Compose builds each service image from the
+current code:
 
 ```bash
 docker compose up -d --build
 ```
+
+**Option B: run the prebuilt images (no local build).** CI publishes an image for each service to the GitHub Container
+Registry (`ghcr.io/ysfwrda/<service>:latest`, built from `main` after the tests pass). The images are public, so no
+login is needed. They are enabled by layering the `docker-compose.images.yml` override on top of the base file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.images.yml pull
+docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+```
+
+To avoid typing the file list each time, set `export COMPOSE_FILE=docker-compose.yml:docker-compose.images.yml`, after
+which plain `docker compose pull` and `docker compose up -d` use the images.
+
+Both options start the services alongside Kafka, Zookeeper, Kafka UI (`http://localhost:8090`), and the four PostgreSQL
+instances, all on a shared Docker network. The services connect to Kafka and their databases by container name. The
+images contain no keys; `./keys` is mounted into the containers at runtime (see Step 2).
+
+Option B reads two optional environment variables:
+
+| Variable         | Default           | Use                                                          |
+|------------------|-------------------|--------------------------------------------------------------|
+| `IMAGE_TAG`      | `latest`          | Pin a published build by its full 40-character commit SHA   |
+| `IMAGE_REGISTRY` | `ghcr.io/ysfwrda` | Pull from a fork's registry, e.g. `ghcr.io/<your-user>`     |
+
+Note that Option B runs the code published from `main`, not your working tree; use Option A to test local changes.
+Without the override file, the images are never pulled and `docker compose up -d --build` always builds from source.
 
 To run a single service on the host against the infrastructure for development, start only the infrastructure and run
 the service with Maven (it falls back to `localhost` addresses by default):
@@ -409,8 +419,8 @@ docker compose up -d zookeeper kafka postgres-appointment postgres-notification 
 cd appointment-service && mvn spring-boot:run
 ```
 
-If `docker compose pull` is denied (for example, a fork whose packages are private), run `docker login ghcr.io` with a
-GitHub token that has `read:packages`, or build locally with `--build`.
+If the pull in Option B is denied (for example, a fork whose packages are private), run `docker login ghcr.io` with a
+GitHub token that has `read:packages`, or use Option A.
 
 ### Step 4 — Exercise the Flow
 

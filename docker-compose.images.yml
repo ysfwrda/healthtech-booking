@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────
+# Override: run the prebuilt service images published by CI to ghcr
+# (ghcr.io/ysfwrda/<service>:latest, built from main after tests pass).
+# Layer it on top of the base file; the base file alone builds from source.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.images.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+#
+# Optional variables:
+#   IMAGE_TAG=<full-commit-sha>        pin a published build (full 40-char SHA)
+#   IMAGE_REGISTRY=ghcr.io/<owner>     use a fork's images
+#
+# Tip: `export COMPOSE_FILE=docker-compose.yml:docker-compose.images.yml`
+# makes plain `docker compose pull` / `up -d` use this override.
+# ─────────────────────────────────────────────────────────────
+
+services:
+  appointment-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/appointment-service:${IMAGE_TAG:-latest}
+  patient-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/patient-service:${IMAGE_TAG:-latest}
+  doctor-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/doctor-service:${IMAGE_TAG:-latest}
+  notification-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/notification-service:${IMAGE_TAG:-latest}
+  api-gateway:
+    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/api-gateway:${IMAGE_TAG:-latest}
