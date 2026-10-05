@@ -1,20 +1,28 @@
-version: '3.8'
-
 # ─────────────────────────────────────────────────────────────
-# HealthTech Booking Platform — Local Infrastructure
+# HealthTech Booking Platform — Local Stack
 #
 # Starts:
 #   - Zookeeper          (required by Kafka)
 #   - Kafka              (event broker)
-#   - PostgreSQL x3      (one DB per service — DB per Service pattern)
+#   - PostgreSQL x4      (one DB per service — DB per Service pattern)
 #   - Kafka UI           (optional: browse topics at localhost:8090)
+#   - The five application services (appointment, patient, doctor,
+#     notification, api-gateway)
+#
+# The services run from prebuilt images published to ghcr by CI
+# (ghcr.io/ysfwrda/<service>:latest, built from main). Generate the JWT
+# keys in ./keys first (see README, Local Setup). Overrides:
+#   IMAGE_TAG=<commit-sha>   pin a specific published build
+#   IMAGE_REGISTRY=ghcr.io/<owner>   use a fork's images
 #
 # Usage:
-#   docker-compose up -d              → start everything
-#   docker-compose ps                 → check status
-#   docker-compose logs -f kafka      → follow Kafka logs
-#   docker-compose down               → stop and remove containers
-#   docker-compose down -v            → also remove volumes (reset data)
+#   docker compose pull               → fetch the prebuilt service images
+#   docker compose up -d              → start everything
+#   docker compose up -d --build      → build the service images locally instead
+#   docker compose ps                 → check status
+#   docker compose logs -f kafka      → follow Kafka logs
+#   docker compose down               → stop and remove containers
+#   docker compose down -v            → also remove volumes (reset data)
 # ─────────────────────────────────────────────────────────────
 
 services:
@@ -139,6 +147,7 @@ services:
 
   # ── Appointment Service ──────────────────────
   appointment-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/appointment-service:${IMAGE_TAG:-latest}
     build: ./appointment-service
     ports:
       - "8081:8081"
@@ -158,6 +167,7 @@ services:
 
   # ── Patient Service ──────────────────────────
   patient-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/patient-service:${IMAGE_TAG:-latest}
     build: ./patient-service
     ports:
       - "8083:8083"
@@ -178,6 +188,7 @@ services:
 
   # ── Doctor Service ───────────────────────────
   doctor-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/doctor-service:${IMAGE_TAG:-latest}
     build: ./doctor-service
     ports:
       - "8084:8084"
@@ -198,6 +209,7 @@ services:
 
   # ── Notification Service ─────────────────────
   notification-service:
+    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/notification-service:${IMAGE_TAG:-latest}
     build: ./notification-service
     ports:
       - "8082:8082"
@@ -214,6 +226,7 @@ services:
 
   # ── API Gateway ───────────────────────────────
   api-gateway:
+    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/api-gateway:${IMAGE_TAG:-latest}
     build: ./api-gateway
     ports:
       - "8080:8080"

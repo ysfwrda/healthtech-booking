@@ -298,7 +298,7 @@ real persistence, real RS256 signature validation, and in some cases a real Kafk
 
 The `*ApplicationTests` smoke tests (`PatientServiceApplicationTests`, `DoctorServiceApplicationTests`,
 `AppointmentServiceApplicationTests`) also load the full application, including `JwtDecoderConfig`, and each starts
-its own Testcontainers Postgres, so they no longer silently depend on a manually-run `docker-compose` stack being up.
+its own Testcontainers Postgres, so they no longer silently depend on a manually-run `docker compose` stack being up.
 They read from the same `keys/` directory described in JWT Keys below, the one and only key location in this repo;
 a real deployment never uses this location either, since it overrides `JWT_PRIVATE_KEY_PATH`/`JWT_PUBLIC_KEY_PATH`
 to point at a mounted secret instead (see the Docker Compose table below).
@@ -309,19 +309,20 @@ to point at a mounted secret instead (see the Docker Compose table below).
 
 ### Requirements
 
-* Docker and Docker Compose (primary; runs the whole system)
-* Java 21 and Maven 3.9+ (optional; only for running a service on the host)
+* Docker and Docker Compose v2 (primary; runs the whole system from prebuilt images, no local build needed)
+* Java 21 and Maven 3.9+ (optional; only to run a service on the host or to build the images yourself)
+* `openssl` (to generate the JWT key pair, see Step 2)
 * `curl` and `jq` (for the test script)
 
-### Step 1 — Start Infrastructure
+### Step 1 — Clone the Repository
 
 ```bash
 git clone https://github.com/ysfwrda/healthtech-booking.git
 cd healthtech-booking
-docker-compose up -d
 ```
 
-Starts Kafka, Zookeeper, four PostgreSQL instances (one per service), and Kafka UI at `http://localhost:8090`.
+The repository supplies `docker-compose.yml`, the committed public key, and the scripts. The service images themselves
+are pulled from the container registry in Step 3, so nothing needs to be built.
 
 ### Step 2 — JWT Keys
 
@@ -374,21 +375,42 @@ Authentication section below and ADR-004.
 
 ### Step 3 — Start the Services
 
-All services are containerized. Bring up the entire system (infrastructure plus all five services) with one command:
+All services are containerized, and CI publishes a prebuilt image for each of them to the GitHub Container Registry
+(`ghcr.io/ysfwrda/<service>:latest`, built from `main` after the tests pass). The images are public, so no login is
+needed. Make sure the keys from Step 2 exist, then bring up the entire system (infrastructure plus all five services):
 
 ```bash
-docker-compose up --build
+docker compose pull
+docker compose up -d
 ```
 
-This builds each service image and starts them alongside Kafka, Zookeeper, and the four PostgreSQL instances, all on a
-shared Docker network. The services connect to Kafka and their databases by container name.
+This starts the five services alongside Kafka, Zookeeper, Kafka UI (`http://localhost:8090`), and the four PostgreSQL
+instances, all on a shared Docker network. The services connect to Kafka and their databases by container name. The
+images contain no keys; `./keys` is mounted into the containers at runtime (see Step 2).
 
-To run a single service against the infrastructure for development, you can still run it on the host with Maven (it
-falls back to `localhost` addresses by default):
+Two optional environment variables control which images are used:
+
+| Variable         | Default           | Use                                                           |
+|------------------|-------------------|---------------------------------------------------------------|
+| `IMAGE_TAG`      | `latest`          | Pin a specific published build, e.g. a commit SHA            |
+| `IMAGE_REGISTRY` | `ghcr.io/ysfwrda` | Pull from a fork's registry, e.g. `ghcr.io/<your-user>`      |
+
+To build the images from your working tree instead (for example, to try local changes), use:
 
 ```bash
+docker compose up -d --build
+```
+
+To run a single service on the host against the infrastructure for development, start only the infrastructure and run
+the service with Maven (it falls back to `localhost` addresses by default):
+
+```bash
+docker compose up -d zookeeper kafka postgres-appointment postgres-notification postgres-patient postgres-doctor
 cd appointment-service && mvn spring-boot:run
 ```
+
+If `docker compose pull` is denied (for example, a fork whose packages are private), run `docker login ghcr.io` with a
+GitHub token that has `read:packages`, or build locally with `--build`.
 
 ### Step 4 — Exercise the Flow
 
@@ -542,7 +564,7 @@ curl -X POST http://localhost:8080/api/doctors/login \
 ### Step 6 — Run the Frontend
 
 The frontend is a React (Vite, TypeScript) client that talks to every service exclusively through the API Gateway.
-It is not containerized, so run it on the host against the Docker Compose stack from Step 1:
+It is not containerized, so run it on the host against the Docker Compose stack from Step 3:
 
 ```bash
 cd frontend
