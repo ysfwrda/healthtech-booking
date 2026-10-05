@@ -95,4 +95,39 @@ public class GatewayConfig {
                 .before(BeforeFilterFunctions.uri(doctorServiceUri))
                 .build();
     }
+
+    // OpenAPI spec proxies feeding the gateway's aggregated Swagger UI.
+
+    @Bean
+    public RouterFunction<ServerResponse> appointmentDocsRoute() {
+        return GatewayRouterFunctions.route("appointment-docs")
+                .route(GatewayRequestPredicates.path("/docs/appointment/v3/api-docs"),
+                        HandlerFunctions.http())
+                .before(propagateCorrelationId())
+                .before(BeforeFilterFunctions.setPath("/v3/api-docs"))
+                .before(BeforeFilterFunctions.uri(appointmentServiceUri))
+                .build();
+    }
+
+    @Bean
+    public RouterFunction<ServerResponse> patientDocsRoute() {
+        return GatewayRouterFunctions.route("patient-docs")
+                .route(GatewayRequestPredicates.path("/docs/patient/v3/api-docs"),
+                        HandlerFunctions.http())
+                .before(propagateCorrelationId())
+                .before(BeforeFilterFunctions.setPath("/v3/api-docs"))
+                .before(BeforeFilterFunctions.uri(patientServiceUri))
+                .build();
+    }
+
+    @Bean
+    public RouterFunction<ServerResponse> doctorDocsRoute() {
+        return GatewayRouterFunctions.route("doctor-docs")
+                .route(GatewayRequestPredicates.path("/docs/doctor/v3/api-docs"),
+                        HandlerFunctions.http())
+                .before(propagateCorrelationId())
+                .before(BeforeFilterFunctions.setPath("/v3/api-docs"))
+                .before(BeforeFilterFunctions.uri(doctorServiceUri))
+                .build();
+    }
 }

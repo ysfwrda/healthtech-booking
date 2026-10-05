@@ -85,6 +85,12 @@ pattern-based alternative that fails safer on a forgotten endpoint (new routes
 default to protected) at the cost of looser matching; either is compatible with this
 ADR, but the exact-union list is what is implemented.
 
+**Documentation endpoints are an explicit exception.** The Swagger UI and OpenAPI spec
+paths (`/swagger-ui/**`, `/swagger-ui.html`, `/v3/api-docs/**`) are public on each
+service, and the gateway additionally permits `GET /docs/*/v3/api-docs`, which proxies
+each service's spec for its aggregated UI. They expose API shape only, never data, and
+can be switched off with `SWAGGER_ENABLED=false`. The gateway test covers these paths.
+
 Tokens carry three claims: `sub`, `role`, and `exp`.
 
 * `sub` is the subject's identifier: the patient id in a PATIENT token, the doctor id in

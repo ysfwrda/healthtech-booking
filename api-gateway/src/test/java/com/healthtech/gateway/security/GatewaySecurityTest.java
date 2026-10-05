@@ -41,7 +41,13 @@ class GatewaySecurityTest {
                 Arguments.of(HttpMethod.POST, "/api/doctors/login"),
                 Arguments.of(HttpMethod.GET, "/api/doctors"),
                 Arguments.of(HttpMethod.GET, "/api/specialties"),
-                Arguments.of(HttpMethod.GET, "/api/availability")
+                Arguments.of(HttpMethod.GET, "/api/availability"),
+                Arguments.of(HttpMethod.GET, "/swagger-ui/index.html"),
+                Arguments.of(HttpMethod.GET, "/swagger-ui.html"),
+                Arguments.of(HttpMethod.GET, "/v3/api-docs/swagger-config"),
+                Arguments.of(HttpMethod.GET, "/docs/appointment/v3/api-docs"),
+                Arguments.of(HttpMethod.GET, "/docs/patient/v3/api-docs"),
+                Arguments.of(HttpMethod.GET, "/docs/doctor/v3/api-docs")
         );
     }
 

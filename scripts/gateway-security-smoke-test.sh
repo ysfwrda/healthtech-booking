@@ -97,5 +97,11 @@ CODE="$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS "$GATEWAY/api/auth/log
 assert_not_status "OPTIONS /api/auth/login" 401 "$CODE"
 [ "$CODE" != "403" ] || fail "OPTIONS /api/auth/login returned 403"
 
+section "Swagger UI and proxied OpenAPI specs: public through the gateway"
+for path in /swagger-ui/index.html /docs/appointment/v3/api-docs /docs/patient/v3/api-docs /docs/doctor/v3/api-docs; do
+  CODE="$(curl -s -o /dev/null -w '%{http_code}' "$GATEWAY$path")"
+  assert_status "GET $path" 200 "$CODE"
+done
+
 section "Done"
 ok "gateway security smoke test passed"
