@@ -19,11 +19,13 @@ management:
       exposure:
         include: health, info
 
-# Aggregated Swagger UI: the gateway has no API of its own, so its own /v3/api-docs is off and
-# each service's spec is proxied through /docs/<service>/v3/api-docs (see GatewayConfig).
+# Aggregated Swagger UI: springdoc's UI beans require api-docs to be enabled, so it stays on, but
+# the gateway has no API of its own: nothing is scanned and its own /v3/api-docs is not permitted.
+# Each service's spec is proxied through /docs/<service>/v3/api-docs (see GatewayConfig).
 springdoc:
+  packages-to-scan: com.healthtech.gateway.none
   api-docs:
-    enabled: false
+    enabled: ${SWAGGER_ENABLED:true}
   swagger-ui:
     enabled: ${SWAGGER_ENABLED:true}
     urls:

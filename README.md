@@ -369,9 +369,8 @@ Note: doctor-service now issues DOCTOR tokens too (self-registration and login),
 key patient-service uses for PATIENT tokens, per [ADR-004](docs/adr/ADR-004-JWT-Authentication.md). Doctor
 registration is public by design; there is no admin/doctor role check gating who can register (see Current
 Limitations). Browsing and specialty reads stay public.
-The API Gateway does not yet validate tokens at the edge (per the Authentication section below, that is still
-planned). No `JwtDecoder` or `JWT_PUBLIC_KEY_PATH` wiring exists in `api-gateway` yet; that scaffolding still needs
-to be added when gateway-level validation lands.
+The API Gateway validates tokens at the edge (signature and expiry only) with the shared public key, see the
+Authentication section below and ADR-004.
 
 ### Step 3 — Start the Services
 

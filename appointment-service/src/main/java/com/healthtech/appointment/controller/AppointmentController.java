@@ -5,7 +5,6 @@ import com.healthtech.appointment.dto.AppointmentResponse;
 import com.healthtech.appointment.service.AppointmentService;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

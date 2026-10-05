@@ -74,11 +74,11 @@ methods. This makes the rule visible in one file, testable against the real
 authorization rules with a mocked `JwtDecoder` (no key material needed), and
 impossible for a new controller method to accidentally skip.
 
-The gateway's own permitted-path list is the **exact union** of the three services'
-own public paths (specific method-and-path matchers, not a wildcard pattern like
-`/**/register`). This is the least-privilege choice: a newly added public endpoint
+The gateway's own permitted-path list is the **exact union** (plus `/error`, which Boot's error dispatch needs, see the gateway `SecurityConfig`) of the three services'
+own public paths (specific method-and-path matchers mirroring the services' own, not a
+broader pattern like `/**/register`). This is the least-privilege choice: a newly added public endpoint
 requires an explicit, reviewed addition to the gateway list, and a companion gateway
-test (asserting every known public path is not rejected with 401/403, and that a
+test (asserting the known public application paths are not rejected with 401/403, and that a
 protected path with no token is) fails immediately if that list drifts from what the
 services actually expose. The trade-off is weighed consciously against a
 pattern-based alternative that fails safer on a forgotten endpoint (new routes
@@ -87,9 +87,10 @@ ADR, but the exact-union list is what is implemented.
 
 **Documentation endpoints are an explicit exception.** The Swagger UI and OpenAPI spec
 paths (`/swagger-ui/**`, `/swagger-ui.html`, `/v3/api-docs/**`) are public on each
-service, and the gateway additionally permits `GET /docs/*/v3/api-docs`, which proxies
-each service's spec for its aggregated UI. They expose API shape only, never data, and
-can be switched off with `SWAGGER_ENABLED=false`. The gateway test covers these paths.
+service (GET only), and the gateway additionally permits `GET /docs/*/v3/api-docs`, which proxies
+each service's spec for its aggregated UI, plus the UI and its swagger-config. They expose API shape only, never data.
+`SWAGGER_ENABLED=false` switches them off on each service and, on the gateway, the UI and the proxy routes.
+The gateway test covers these paths.
 
 Tokens carry three claims: `sub`, `role`, and `exp`.
 

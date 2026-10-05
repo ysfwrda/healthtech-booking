@@ -61,4 +61,19 @@ class GatewaySecurityTest {
         assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
     }
+
+    @Test
+    void docsProxy_nonGet_isRejectedAtEdge() {
+        ResponseEntity<String> response = restTemplate.exchange("/docs/appointment/v3/api-docs",
+                HttpMethod.POST, null, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void docsProxy_unknownNestedPath_isRejectedAtEdge() {
+        ResponseEntity<String> response = restTemplate.getForEntity("/docs/x/y/v3/api-docs", String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
 }

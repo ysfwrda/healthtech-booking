@@ -38,7 +38,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/availability/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         // Swagger UI and the proxied per-service OpenAPI specs (mirrors the services' own docs paths).
-                        .requestMatchers(HttpMethod.GET, "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/docs/*/v3/api-docs").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/swagger-config", "/docs/*/v3/api-docs").permitAll()
                         // Boot's error controller is reached via an internal ERROR-dispatch
                         // forward, e.g. when a downstream proxy call fails - the security
                         // filter chain re-runs on that forward, and without this the missing
