@@ -576,7 +576,8 @@ curl -X POST http://localhost:8080/api/doctors/login \
 The frontend is a React (Vite, TypeScript) client that talks to every service exclusively through the API Gateway.
 It is built and served by nginx as the `frontend` service in `docker-compose.yml`, so `docker compose up -d --build`
 already starts it at `http://localhost:5173`. `VITE_API_BASE` is baked in at image build time (build arg, default
-`http://localhost:8080`). For hot reload, run it on the host instead against the Compose stack from Step 3:
+`http://localhost:8080`). To run on another host, set `FRONTEND_URL` (gateway CORS origin) and `VITE_API_BASE` in your
+environment or a root `.env` before `docker compose up -d --build`. For hot reload, run it on the host instead against the Compose stack from Step 3:
 
 ```bash
 cd frontend
