@@ -25,3 +25,5 @@ services:
     image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/notification-service:${IMAGE_TAG:-latest}
   api-gateway:
     image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/api-gateway:${IMAGE_TAG:-latest}
+  frontend:
+    image: ${IMAGE_REGISTRY:-ghcr.io/ysfwrda}/frontend:${IMAGE_TAG:-latest}

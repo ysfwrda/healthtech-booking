@@ -57,7 +57,7 @@ jobs:
       packages: write           # lets GITHUB_TOKEN push to ghcr
     strategy:
       matrix:
-        service: [ api-gateway, appointment-service, doctor-service, notification-service, patient-service ]
+        service: [ api-gateway, appointment-service, doctor-service, notification-service, patient-service, frontend ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
