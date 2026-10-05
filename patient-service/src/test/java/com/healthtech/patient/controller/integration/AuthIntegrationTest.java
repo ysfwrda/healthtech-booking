@@ -37,9 +37,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// @DirtiesContext: without it the relay's background scheduler keeps running after this
-// class's containers are torn down, spamming connection-refused against dead containers for
-// the rest of the suite.
+// @DirtiesContext stops the relay scheduler once the containers are torn down, avoiding
+// connection-refused spam for the rest of the suite.
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 @DirtiesContext

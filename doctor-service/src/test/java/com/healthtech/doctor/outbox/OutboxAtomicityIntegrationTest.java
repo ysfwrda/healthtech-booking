@@ -29,11 +29,8 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// The relay's fixed delay is pushed out to an hour so it never fires during this test class,
-// keeping "still unpublished" assertions deterministic instead of racing a live scheduler.
-// No real Kafka container is needed: ProducerFactory bean creation is lazy and never actually
-// connects unless something sends, which nothing does here. DoctorSeeder's own KafkaTemplate is
-// mocked so its startup send doesn't need a broker either.
+// Relay delay pushed out to an hour so it never fires, keeping 'unpublished' assertions deterministic.
+// No Kafka container: nothing sends, and DoctorSeeder's KafkaTemplate is mocked.
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "outbox.relay.fixed-delay-ms=3600000")
 @Testcontainers

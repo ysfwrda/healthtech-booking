@@ -40,11 +40,8 @@ import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// outbox.relay.fixed-delay-ms is pushed out to an hour: this class no longer mocks a
-// KafkaTemplate (AppointmentService now uses the outbox instead), so without this the live
-// OutboxRelay would fire every second against an unreachable default broker, contending with
-// the concurrent-booking test's own DB connections for no reason - these tests don't assert on
-// Kafka delivery at all.
+// Relay delay pushed out to an hour: these tests don't assert on Kafka delivery, so the live
+// relay would only retry against an unreachable broker.
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "outbox.relay.fixed-delay-ms=3600000")
 @Import(AppointmentIntegrationTest.TestSecurityConfig.class)

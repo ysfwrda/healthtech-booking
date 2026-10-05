@@ -36,14 +36,8 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// @DirtiesContext: this class's OutboxRelay/OutboxPruningJob schedulers keep running on
-// background threads after the class's static containers are torn down unless the context
-// itself is closed, otherwise they spam "connection refused" against dead containers for the
-// rest of the suite and burn CPU that other test classes need.
-//
-// The relay's own fixed delay is pushed out to an hour: these tests invoke relayBatch()
-// directly to get deterministic control over claiming, and the live background scheduler
-// would otherwise race those direct calls as an uncontrolled third claimant.
+// @DirtiesContext stops the relay scheduler once the containers are gone; its delay is pushed out
+// to an hour so direct relayBatch() calls are not raced by the live scheduler.
 @SpringBootTest(properties = "outbox.relay.fixed-delay-ms=3600000")
 @Testcontainers
 @DirtiesContext

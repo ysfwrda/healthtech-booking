@@ -36,13 +36,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// Simulates the broker going down and recovering. Uses the low-level Docker API to pause/unpause
-// the SAME container: pause freezes the broker process via the cgroup freezer in place, so the
-// port mapping never changes (unlike Testcontainers' own stop(), which tears the container down
-// and hands back a differently-port-mapped one on restart) and there is no Kafka process
-// reinitialization to race against. A paused broker also more realistically simulates an
-// unresponsive node than an immediate connection refusal, exercising the bounded max.block.ms /
-// delivery.timeout.ms producer config rather than a fast-fail path.
+// Simulates a broker outage by pausing the Kafka container in place (the port mapping survives).
+// A paused broker hangs rather than refuses, exercising the bounded producer timeouts.
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 @DirtiesContext
@@ -71,10 +66,8 @@ class OutboxRelayKafkaOutageIntegrationTest {
     TestRestTemplate restTemplate;
 
     @Test
-    void register_survivesKafkaOutage_thenDrainsOnRecovery() throws Exception {
-        // Arrange: the broker is paused before the request, simulating an outage
-        String containerId = kafkaContainer.getContainerId();
-        var dockerClient = DockerClientFactory.instance().client();
+    void register_whileKafkaIsDown_returns201AndLeavesUnpublishedOutboxRow() {
+        // Arrange
         RegisterRequest request = RegisterRequest.builder()
                 .firstName("Kaf")
                 .lastName("Outage")
@@ -84,13 +77,15 @@ class OutboxRelayKafkaOutageIntegrationTest {
                 .email("kaf.outage@example.com")
                 .insuranceType(InsuranceType.STATUTORY)
                 .build();
+        String containerId = kafkaContainer.getContainerId();
+        var dockerClient = DockerClientFactory.instance().client();
 
         dockerClient.pauseContainerCmd(containerId).exec();
         try {
-            // Act: register while Kafka is unreachable
+            // Act
             ResponseEntity<AuthResponse> response = restTemplate.postForEntity("/api/auth/register", request, AuthResponse.class);
 
-            // Assert: the request still succeeds, with an unpublished outbox row left behind
+            // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
             var patient = patientRepository.findByUsername("kafoutage").orElseThrow();
             OutboxMessage row = outboxRepository.findAll().stream()
@@ -100,44 +95,57 @@ class OutboxRelayKafkaOutageIntegrationTest {
         } finally {
             dockerClient.unpauseContainerCmd(containerId).exec();
         }
+    }
 
+    @Test
+    void unpublishedRow_isPublishedOnceKafkaRecovers() {
+        // Arrange
+        String topic = "outage-recovery-test";
+        String containerId = kafkaContainer.getContainerId();
+        var dockerClient = DockerClientFactory.instance().client();
+        OutboxMessage row = OutboxMessage.builder()
+                .id(UUID.randomUUID())
+                .aggregateId(UUID.randomUUID().toString())
+                .topic(topic)
+                .payload("{\"hello\":\"world\"}")
+                .build();
+        dockerClient.pauseContainerCmd(containerId).exec();
+        outboxRepository.save(row);
+
+        try (Consumer<String, String> consumer = testConsumer(topic)) {
+            // Act
+            dockerClient.unpauseContainerCmd(containerId).exec();
+
+            // Assert
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(60))
+                    .pollInterval(Duration.ofSeconds(1))
+                    .untilAsserted(() -> assertThat(
+                            outboxRepository.findById(row.getId()).orElseThrow().getPublishedAt()).isNotNull());
+            ConsumerRecord<String, String> record = Awaitility.await()
+                    .atMost(Duration.ofSeconds(20))
+                    .until(() -> {
+                        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(300));
+                        for (ConsumerRecord<String, String> r : records) {
+                            if (row.getAggregateId().equals(r.key())) {
+                                return r;
+                            }
+                        }
+                        return null;
+                    }, java.util.Objects::nonNull);
+            assertThat(record.topic()).isEqualTo(topic);
+        }
+    }
+
+    private Consumer<String, String> testConsumer(String topic) {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-" + UUID.randomUUID());
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        try (Consumer<String, String> consumer = new DefaultKafkaConsumerFactory<String, String>(props).createConsumer()) {
-            consumer.subscribe(List.of("patient.registered"));
-
-            var patient = patientRepository.findByUsername("kafoutage").orElseThrow();
-
-            // Act & Assert: once the broker recovers, the relay drains the row and it reaches the topic
-            Awaitility.await()
-                    .atMost(Duration.ofSeconds(60))
-                    .pollInterval(Duration.ofSeconds(1))
-                    .untilAsserted(() -> {
-                        OutboxMessage refreshed = outboxRepository.findById(
-                                outboxRepository.findAll().stream()
-                                        .filter(m -> m.getAggregateId().equals(patient.getId().toString()))
-                                        .findFirst().orElseThrow().getId()
-                        ).orElseThrow();
-                        assertThat(refreshed.getPublishedAt()).isNotNull();
-                    });
-
-            ConsumerRecord<String, String> record = Awaitility.await()
-                    .atMost(Duration.ofSeconds(20))
-                    .until(() -> {
-                        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(300));
-                        for (ConsumerRecord<String, String> r : records) {
-                            if (patient.getId().toString().equals(r.key())) {
-                                return r;
-                            }
-                        }
-                        return null;
-                    }, java.util.Objects::nonNull);
-
-            assertThat(record.topic()).isEqualTo("patient.registered");
-        }
+        Consumer<String, String> consumer = new DefaultKafkaConsumerFactory<String, String>(props).createConsumer();
+        consumer.subscribe(List.of(topic));
+        return consumer;
     }
 }
