@@ -392,7 +392,7 @@ Two optional environment variables control which images are used:
 
 | Variable         | Default           | Use                                                           |
 |------------------|-------------------|---------------------------------------------------------------|
-| `IMAGE_TAG`      | `latest`          | Pin a specific published build, e.g. a commit SHA            |
+| `IMAGE_TAG`      | `latest`          | Pin a published build by its full 40-character commit SHA   |
 | `IMAGE_REGISTRY` | `ghcr.io/ysfwrda` | Pull from a fork's registry, e.g. `ghcr.io/<your-user>`      |
 
 To build the images from your working tree instead (for example, to try local changes), use:

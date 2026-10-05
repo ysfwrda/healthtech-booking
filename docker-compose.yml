@@ -12,7 +12,7 @@
 # The services run from prebuilt images published to ghcr by CI
 # (ghcr.io/ysfwrda/<service>:latest, built from main). Generate the JWT
 # keys in ./keys first (see README, Local Setup). Overrides:
-#   IMAGE_TAG=<commit-sha>   pin a specific published build
+#   IMAGE_TAG=<full-commit-sha>   pin a published build (full 40-char SHA)
 #   IMAGE_REGISTRY=ghcr.io/<owner>   use a fork's images
 #
 # Usage:
@@ -246,7 +246,7 @@ services:
 
 # ── Volumes ───────────────────────────────────────────────────
 # Named volumes persist data between container restarts.
-# Use `docker-compose down -v` to wipe them (full reset).
+# Use `docker compose down -v` to wipe them (full reset).
 volumes:
   postgres-appointment-data:
   postgres-notification-data:
