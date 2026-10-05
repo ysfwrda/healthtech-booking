@@ -41,7 +41,13 @@ class GatewaySecurityTest {
                 Arguments.of(HttpMethod.POST, "/api/doctors/login"),
                 Arguments.of(HttpMethod.GET, "/api/doctors"),
                 Arguments.of(HttpMethod.GET, "/api/specialties"),
-                Arguments.of(HttpMethod.GET, "/api/availability")
+                Arguments.of(HttpMethod.GET, "/api/availability"),
+                Arguments.of(HttpMethod.GET, "/swagger-ui/index.html"),
+                Arguments.of(HttpMethod.GET, "/swagger-ui.html"),
+                Arguments.of(HttpMethod.GET, "/v3/api-docs/swagger-config"),
+                Arguments.of(HttpMethod.GET, "/docs/appointment/v3/api-docs"),
+                Arguments.of(HttpMethod.GET, "/docs/patient/v3/api-docs"),
+                Arguments.of(HttpMethod.GET, "/docs/doctor/v3/api-docs")
         );
     }
 
@@ -54,5 +60,20 @@ class GatewaySecurityTest {
 
         assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void docsProxy_nonGet_isRejectedAtEdge() {
+        ResponseEntity<String> response = restTemplate.exchange("/docs/appointment/v3/api-docs",
+                HttpMethod.POST, null, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void docsProxy_unknownNestedPath_isRejectedAtEdge() {
+        ResponseEntity<String> response = restTemplate.getForEntity("/docs/x/y/v3/api-docs", String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 }

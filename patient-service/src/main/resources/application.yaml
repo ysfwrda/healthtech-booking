@@ -30,6 +30,8 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 app:
+  openapi:
+    server-url: ${OPENAPI_SERVER_URL:/}
   jwt:
     public-key: ${JWT_PUBLIC_KEY_PATH:file:../keys/public.pem}
     private-key: ${JWT_PRIVATE_KEY_PATH:file:../keys/private.pem}
@@ -51,6 +53,12 @@ management:
     web:
       exposure:
         include: health, beans, mappings
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
 
 logging:
   pattern:

@@ -39,6 +39,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/availability/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .anyRequest().hasRole("PATIENT")
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
