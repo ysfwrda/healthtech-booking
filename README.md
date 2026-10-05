@@ -22,7 +22,7 @@ handling.
 ## Tech Stack
 
 Java 21 · Spring Boot 3 · Apache Kafka · PostgreSQL · Spring Cloud Gateway (MVC) · Spring Security (OAuth2 Resource
-Server) · MapStruct · JWT (RS256) · Docker · React (Vite, TypeScript)
+Server) · MapStruct · JWT (RS256) · springdoc-openapi (Swagger UI) · Docker · React (Vite, TypeScript)
 
 ---
 
@@ -98,7 +98,8 @@ Authentication uses **JWT with RS256** (asymmetric signing), per [ADR-004](docs/
 * The public key is distributed to services that validate tokens. Appointment Service validates tokens with the same
   public key; it never holds the private key and cannot mint tokens.
 * Validation follows a hybrid, zero-trust model: services validate tokens independently (the authoritative boundary).
-  Gateway-level edge validation is a planned defense-in-depth addition and is not yet enabled.
+  The API Gateway additionally validates the token's signature and expiry at the edge (no role check) and rejects
+  unauthenticated traffic on protected paths; see ADR-004.
 * Tokens carry minimal claims: `sub` (the subject's id: the patient id in a PATIENT token, the doctor id in a DOCTOR
   token), `role`, and `exp`.
 
@@ -108,7 +109,8 @@ and requires a PATIENT token, consistent with booking: a patient can only cancel
 the wrong token type or attempts to act on another user's resource are rejected with `403`.
 
 Public (no token required): patient and doctor registration/login, doctor browsing, specialty listing, and
-availability. Booking and cancellation require a valid patient token.
+availability. Booking and cancellation require a valid patient token. The Swagger UI and OpenAPI spec endpoints
+(`/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**`, and the gateway's `/docs/*/v3/api-docs`) are also public.
 
 ---
 
@@ -367,9 +369,8 @@ Note: doctor-service now issues DOCTOR tokens too (self-registration and login),
 key patient-service uses for PATIENT tokens, per [ADR-004](docs/adr/ADR-004-JWT-Authentication.md). Doctor
 registration is public by design; there is no admin/doctor role check gating who can register (see Current
 Limitations). Browsing and specialty reads stay public.
-The API Gateway does not yet validate tokens at the edge (per the Authentication section below, that is still
-planned). No `JwtDecoder` or `JWT_PUBLIC_KEY_PATH` wiring exists in `api-gateway` yet; that scaffolding still needs
-to be added when gateway-level validation lands.
+The API Gateway validates tokens at the edge (signature and expiry only) with the shared public key, see the
+Authentication section below and ADR-004.
 
 ### Step 3 — Start the Services
 
@@ -477,6 +478,35 @@ curl -X PUT http://localhost:8080/api/appointments/<appointment-id>/cancel \
 
 Re-check availability after booking or cancelling to see the slot disappear, then reappear.
 
+Prefer a browser? The same endpoints can be explored interactively in Swagger UI, see
+[API Documentation (Swagger UI)](#api-documentation-swagger-ui) below. This walkthrough remains the reference for the
+end-to-end flow (register, search, book, cancel, event verification).
+
+### API Documentation (Swagger UI)
+
+Every REST service publishes an OpenAPI 3 spec and an interactive Swagger UI (springdoc-openapi). The API Gateway
+serves one aggregated UI covering all three APIs.
+
+| UI                                           | URL                                      | OpenAPI JSON                                  |
+|----------------------------------------------|------------------------------------------|-----------------------------------------------|
+| **Gateway (all services, recommended)**      | http://localhost:8080/swagger-ui.html    | `/docs/{appointment,patient,doctor}/v3/api-docs` |
+| Appointment Service (direct)                 | http://localhost:8081/swagger-ui.html    | http://localhost:8081/v3/api-docs             |
+| Patient Service (direct)                     | http://localhost:8083/swagger-ui.html    | http://localhost:8083/v3/api-docs             |
+| Doctor Service (direct)                      | http://localhost:8084/swagger-ui.html    | http://localhost:8084/v3/api-docs             |
+
+On the gateway UI, pick a service from the **Select a definition** dropdown in the top-right corner.
+
+**Calling protected endpoints from the UI:**
+
+1. Obtain a token with `POST /api/auth/login` (patient) or `POST /api/doctors/login` (doctor) via "Try it out", or with
+   curl as shown above.
+2. Click **Authorize**, paste the token (without the `Bearer ` prefix), and confirm.
+3. Run any protected operation, e.g. `GET /api/appointments`. Role rules are still enforced by each service.
+
+The docs endpoints are public (no token needed to view them). To disable them, e.g. in production, set
+`SWAGGER_ENABLED=false` on the service and/or the gateway. If "Try it out" sends requests to the wrong host, set
+`OPENAPI_SERVER_URL` on the services to the gateway URL, e.g. `http://localhost:8080`.
+
 ### Demo Data (Seeded)
 
 `DoctorSeeder` runs at doctor-service startup (after `SpecialtySeeder`, which it depends on) and seeds six demo
@@ -556,6 +586,7 @@ healthtech-booking/
 |----------------------|-----------|----------------------------|
 | Kafka                | 9092      | PLAINTEXT (host access)    |
 | Kafka UI             | 8090      | Browse topics and messages |
+| Swagger UI (gateway) | 8080      | `/swagger-ui.html`, all APIs |
 | PostgreSQL (appt)    | 5432      | `appointment_db`           |
 | PostgreSQL (notif)   | 5433      | `notification_db`          |
 | PostgreSQL (patient) | 5434      | `patient_db`               |

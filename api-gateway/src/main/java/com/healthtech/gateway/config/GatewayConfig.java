@@ -3,6 +3,7 @@ package com.healthtech.gateway.config;
 import com.healthtech.gateway.filter.CorrelationIdFilter;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cloud.gateway.server.mvc.filter.BeforeFilterFunctions;
 import org.springframework.cloud.gateway.server.mvc.handler.GatewayRouterFunctions;
 import org.springframework.cloud.gateway.server.mvc.handler.HandlerFunctions;
@@ -92,6 +93,44 @@ public class GatewayConfig {
                 .route(GatewayRequestPredicates.path("/api/specialties/**"),
                         HandlerFunctions.http())
                 .before(propagateCorrelationId())
+                .before(BeforeFilterFunctions.uri(doctorServiceUri))
+                .build();
+    }
+
+    // OpenAPI spec proxies feeding the gateway's aggregated Swagger UI; off when SWAGGER_ENABLED=false.
+
+    @Bean
+    @ConditionalOnProperty(name = "springdoc.swagger-ui.enabled", havingValue = "true", matchIfMissing = true)
+    public RouterFunction<ServerResponse> appointmentDocsRoute() {
+        return GatewayRouterFunctions.route("appointment-docs")
+                .route(GatewayRequestPredicates.path("/docs/appointment/v3/api-docs"),
+                        HandlerFunctions.http())
+                .before(propagateCorrelationId())
+                .before(BeforeFilterFunctions.setPath("/v3/api-docs"))
+                .before(BeforeFilterFunctions.uri(appointmentServiceUri))
+                .build();
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "springdoc.swagger-ui.enabled", havingValue = "true", matchIfMissing = true)
+    public RouterFunction<ServerResponse> patientDocsRoute() {
+        return GatewayRouterFunctions.route("patient-docs")
+                .route(GatewayRequestPredicates.path("/docs/patient/v3/api-docs"),
+                        HandlerFunctions.http())
+                .before(propagateCorrelationId())
+                .before(BeforeFilterFunctions.setPath("/v3/api-docs"))
+                .before(BeforeFilterFunctions.uri(patientServiceUri))
+                .build();
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "springdoc.swagger-ui.enabled", havingValue = "true", matchIfMissing = true)
+    public RouterFunction<ServerResponse> doctorDocsRoute() {
+        return GatewayRouterFunctions.route("doctor-docs")
+                .route(GatewayRequestPredicates.path("/docs/doctor/v3/api-docs"),
+                        HandlerFunctions.http())
+                .before(propagateCorrelationId())
+                .before(BeforeFilterFunctions.setPath("/v3/api-docs"))
                 .before(BeforeFilterFunctions.uri(doctorServiceUri))
                 .build();
     }
