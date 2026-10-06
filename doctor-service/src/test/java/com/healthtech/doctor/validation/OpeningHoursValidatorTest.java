@@ -13,6 +13,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class OpeningHoursValidatorTest {
 
@@ -114,5 +115,39 @@ class OpeningHoursValidatorTest {
         ));
 
         assertThat(validator.isValid(blocks, context)).isFalse();
+    }
+
+    @Test
+    void startOffHalfHourGrid_isInvalid() {
+        Set<OpeningHoursDto> blocks = Set.of(block(DayOfWeek.MONDAY, 9, 15, 12, 0));
+
+        assertThat(validator.isValid(blocks, context)).isFalse();
+        verify(context).buildConstraintViolationWithTemplate(
+                "Opening hours for MONDAY must start and end on the hour or half hour");
+    }
+
+    @Test
+    void endOffHalfHourGrid_isInvalid() {
+        Set<OpeningHoursDto> blocks = Set.of(block(DayOfWeek.MONDAY, 9, 0, 12, 45));
+
+        assertThat(validator.isValid(blocks, context)).isFalse();
+    }
+
+    @Test
+    void secondsComponent_isInvalid() {
+        Set<OpeningHoursDto> blocks = Set.of(OpeningHoursDto.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(9, 0, 30))
+                .endTime(LocalTime.of(12, 0))
+                .build());
+
+        assertThat(validator.isValid(blocks, context)).isFalse();
+    }
+
+    @Test
+    void halfHourBoundaries_areValid() {
+        Set<OpeningHoursDto> blocks = Set.of(block(DayOfWeek.MONDAY, 9, 0, 12, 30));
+
+        assertThat(validator.isValid(blocks, context)).isTrue();
     }
 }

@@ -5,6 +5,7 @@ import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 
 import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -26,6 +27,12 @@ public class OpeningHoursValidator implements ConstraintValidator<ValidOpeningHo
                 return fail(context, "Opening hours block for " + block.getDayOfWeek()
                         + " must have a startTime before endTime");
             }
+            // appointment-service books on a 30-minute grid; an off-grid block would advertise
+            // availability slots that booking then rejects as not aligned.
+            if (!onHalfHourGrid(block.getStartTime()) || !onHalfHourGrid(block.getEndTime())) {
+                return fail(context, "Opening hours for " + block.getDayOfWeek()
+                        + " must start and end on the hour or half hour");
+            }
         }
 
         Map<DayOfWeek, List<OpeningHoursDto>> blocksByDay = openingHours.stream()
@@ -44,6 +51,10 @@ public class OpeningHoursValidator implements ConstraintValidator<ValidOpeningHo
         }
 
         return true;
+    }
+
+    private boolean onHalfHourGrid(LocalTime time) {
+        return time.getMinute() % 30 == 0 && time.getSecond() == 0 && time.getNano() == 0;
     }
 
     private boolean overlaps(OpeningHoursDto a, OpeningHoursDto b) {
