@@ -6,6 +6,8 @@ import com.healthtech.appointment.correlation.CorrelationId;
 import com.healthtech.appointment.event.DomainEventPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -19,6 +21,9 @@ public class OutboxEventWriter implements DomainEventPublisher {
     private final OutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
+    // MANDATORY: throws if there is no surrounding transaction, instead of saving the row in its own
+    // and losing atomicity with the state change. Does not start a transaction itself.
+    @Transactional(propagation = Propagation.MANDATORY)
     @Override
     public void publish(String topic, UUID aggregateId, UUID eventId, Object event) {
         outboxRepository.save(OutboxMessage.builder()
