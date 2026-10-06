@@ -39,11 +39,17 @@ class BookingRulesTest {
 
     @Test
     void slotAligned_onGrid_shouldPass() {
+        // Arrange: the Monday 9-17 doctor fixture
+
+        // Act and Assert
         assertThatCode(() -> slotAligned.check(MONDAY.atTime(10, 30), mondayNineToFive)).doesNotThrowAnyException();
     }
 
     @Test
     void slotAligned_offGrid_shouldThrowSlotNotAligned() {
+        // Arrange: the Monday 9-17 doctor fixture
+
+        // Act and Assert
         assertThatThrownBy(() -> slotAligned.check(MONDAY.atTime(10, 15), mondayNineToFive))
                 .isInstanceOf(SlotNotAlignedException.class);
         assertThatThrownBy(() -> slotAligned.check(MONDAY.atTime(10, 0, 30), mondayNineToFive))
@@ -52,12 +58,18 @@ class BookingRulesTest {
 
     @Test
     void withinOpeningHours_lastSlotEndingAtClosing_shouldPass() {
+        // Arrange: the Monday 9-17 doctor fixture
+
+        // Act and Assert
         assertThatCode(() -> withinOpeningHours.check(MONDAY.atTime(16, 30), mondayNineToFive))
                 .doesNotThrowAnyException();
     }
 
     @Test
     void withinOpeningHours_atClosingOrOnClosedDay_shouldThrowOutsideOpeningHours() {
+        // Arrange: the Monday 9-17 doctor fixture
+
+        // Act and Assert
         assertThatThrownBy(() -> withinOpeningHours.check(MONDAY.atTime(17, 0), mondayNineToFive))
                 .isInstanceOf(OutsideOpeningHoursException.class);
         assertThatThrownBy(() -> withinOpeningHours.check(MONDAY.plusDays(1).atTime(10, 0), mondayNineToFive))
@@ -68,11 +80,15 @@ class BookingRulesTest {
     void ruleOrder_shouldCheckAlignmentBeforeOpeningHours() {
         // Spring injects List<BookingRule> sorted by @Order; sorting the same way here pins
         // which error wins for a slot that fails both (e.g. 07:15): SlotNotAligned.
+        // Arrange
         List<BookingRule> rules = new ArrayList<>(List.of(withinOpeningHours, slotAligned));
+        LocalDateTime failsBoth = MONDAY.atTime(7, 15);
+
+        // Act
         AnnotationAwareOrderComparator.sort(rules);
 
+        // Assert
         assertThat(rules).containsExactly(slotAligned, withinOpeningHours);
-        LocalDateTime failsBoth = MONDAY.atTime(7, 15);
         assertThatThrownBy(() -> rules.forEach(rule -> rule.check(failsBoth, mondayNineToFive)))
                 .isInstanceOf(SlotNotAlignedException.class);
     }
