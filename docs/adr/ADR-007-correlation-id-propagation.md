@@ -63,17 +63,20 @@ would generate an unrelated id, and a registration request and the read-model
 projection it triggered would appear in the logs as two unconnected operations,
 even though the projection is the entire point of the request under ADR-005.
 
-In each backend service the header name and MDC key are defined once, in
-`correlation/CorrelationId`, and shared by the HTTP filter, the outbox writer and
-relay (producers), and `ConsumerCorrelation` (consumers), so the Kafka-side code
-does not depend on the HTTP filter.
+In each backend service (not the gateway, which only has the HTTP side) the header
+name and MDC key are defined once, in `correlation/CorrelationId`. The HTTP filter
+uses them everywhere; where a service has them, so do the outbox writer and relay
+on the producing side (patient, doctor and appointment services) and
+`ConsumerCorrelation` on the consuming side (appointment and notification
+services). The Kafka-side code therefore does not depend on the HTTP filter.
 
-Both sides degrade rather than fail when the id is absent. A producer publishing
-outside a request context, such as the demo data seeder, has no id in MDC and
-generates one. A consumer receiving a message with no header, whether published
-before this mechanism existed or from such a producer, generates one rather than
-rejecting the message. This mirrors the filter's own behaviour for a missing
-inbound header.
+Both sides degrade rather than fail when the id is absent. An event written to the
+outbox outside a request context, such as from a test or a scheduled job, has no
+id in MDC and is given a fresh one. The demo data seeder is the exception: it
+publishes directly rather than through the outbox (ADR-008) and sends no header at
+all. A consumer receiving a message with no header, whether published before this
+mechanism existed or by the seeder, generates one rather than rejecting the
+message. This mirrors the filter's own behaviour for a missing inbound header.
 
 Tracing is deferred on cost and stage, not because it would add nothing. It would
 add real value here: OpenTelemetry propagates context through Kafka headers as
