@@ -43,8 +43,8 @@ public class AppointmentEventConsumer {
         handle(event, correlationIdHeader, "cancelled");
     }
 
-    // One listener per topic (Kafka binds topics per method); the handling is shared, so a new
-    // appointment event type needs only its own listener method calling this.
+    // One listener per topic (Kafka binds topics per method); the correlation, recording and
+    // logging around each message are shared here.
     private void handle(AppointmentNotificationEvent event, byte[] correlationIdHeader, String kind) {
         ConsumerCorrelation.runWith(correlationIdHeader, () -> {
             try {

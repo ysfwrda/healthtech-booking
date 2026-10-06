@@ -30,7 +30,7 @@ public class KafkaConsumerConfig {
     }
 
     // Each appointment event type gets its own typed consumer and listener factory, built the
-    // same way; supporting a new event type is two one-line beans below.
+    // same way by these helpers; the per-type beans below are one line each.
     private <T> ConsumerFactory<String, T> consumerFactory(Class<T> eventType) {
         JsonDeserializer<T> deserializer = new JsonDeserializer<>(eventType);
         deserializer.ignoreTypeHeaders();
