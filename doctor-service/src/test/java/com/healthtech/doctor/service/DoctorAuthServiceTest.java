@@ -15,6 +15,7 @@ import com.healthtech.doctor.exception.EmailAlreadyExistsException;
 import com.healthtech.doctor.exception.InvalidCredentialsException;
 import com.healthtech.doctor.exception.SpecialtyNotFoundException;
 import com.healthtech.doctor.mapper.DoctorMapper;
+import com.healthtech.doctor.outbox.OutboxEventWriter;
 import com.healthtech.doctor.outbox.OutboxRepository;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
@@ -22,7 +23,6 @@ import com.healthtech.doctor.security.DoctorTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -52,7 +52,6 @@ class DoctorAuthServiceTest {
     @Mock private OutboxRepository outboxRepository;
     @Spy private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
-    @InjectMocks
     private DoctorAuthService doctorAuthService;
 
     private final UUID doctorId = UUID.randomUUID();
@@ -63,6 +62,9 @@ class DoctorAuthServiceTest {
 
     @BeforeEach
     void setUp() {
+        doctorAuthService = new DoctorAuthService(doctorRepository, specialtyRepository, doctorMapper,
+                doctorTokenProvider, passwordEncoder, new OutboxEventWriter(outboxRepository, objectMapper));
+
         registrationRequest = DoctorRegistrationRequest.builder()
                 .firstName("Anna")
                 .lastName("Mueller")

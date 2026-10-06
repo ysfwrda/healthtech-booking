@@ -49,7 +49,7 @@ class NotificationServiceTest {
                 .build();
 
         // Act
-        notificationService.createForBookedAppointment(event);
+        notificationService.record(event);
 
         // Assert
         ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
@@ -81,7 +81,7 @@ class NotificationServiceTest {
                 .build();
 
         // Act
-        notificationService.createForCancelledAppointment(event);
+        notificationService.record(event);
 
         // Assert
         ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
@@ -107,7 +107,7 @@ class NotificationServiceTest {
                 .build();
 
         // Act
-        notificationService.createForBookedAppointment(event);
+        notificationService.record(event);
 
         // Assert
         ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
@@ -127,7 +127,7 @@ class NotificationServiceTest {
                 .build();
 
         // Act
-        notificationService.createForCancelledAppointment(event);
+        notificationService.record(event);
 
         // Assert
         ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);

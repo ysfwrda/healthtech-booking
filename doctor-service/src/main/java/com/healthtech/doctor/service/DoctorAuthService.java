@@ -1,7 +1,5 @@
 package com.healthtech.doctor.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.doctor.domain.Doctor;
 import com.healthtech.doctor.domain.Specialty;
 import com.healthtech.doctor.dto.DoctorAuthResponse;
@@ -9,18 +7,15 @@ import com.healthtech.doctor.dto.DoctorLoginRequest;
 import com.healthtech.doctor.dto.DoctorRegistrationRequest;
 import com.healthtech.doctor.event.DoctorRegistered;
 import com.healthtech.doctor.event.OpeningHoursData;
+import com.healthtech.doctor.event.DomainEventPublisher;
 import com.healthtech.doctor.exception.EmailAlreadyExistsException;
 import com.healthtech.doctor.exception.InvalidCredentialsException;
 import com.healthtech.doctor.exception.SpecialtyNotFoundException;
-import com.healthtech.doctor.filter.CorrelationIdFilter;
 import com.healthtech.doctor.mapper.DoctorMapper;
-import com.healthtech.doctor.outbox.OutboxMessage;
-import com.healthtech.doctor.outbox.OutboxRepository;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
 import com.healthtech.doctor.security.DoctorTokenProvider;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -39,8 +34,7 @@ public class DoctorAuthService {
     private final DoctorMapper doctorMapper;
     private final DoctorTokenProvider doctorTokenProvider;
     private final PasswordEncoder passwordEncoder;
-    private final OutboxRepository outboxRepository;
-    private final ObjectMapper objectMapper;
+    private final DomainEventPublisher eventPublisher;
 
     @Transactional
     public DoctorAuthResponse register(DoctorRegistrationRequest request) {
@@ -61,30 +55,15 @@ public class DoctorAuthService {
                     "Doctor with this email already exists: " + request.getEmail());
         }
 
-        Set<OpeningHoursData> openingHours = savedDoctor.getOpeningHours() == null ? Set.of() :
-                savedDoctor.getOpeningHours().stream()
-                        .map(oh -> OpeningHoursData.builder()
-                                .dayOfWeek(oh.getDayOfWeek())
-                                .startTime(oh.getStartTime())
-                                .endTime(oh.getEndTime())
-                                .build())
-                        .collect(Collectors.toSet());
-
         DoctorRegistered event = DoctorRegistered.builder()
                 .eventId(UUID.randomUUID())
                 .doctorId(savedDoctor.getId())
                 .firstName(savedDoctor.getFirstName())
                 .lastName(savedDoctor.getLastName())
-                .openingHours(openingHours)
+                .openingHours(OpeningHoursData.fromAll(savedDoctor.getOpeningHours()))
                 .registeredAt(savedDoctor.getRegisteredAt())
                 .build();
-        outboxRepository.save(OutboxMessage.builder()
-                .id(event.getEventId())
-                .aggregateId(savedDoctor.getId().toString())
-                .topic("doctor.registered")
-                .payload(serialize(event))
-                .correlationId(correlationIdOrGenerate())
-                .build());
+        eventPublisher.publish("doctor.registered", savedDoctor.getId(), event.getEventId(), event);
 
         String token = doctorTokenProvider.generateToken(savedDoctor.getId());
         return DoctorAuthResponse.builder()
@@ -109,22 +88,5 @@ public class DoctorAuthService {
                 .token(token)
                 .expiresIn(doctorTokenProvider.getExpirationSeconds())
                 .build();
-    }
-
-    // Threads the current request's correlation id onto the outgoing Kafka message so a
-    // consumer processing this event can tie its own log lines back to the request that
-    // produced it. Falls back to a fresh id outside a request context (e.g. a test),
-    // matching CorrelationIdFilter's own fallback for a missing incoming header.
-    private String correlationIdOrGenerate() {
-        String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
-        return correlationId != null ? correlationId : UUID.randomUUID().toString();
-    }
-
-    private String serialize(DoctorRegistered event) {
-        try {
-            return objectMapper.writeValueAsString(event);
-        } catch (JsonProcessingException ex) {
-            throw new IllegalStateException("Failed to serialize DoctorRegistered event", ex);
-        }
     }
 }

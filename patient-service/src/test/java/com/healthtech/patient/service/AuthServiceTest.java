@@ -10,13 +10,13 @@ import com.healthtech.patient.exception.EmailAlreadyExistsException;
 import com.healthtech.patient.exception.InvalidCredentialsException;
 import com.healthtech.patient.exception.UsernameAlreadyExistsException;
 import com.healthtech.patient.mapper.PatientMapper;
+import com.healthtech.patient.outbox.OutboxEventWriter;
 import com.healthtech.patient.outbox.OutboxRepository;
 import com.healthtech.patient.repository.PatientRepository;
 import com.healthtech.patient.security.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -43,7 +43,6 @@ class AuthServiceTest {
     @Mock private OutboxRepository outboxRepository;
     @Spy private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
-    @InjectMocks
     private AuthService authService;
 
     private RegisterRequest registerRequest;
@@ -52,6 +51,9 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
+        authService = new AuthService(jwtTokenProvider, patientRepository, patientMapper, passwordEncoder,
+                new OutboxEventWriter(outboxRepository, objectMapper));
+
         registerRequest = RegisterRequest.builder()
                 .firstName("John")
                 .lastName("Doe")

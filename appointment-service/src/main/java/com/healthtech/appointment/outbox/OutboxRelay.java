@@ -1,6 +1,6 @@
 package com.healthtech.appointment.outbox;
 
-import com.healthtech.appointment.filter.CorrelationIdFilter;
+import com.healthtech.appointment.correlation.CorrelationId;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +58,7 @@ public class OutboxRelay {
         ProducerRecord<String, String> record = new ProducerRecord<>(
                 message.getTopic(), message.getAggregateId(), message.getPayload());
         if (message.getCorrelationId() != null) {
-            record.headers().add(CorrelationIdFilter.CORRELATION_ID_HEADER,
+            record.headers().add(CorrelationId.HEADER,
                     message.getCorrelationId().getBytes(StandardCharsets.UTF_8));
         }
         try {

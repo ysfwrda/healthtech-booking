@@ -29,43 +29,41 @@ public class KafkaConsumerConfig {
         return props;
     }
 
-    @Bean
-    public ConsumerFactory<String, AppointmentBooked> bookedConsumerFactory() {
-        JsonDeserializer<AppointmentBooked> deserializer =
-                new JsonDeserializer<>(AppointmentBooked.class);
+    // Each appointment event type gets its own typed consumer and listener factory, built the
+    // same way by these helpers; the per-type beans below are one line each.
+    private <T> ConsumerFactory<String, T> consumerFactory(Class<T> eventType) {
+        JsonDeserializer<T> deserializer = new JsonDeserializer<>(eventType);
         deserializer.ignoreTypeHeaders();
         return new DefaultKafkaConsumerFactory<>(
                 baseConsumerProps(),
                 new StringDeserializer(),
                 deserializer
         );
+    }
+
+    private <T> ConcurrentKafkaListenerContainerFactory<String, T> listenerFactory(ConsumerFactory<String, T> consumerFactory) {
+        ConcurrentKafkaListenerContainerFactory<String, T> factory = new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(consumerFactory);
+        return factory;
+    }
+
+    @Bean
+    public ConsumerFactory<String, AppointmentBooked> bookedConsumerFactory() {
+        return consumerFactory(AppointmentBooked.class);
     }
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, AppointmentBooked> bookedKafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, AppointmentBooked> factory =
-                new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(bookedConsumerFactory());
-        return factory;
+        return listenerFactory(bookedConsumerFactory());
     }
 
     @Bean
     public ConsumerFactory<String, AppointmentCancelled> cancelledConsumerFactory() {
-        JsonDeserializer<AppointmentCancelled> deserializer =
-                new JsonDeserializer<>(AppointmentCancelled.class);
-        deserializer.ignoreTypeHeaders();
-        return new DefaultKafkaConsumerFactory<>(
-                baseConsumerProps(),
-                new StringDeserializer(),
-                deserializer
-        );
+        return consumerFactory(AppointmentCancelled.class);
     }
 
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, AppointmentCancelled> cancelledKafkaListenerContainerFactory() {
-        ConcurrentKafkaListenerContainerFactory<String, AppointmentCancelled> factory =
-                new ConcurrentKafkaListenerContainerFactory<>();
-        factory.setConsumerFactory(cancelledConsumerFactory());
-        return factory;
+        return listenerFactory(cancelledConsumerFactory());
     }
 }

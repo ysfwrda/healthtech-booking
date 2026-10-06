@@ -2,7 +2,7 @@ package com.healthtech.appointment.controller;
 
 import com.healthtech.appointment.dto.AvailableSlotsResponse;
 import com.healthtech.appointment.security.SecurityConfig;
-import com.healthtech.appointment.service.AppointmentService;
+import com.healthtech.appointment.service.AvailabilityService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -36,7 +36,7 @@ class AvailabilityControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private AppointmentService appointmentService;
+    private AvailabilityService availabilityService;
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
@@ -54,7 +54,7 @@ class AvailabilityControllerTest {
                 .availableSlots(List.of(firstSlot, secondSlot))
                 .build();
 
-        when(appointmentService.getAvailableSlots(doctorId, date)).thenReturn(response);
+        when(availabilityService.getAvailableSlots(doctorId, date)).thenReturn(response);
 
         // Act and Assert
         mockMvc.perform(get("/api/availability")
@@ -69,7 +69,7 @@ class AvailabilityControllerTest {
 
         // Confirms the "date" query param was bound into a real LocalDate (not just
         // forwarded as a raw string) by checking the exact LocalDate the service received.
-        verify(appointmentService).getAvailableSlots(doctorId, date);
+        verify(availabilityService).getAvailableSlots(doctorId, date);
     }
 
     @Test
