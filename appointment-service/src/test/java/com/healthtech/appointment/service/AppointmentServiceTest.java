@@ -27,8 +27,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -69,7 +71,8 @@ class AppointmentServiceTest {
                 validPatientRepository,
                 validDoctorRepository,
                 new SlotPolicy(),
-                new OutboxEventWriter(outboxRepository, objectMapper)
+                new OutboxEventWriter(outboxRepository, objectMapper),
+                Clock.systemDefaultZone()
         );
     }
 
@@ -406,5 +409,40 @@ class AppointmentServiceTest {
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
         assertThat(result.get(1).getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+    }
+
+    @Test
+    void cancelAppointment_shouldStampCancelledAtFromTheInjectedClock() throws Exception {
+        // Arrange
+        LocalDateTime now = LocalDateTime.of(2030, 3, 18, 14, 5);
+        AppointmentService serviceAtFixedTime = new AppointmentService(
+                appointmentRepository,
+                appointmentMapper,
+                validPatientRepository,
+                validDoctorRepository,
+                new SlotPolicy(),
+                new OutboxEventWriter(outboxRepository, objectMapper),
+                Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
+        );
+        UUID patientId = UUID.randomUUID();
+        Appointment appointment = Appointment.builder()
+                .id(UUID.randomUUID())
+                .patientId(patientId)
+                .type(INITIAL_CONSULTATION)
+                .status(AppointmentStatus.CONFIRMED)
+                .build();
+        when(appointmentRepository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.save(appointment)).thenReturn(appointment);
+        when(appointmentMapper.toResponse(appointment)).thenReturn(AppointmentResponse.builder().build());
+
+        // Act
+        serviceAtFixedTime.cancelAppointment(appointment.getId(), patientId);
+
+        // Assert
+        ArgumentCaptor<com.healthtech.appointment.outbox.OutboxMessage> rowCaptor =
+                ArgumentCaptor.forClass(com.healthtech.appointment.outbox.OutboxMessage.class);
+        verify(outboxRepository).save(rowCaptor.capture());
+        AppointmentCancelled event = objectMapper.readValue(rowCaptor.getValue().getPayload(), AppointmentCancelled.class);
+        assertThat(event.getCancelledAt()).isEqualTo(now);
     }
 }

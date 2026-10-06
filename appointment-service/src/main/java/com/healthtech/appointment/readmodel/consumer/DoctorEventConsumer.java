@@ -2,8 +2,8 @@ package com.healthtech.appointment.readmodel.consumer;
 
 import com.healthtech.appointment.event.DoctorRegistered;
 import com.healthtech.appointment.event.OpeningHoursPayload;
-import com.healthtech.appointment.filter.ConsumerCorrelation;
-import com.healthtech.appointment.filter.CorrelationIdFilter;
+import com.healthtech.appointment.correlation.ConsumerCorrelation;
+import com.healthtech.appointment.correlation.CorrelationId;
 import com.healthtech.appointment.readmodel.OpeningHours;
 import com.healthtech.appointment.readmodel.ValidDoctor;
 import com.healthtech.appointment.readmodel.ValidDoctorRepository;
@@ -30,7 +30,7 @@ public class DoctorEventConsumer {
     )
     public void onDoctorRegistered(
             DoctorRegistered event,
-            @Header(value = CorrelationIdFilter.CORRELATION_ID_HEADER, required = false) byte[] correlationIdHeader) {
+            @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
         ConsumerCorrelation.runWith(correlationIdHeader, () -> {
             try {
                 Set<OpeningHours> openingHours = event.getOpeningHours() == null ? Set.of() :

@@ -1,4 +1,4 @@
-package com.healthtech.notification.filter;
+package com.healthtech.appointment.correlation;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -15,7 +15,7 @@ class ConsumerCorrelationTest {
 
     @AfterEach
     void clearMdc() {
-        MDC.remove(CorrelationIdFilter.MDC_KEY);
+        MDC.remove(CorrelationId.MDC_KEY);
     }
 
     @Test
@@ -25,11 +25,11 @@ class ConsumerCorrelationTest {
 
         // Act
         ConsumerCorrelation.runWith("request-123".getBytes(StandardCharsets.UTF_8),
-                () -> seen.set(MDC.get(CorrelationIdFilter.MDC_KEY)));
+                () -> seen.set(MDC.get(CorrelationId.MDC_KEY)));
 
         // Assert
         assertThat(seen.get()).isEqualTo("request-123");
-        assertThat(MDC.get(CorrelationIdFilter.MDC_KEY)).isNull();
+        assertThat(MDC.get(CorrelationId.MDC_KEY)).isNull();
     }
 
     @Test
@@ -38,12 +38,12 @@ class ConsumerCorrelationTest {
         AtomicReference<String> seen = new AtomicReference<>();
 
         // Act
-        ConsumerCorrelation.runWith(null, () -> seen.set(MDC.get(CorrelationIdFilter.MDC_KEY)));
+        ConsumerCorrelation.runWith(null, () -> seen.set(MDC.get(CorrelationId.MDC_KEY)));
 
         // Assert
         assertThat(seen.get()).isNotBlank();
         assertThat(UUID.fromString(seen.get())).isNotNull();
-        assertThat(MDC.get(CorrelationIdFilter.MDC_KEY)).isNull();
+        assertThat(MDC.get(CorrelationId.MDC_KEY)).isNull();
     }
 
     @Test
@@ -55,6 +55,6 @@ class ConsumerCorrelationTest {
         assertThatThrownBy(() -> ConsumerCorrelation.runWith(
                 "request-123".getBytes(StandardCharsets.UTF_8), () -> { throw failure; }))
                 .isSameAs(failure);
-        assertThat(MDC.get(CorrelationIdFilter.MDC_KEY)).isNull();
+        assertThat(MDC.get(CorrelationId.MDC_KEY)).isNull();
     }
 }

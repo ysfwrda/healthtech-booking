@@ -1,8 +1,8 @@
 package com.healthtech.appointment.readmodel.consumer;
 
 import com.healthtech.appointment.event.PatientRegistered;
-import com.healthtech.appointment.filter.ConsumerCorrelation;
-import com.healthtech.appointment.filter.CorrelationIdFilter;
+import com.healthtech.appointment.correlation.ConsumerCorrelation;
+import com.healthtech.appointment.correlation.CorrelationId;
 import com.healthtech.appointment.readmodel.ValidPatient;
 import com.healthtech.appointment.readmodel.ValidPatientRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ public class PatientEventConsumer {
     )
     public void onPatientRegistered(
             PatientRegistered event,
-            @Header(value = CorrelationIdFilter.CORRELATION_ID_HEADER, required = false) byte[] correlationIdHeader) {
+            @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
         ConsumerCorrelation.runWith(correlationIdHeader, () -> {
             try {
                 ValidPatient patient = ValidPatient.builder()

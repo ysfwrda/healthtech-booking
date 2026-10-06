@@ -5,11 +5,11 @@ import com.healthtech.patient.dto.AuthResponse;
 import com.healthtech.patient.dto.LoginRequest;
 import com.healthtech.patient.dto.RegisterRequest;
 import com.healthtech.patient.event.PatientRegistered;
+import com.healthtech.patient.event.DomainEventPublisher;
 import com.healthtech.patient.exception.EmailAlreadyExistsException;
 import com.healthtech.patient.exception.InvalidCredentialsException;
 import com.healthtech.patient.exception.UsernameAlreadyExistsException;
 import com.healthtech.patient.mapper.PatientMapper;
-import com.healthtech.patient.outbox.OutboxEventWriter;
 import com.healthtech.patient.repository.PatientRepository;
 import com.healthtech.patient.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +27,7 @@ public class AuthService {
     private final PatientRepository patientRepository;
     private final PatientMapper patientMapper;
     private final PasswordEncoder passwordEncoder;
-    private final OutboxEventWriter outboxEventWriter;
+    private final DomainEventPublisher eventPublisher;
 
     @Transactional
     public AuthResponse register(RegisterRequest registerRequest) {
@@ -53,7 +53,7 @@ public class AuthService {
                 .lastName(patient.getLastName())
                 .email(patient.getEmail())
                 .registeredAt(patient.getRegisteredAt()).build();
-        outboxEventWriter.write("patient.registered", patient.getId(), event.getEventId(), event);
+        eventPublisher.publish("patient.registered", patient.getId(), event.getEventId(), event);
 
         return AuthResponse.builder()
                 .username(patient.getUsername())

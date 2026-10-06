@@ -6,9 +6,9 @@ import com.healthtech.appointment.dto.AppointmentRequest;
 import com.healthtech.appointment.dto.AppointmentResponse;
 import com.healthtech.appointment.event.AppointmentBooked;
 import com.healthtech.appointment.event.AppointmentCancelled;
+import com.healthtech.appointment.event.DomainEventPublisher;
 import com.healthtech.appointment.exception.*;
 import com.healthtech.appointment.mapper.AppointmentMapper;
-import com.healthtech.appointment.outbox.OutboxEventWriter;
 import com.healthtech.appointment.readmodel.*;
 import com.healthtech.appointment.repository.AppointmentRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +18,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -35,7 +36,8 @@ public class AppointmentService {
     private final ValidPatientRepository validPatientRepository;
     private final ValidDoctorRepository validDoctorRepository;
     private final SlotPolicy slotPolicy;
-    private final OutboxEventWriter outboxEventWriter;
+    private final DomainEventPublisher eventPublisher;
+    private final Clock clock;
 
     @Transactional
     public AppointmentResponse bookAppointment(AppointmentRequest request, UUID patientId) {
@@ -88,7 +90,7 @@ public class AppointmentService {
                 .bookedAt(saved.getCreatedAt())
                 .build();
 
-        outboxEventWriter.write("appointment.booked", saved.getId(), event.getEventId(), event);
+        eventPublisher.publish("appointment.booked", saved.getId(), event.getEventId(), event);
         log.info("Appointment booked, appointmentId {}", saved.getId());
         return appointmentMapper.toResponse(saved);
     }
@@ -110,10 +112,10 @@ public class AppointmentService {
                 .doctorId(saved.getDoctorId())
                 .duration(saved.getDuration())
                 .dateTime(saved.getDateTime())
-                .cancelledAt(LocalDateTime.now())
+                .cancelledAt(LocalDateTime.now(clock))
                 .build();
 
-        outboxEventWriter.write("appointment.cancelled", saved.getId(), event.getEventId(), event);
+        eventPublisher.publish("appointment.cancelled", saved.getId(), event.getEventId(), event);
         log.info("Appointment cancelled, appointmentId {}", saved.getId());
         return appointmentMapper.toResponse(saved);
     }
