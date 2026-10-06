@@ -10,8 +10,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 // The single home of the booking grid: how long a slot is, which start times are valid,
-// and which slots an opening-hours block offers. Booking and availability both read it,
-// so the two can never disagree about what a slot is.
+// and which slots an opening-hours block offers. Booking and availability both read it, so
+// they share one slot length. slotsWithin does not apply isAligned: a block starting off the
+// grid (e.g. 09:15) yields slots that booking will reject.
 @Component
 public class SlotPolicy {
 
