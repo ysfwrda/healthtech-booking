@@ -269,6 +269,7 @@ public class DoctorIntegrationTest {
 
     @Test
     void register_offGridOpeningHours_returns400WithGridError() throws Exception {
+        // Arrange
         OpeningHoursDto offGrid = OpeningHoursDto.builder()
                 .dayOfWeek(DayOfWeek.MONDAY)
                 .startTime(LocalTime.of(9, 15))
@@ -279,9 +280,11 @@ public class DoctorIntegrationTest {
                 .openingHours(Set.of(offGrid))
                 .build();
 
+        // Act
         ResponseEntity<String> response = restTemplate.postForEntity(
                 "/api/doctors/register", request, String.class);
 
+        // Assert
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         JsonNode problem = new ObjectMapper().readTree(response.getBody());
         assertThat(problem.get("title").asText()).isEqualTo("Validation Error");
