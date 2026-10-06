@@ -19,6 +19,9 @@ import com.healthtech.appointment.readmodel.ValidDoctorRepository;
 import com.healthtech.appointment.readmodel.ValidPatient;
 import com.healthtech.appointment.readmodel.ValidPatientRepository;
 import com.healthtech.appointment.repository.AppointmentRepository;
+import com.healthtech.appointment.service.booking.BookingRule;
+import com.healthtech.appointment.service.booking.SlotAlignedRule;
+import com.healthtech.appointment.service.booking.WithinOpeningHoursRule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,6 +66,12 @@ class AppointmentServiceTest {
 
     private AppointmentService appointmentService;
 
+    // The production rules, in their @Order: alignment, then opening hours.
+    private static List<BookingRule> bookingRules() {
+        SlotPolicy slotPolicy = new SlotPolicy();
+        return List.of(new SlotAlignedRule(slotPolicy), new WithinOpeningHoursRule(slotPolicy));
+    }
+
     @BeforeEach
     void setUp() {
         appointmentService = new AppointmentService(
@@ -70,7 +79,7 @@ class AppointmentServiceTest {
                 appointmentMapper,
                 validPatientRepository,
                 validDoctorRepository,
-                new SlotPolicy(),
+                bookingRules(),
                 new OutboxEventWriter(outboxRepository, objectMapper),
                 Clock.systemDefaultZone()
         );
@@ -420,7 +429,7 @@ class AppointmentServiceTest {
                 appointmentMapper,
                 validPatientRepository,
                 validDoctorRepository,
-                new SlotPolicy(),
+                bookingRules(),
                 new OutboxEventWriter(outboxRepository, objectMapper),
                 Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
         );

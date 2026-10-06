@@ -2,6 +2,7 @@ package com.healthtech.notification.consumer;
 
 import com.healthtech.notification.event.AppointmentBooked;
 import com.healthtech.notification.event.AppointmentCancelled;
+import com.healthtech.notification.event.AppointmentNotificationEvent;
 import com.healthtech.notification.correlation.ConsumerCorrelation;
 import com.healthtech.notification.correlation.CorrelationId;
 import com.healthtech.notification.service.NotificationService;
@@ -28,16 +29,7 @@ public class AppointmentEventConsumer {
     public void consumeBookedEvent(
             AppointmentBooked event,
             @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
-        ConsumerCorrelation.runWith(correlationIdHeader, () -> {
-            try {
-                notificationService.createForBookedAppointment(event);
-                log.info("Notification recorded for booked appointment, appointmentId {}", event.getAppointmentId());
-            } catch (RuntimeException e) {
-                log.error("Failed to record notification for booked appointment, appointmentId {}",
-                        event.getAppointmentId(), e);
-                throw e;
-            }
-        });
+        handle(event, correlationIdHeader);
     }
 
     @KafkaListener(
@@ -48,13 +40,20 @@ public class AppointmentEventConsumer {
     public void consumeCancelledEvent(
             AppointmentCancelled event,
             @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
+        handle(event, correlationIdHeader);
+    }
+
+    // One listener per topic (Kafka binds topics per method); the correlation, recording and
+    // logging around each message are shared here.
+    private void handle(AppointmentNotificationEvent event, byte[] correlationIdHeader) {
         ConsumerCorrelation.runWith(correlationIdHeader, () -> {
             try {
-                notificationService.createForCancelledAppointment(event);
-                log.info("Notification recorded for cancelled appointment, appointmentId {}", event.getAppointmentId());
+                notificationService.record(event);
+                log.info("Notification recorded, type {}, appointmentId {}",
+                        event.notificationType(), event.getAppointmentId());
             } catch (RuntimeException e) {
-                log.error("Failed to record notification for cancelled appointment, appointmentId {}",
-                        event.getAppointmentId(), e);
+                log.error("Failed to record notification, type {}, appointmentId {}",
+                        event.notificationType(), event.getAppointmentId(), e);
                 throw e;
             }
         });

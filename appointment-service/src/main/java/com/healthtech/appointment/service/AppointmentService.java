@@ -11,6 +11,7 @@ import com.healthtech.appointment.exception.*;
 import com.healthtech.appointment.mapper.AppointmentMapper;
 import com.healthtech.appointment.readmodel.*;
 import com.healthtech.appointment.repository.AppointmentRepository;
+import com.healthtech.appointment.service.booking.BookingRule;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,9 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
-import java.time.DayOfWeek;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,7 +34,7 @@ public class AppointmentService {
     private final AppointmentMapper appointmentMapper;
     private final ValidPatientRepository validPatientRepository;
     private final ValidDoctorRepository validDoctorRepository;
-    private final SlotPolicy slotPolicy;
+    private final List<BookingRule> bookingRules;
     private final DomainEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -52,17 +51,7 @@ public class AppointmentService {
         ValidDoctor doctor = validDoctorRepository.findById(appointment.getDoctorId())
                 .orElseThrow(() -> new DoctorNotFoundException(appointment.getDoctorId()));
 
-        LocalTime slotStart = request.getDateTime().toLocalTime();
-        LocalTime slotEnd = slotPolicy.slotEnd(slotStart);
-        DayOfWeek day = request.getDateTime().getDayOfWeek();
-
-        if(!slotPolicy.isAligned(slotStart)) {
-            throw new SlotNotAlignedException();
-        }
-
-        if(!doctor.isOpenFor(day, slotStart, slotEnd)){
-            throw new OutsideOpeningHoursException();
-        }
+        bookingRules.forEach(rule -> rule.check(request.getDateTime(), doctor));
 
         Appointment saved;
         try {

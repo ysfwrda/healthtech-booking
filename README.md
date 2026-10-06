@@ -262,7 +262,7 @@ full Spring context can catch.
 ### Unit tests
 
 Plain Mockito tests against a single class, no Spring context, no I/O. These cover business logic and edge cases in
-isolation: `AppointmentServiceTest`, `AvailabilityServiceTest`, `SlotPolicyTest`, `ValidDoctorTest`,
+isolation: `AppointmentServiceTest`, `AvailabilityServiceTest`, `SlotPolicyTest`, `BookingRulesTest`, `ValidDoctorTest`,
 `DoctorServiceTest`, `SpecialtyServiceTest`, `DoctorSpecificationsTest`, `SpecialtySeederTest`, `AuthServiceTest`,
 `PatientServiceTest`, `JwtTokenProviderTest`, `NotificationServiceTest`, `OutboxEventWriterTest` (one per publishing
 service), `ConsumerCorrelationTest` (appointment and notification services), and `AppointmentEventConsumerTest` (the
