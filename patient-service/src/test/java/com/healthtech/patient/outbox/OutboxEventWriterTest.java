@@ -42,12 +42,15 @@ class OutboxEventWriterTest {
 
     @Test
     void write_shouldSaveRowWithIdsTopicAndJsonPayload() {
+        // Arrange
         UUID aggregateId = UUID.randomUUID();
         UUID eventId = UUID.randomUUID();
 
+        // Act
         OutboxMessage row = writeAndCapture(new OutboxEventWriter(outboxRepository, objectMapper),
                 "some.topic", aggregateId, eventId);
 
+        // Assert
         assertThat(row.getId()).isEqualTo(eventId);
         assertThat(row.getAggregateId()).isEqualTo(aggregateId.toString());
         assertThat(row.getTopic()).isEqualTo("some.topic");
@@ -57,29 +60,38 @@ class OutboxEventWriterTest {
 
     @Test
     void write_withCorrelationIdInMdc_shouldCarryItOnTheRow() {
+        // Arrange
         MDC.put(CorrelationIdFilter.MDC_KEY, "request-123");
 
+        // Act
         OutboxMessage row = writeAndCapture(new OutboxEventWriter(outboxRepository, objectMapper),
                 "some.topic", UUID.randomUUID(), UUID.randomUUID());
 
+        // Assert
         assertThat(row.getCorrelationId()).isEqualTo("request-123");
     }
 
     @Test
     void write_withoutCorrelationIdInMdc_shouldGenerateOne() {
+        // Arrange: no correlation id in the MDC
+
+        // Act
         OutboxMessage row = writeAndCapture(new OutboxEventWriter(outboxRepository, objectMapper),
                 "some.topic", UUID.randomUUID(), UUID.randomUUID());
 
+        // Assert
         assertThat(row.getCorrelationId()).isNotBlank();
         assertThat(UUID.fromString(row.getCorrelationId())).isNotNull();
     }
 
     @Test
     void write_serializationFailure_shouldThrowIllegalStateAndSaveNothing() throws Exception {
+        // Arrange
         ObjectMapper failingMapper = mock(ObjectMapper.class);
         when(failingMapper.writeValueAsString(any())).thenThrow(new JsonProcessingException("boom") {});
         OutboxEventWriter writer = new OutboxEventWriter(outboxRepository, failingMapper);
 
+        // Act and Assert
         assertThatThrownBy(() -> writer.write("some.topic", UUID.randomUUID(), UUID.randomUUID(), new SampleEvent("x")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Failed to serialize SampleEvent event");

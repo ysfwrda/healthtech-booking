@@ -27,8 +27,10 @@ class ValidDoctorTest {
 
     @Test
     void openingHoursCovers_shouldIncludeBothBoundaries() {
+        // Arrange
         OpeningHours block = hours(DayOfWeek.MONDAY, 9, 17);
 
+        // Act and Assert
         assertThat(block.covers(LocalTime.of(9, 0), LocalTime.of(9, 30))).isTrue();
         assertThat(block.covers(LocalTime.of(16, 30), LocalTime.of(17, 0))).isTrue();
         assertThat(block.covers(LocalTime.of(8, 30), LocalTime.of(9, 0))).isFalse();
@@ -37,7 +39,9 @@ class ValidDoctorTest {
 
     @Test
     void openingHoursOn_shouldReturnOnlyThatDaysBlocks() {
-        // The read-model OpeningHours has no equals(), so compare field by field.
+        // Arrange: the doctor fixture (Monday 9-12 and 14-17, Tuesday 8-10)
+
+        // Act and Assert: the read-model OpeningHours has no equals(), so compare field by field.
         assertThat(doctor.openingHoursOn(DayOfWeek.MONDAY))
                 .usingRecursiveFieldByFieldElementComparator()
                 .containsExactlyInAnyOrder(hours(DayOfWeek.MONDAY, 9, 12), hours(DayOfWeek.MONDAY, 14, 17));
@@ -46,12 +50,18 @@ class ValidDoctorTest {
 
     @Test
     void isOpenFor_slotInsideAnyBlockOfThatDay_shouldBeTrue() {
+        // Arrange: the doctor fixture
+
+        // Act and Assert
         assertThat(doctor.isOpenFor(DayOfWeek.MONDAY, LocalTime.of(11, 30), LocalTime.of(12, 0))).isTrue();
         assertThat(doctor.isOpenFor(DayOfWeek.MONDAY, LocalTime.of(14, 0), LocalTime.of(14, 30))).isTrue();
     }
 
     @Test
     void isOpenFor_slotInLunchGapOrOnAnotherDay_shouldBeFalse() {
+        // Arrange: the doctor fixture
+
+        // Act and Assert
         assertThat(doctor.isOpenFor(DayOfWeek.MONDAY, LocalTime.of(12, 0), LocalTime.of(12, 30))).isFalse();
         assertThat(doctor.isOpenFor(DayOfWeek.WEDNESDAY, LocalTime.of(9, 0), LocalTime.of(9, 30))).isFalse();
         assertThat(doctor.isOpenFor(DayOfWeek.TUESDAY, LocalTime.of(10, 0), LocalTime.of(10, 30))).isFalse();
