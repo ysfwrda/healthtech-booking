@@ -19,4 +19,10 @@ public class OpeningHours {
     private DayOfWeek dayOfWeek;
     private LocalTime startTime;
     private LocalTime endTime;
+
+    // True when [start, end] lies entirely inside this block: start >= startTime and
+    // end <= endTime. A slot ending exactly at closing time fits.
+    public boolean covers(LocalTime start, LocalTime end) {
+        return !startTime.isAfter(start) && !endTime.isBefore(end);
+    }
 }
