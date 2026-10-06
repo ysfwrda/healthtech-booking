@@ -20,21 +20,27 @@ class ConsumerCorrelationTest {
 
     @Test
     void runWith_header_shouldExposeItInMdcDuringWorkAndClearAfter() {
+        // Arrange
         AtomicReference<String> seen = new AtomicReference<>();
 
+        // Act
         ConsumerCorrelation.runWith("request-123".getBytes(StandardCharsets.UTF_8),
                 () -> seen.set(MDC.get(CorrelationId.MDC_KEY)));
 
+        // Assert
         assertThat(seen.get()).isEqualTo("request-123");
         assertThat(MDC.get(CorrelationId.MDC_KEY)).isNull();
     }
 
     @Test
     void runWith_noHeader_shouldGenerateAFreshId() {
+        // Arrange
         AtomicReference<String> seen = new AtomicReference<>();
 
+        // Act
         ConsumerCorrelation.runWith(null, () -> seen.set(MDC.get(CorrelationId.MDC_KEY)));
 
+        // Assert
         assertThat(seen.get()).isNotBlank();
         assertThat(UUID.fromString(seen.get())).isNotNull();
         assertThat(MDC.get(CorrelationId.MDC_KEY)).isNull();
@@ -42,8 +48,10 @@ class ConsumerCorrelationTest {
 
     @Test
     void runWith_workThrows_shouldRethrowAndStillClearMdc() {
+        // Arrange
         RuntimeException failure = new RuntimeException("boom");
 
+        // Act and Assert
         assertThatThrownBy(() -> ConsumerCorrelation.runWith(
                 "request-123".getBytes(StandardCharsets.UTF_8), () -> { throw failure; }))
                 .isSameAs(failure);
