@@ -2,7 +2,7 @@ package com.healthtech.patient.outbox;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.healthtech.patient.filter.CorrelationIdFilter;
+import com.healthtech.patient.correlation.CorrelationId;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,11 +30,11 @@ class OutboxEventWriterTest {
 
     @AfterEach
     void clearMdc() {
-        MDC.remove(CorrelationIdFilter.MDC_KEY);
+        MDC.remove(CorrelationId.MDC_KEY);
     }
 
     private OutboxMessage writeAndCapture(OutboxEventWriter writer, String topic, UUID aggregateId, UUID eventId) {
-        writer.write(topic, aggregateId, eventId, new SampleEvent("hello"));
+        writer.publish(topic, aggregateId, eventId, new SampleEvent("hello"));
         ArgumentCaptor<OutboxMessage> captor = ArgumentCaptor.forClass(OutboxMessage.class);
         verify(outboxRepository).save(captor.capture());
         return captor.getValue();
@@ -57,7 +57,7 @@ class OutboxEventWriterTest {
 
     @Test
     void write_withCorrelationIdInMdc_shouldCarryItOnTheRow() {
-        MDC.put(CorrelationIdFilter.MDC_KEY, "request-123");
+        MDC.put(CorrelationId.MDC_KEY, "request-123");
 
         OutboxMessage row = writeAndCapture(new OutboxEventWriter(outboxRepository, objectMapper),
                 "some.topic", UUID.randomUUID(), UUID.randomUUID());
@@ -80,7 +80,7 @@ class OutboxEventWriterTest {
         when(failingMapper.writeValueAsString(any())).thenThrow(new JsonProcessingException("boom") {});
         OutboxEventWriter writer = new OutboxEventWriter(outboxRepository, failingMapper);
 
-        assertThatThrownBy(() -> writer.write("some.topic", UUID.randomUUID(), UUID.randomUUID(), new SampleEvent("x")))
+        assertThatThrownBy(() -> writer.publish("some.topic", UUID.randomUUID(), UUID.randomUUID(), new SampleEvent("x")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Failed to serialize SampleEvent event");
         verify(outboxRepository, never()).save(any());

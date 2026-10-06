@@ -63,6 +63,11 @@ would generate an unrelated id, and a registration request and the read-model
 projection it triggered would appear in the logs as two unconnected operations,
 even though the projection is the entire point of the request under ADR-005.
 
+In each backend service the header name and MDC key are defined once, in
+`correlation/CorrelationId`, and shared by the HTTP filter, the outbox writer and
+relay (producers), and `ConsumerCorrelation` (consumers), so the Kafka-side code
+does not depend on the HTTP filter.
+
 Both sides degrade rather than fail when the id is absent. A producer publishing
 outside a request context, such as the demo data seeder, has no id in MDC and
 generates one. A consumer receiving a message with no header, whether published

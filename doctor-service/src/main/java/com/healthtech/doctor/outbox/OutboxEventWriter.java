@@ -2,9 +2,9 @@ package com.healthtech.doctor.outbox;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.healthtech.doctor.filter.CorrelationIdFilter;
+import com.healthtech.doctor.correlation.CorrelationId;
+import com.healthtech.doctor.event.DomainEventPublisher;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -14,28 +14,20 @@ import java.util.UUID;
 // it describes; OutboxRelay publishes it to Kafka afterwards (see ADR-008).
 @Component
 @RequiredArgsConstructor
-public class OutboxEventWriter {
+public class OutboxEventWriter implements DomainEventPublisher {
 
     private final OutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
-    public void write(String topic, UUID aggregateId, UUID eventId, Object event) {
+    @Override
+    public void publish(String topic, UUID aggregateId, UUID eventId, Object event) {
         outboxRepository.save(OutboxMessage.builder()
                 .id(eventId)
                 .aggregateId(aggregateId.toString())
                 .topic(topic)
                 .payload(serialize(event))
-                .correlationId(correlationIdOrGenerate())
+                .correlationId(CorrelationId.currentOrNew())
                 .build());
-    }
-
-    // Threads the current request's correlation id onto the outgoing Kafka message so a
-    // consumer processing this event can tie its own log lines back to the request that
-    // produced it. Falls back to a fresh id outside a request context (e.g. a test),
-    // matching CorrelationIdFilter's own fallback for a missing incoming header.
-    private String correlationIdOrGenerate() {
-        String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
-        return correlationId != null ? correlationId : UUID.randomUUID().toString();
     }
 
     private String serialize(Object event) {

@@ -14,10 +14,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -46,7 +48,8 @@ class AvailabilityServiceTest {
         availabilityService = new AvailabilityService(
                 validDoctorRepository,
                 appointmentRepository,
-                new SlotPolicy()
+                new SlotPolicy(),
+                Clock.systemDefaultZone()
         );
     }
 
@@ -248,8 +251,68 @@ class AvailabilityServiceTest {
         assertThat(result.getAvailableSlots()).doesNotContain(futureDate.atTime(13, 0));
     }
 
-    // Note: the past-slot filter (today only, step 4 in getAvailableSlots) is not
-    // unit-tested here because it depends on LocalDateTime.now(). Making it testable
-    // would require injecting a java.time.Clock into AvailabilityService. Flagged as a
-    // possible future refactor.
+    // --- past-slot filter (today only), driven by a fixed Clock ---
+
+    private AvailabilityService serviceAt(LocalDateTime now) {
+        Clock fixed = Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+        return new AvailabilityService(validDoctorRepository, appointmentRepository, new SlotPolicy(), fixed);
+    }
+
+    @Test
+    void getAvailableSlots_today_shouldDropSlotsThatStartedBeforeNow() {
+        // Arrange: it is 12:10 on FUTURE_DATE, doctor open 09:00-17:00
+        UUID doctorId = UUID.randomUUID();
+        stubDoctorOpeningHours(doctorId, Set.of(OpeningHours.builder()
+                .dayOfWeek(FUTURE_DATE.getDayOfWeek())
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(17, 0))
+                .build()));
+        stubTakenAppointments(doctorId, FUTURE_DATE, List.of());
+
+        // Act
+        AvailableSlotsResponse result = serviceAt(FUTURE_DATE.atTime(12, 10)).getAvailableSlots(doctorId, FUTURE_DATE);
+
+        // Assert
+        assertThat(result.getAvailableSlots()).containsExactly(
+                FUTURE_DATE.atTime(12, 30), FUTURE_DATE.atTime(13, 0), FUTURE_DATE.atTime(13, 30),
+                FUTURE_DATE.atTime(14, 0), FUTURE_DATE.atTime(14, 30), FUTURE_DATE.atTime(15, 0),
+                FUTURE_DATE.atTime(15, 30), FUTURE_DATE.atTime(16, 0), FUTURE_DATE.atTime(16, 30));
+    }
+
+    @Test
+    void getAvailableSlots_today_slotStartingExactlyNow_shouldBeKept() {
+        // Arrange
+        UUID doctorId = UUID.randomUUID();
+        stubDoctorOpeningHours(doctorId, Set.of(OpeningHours.builder()
+                .dayOfWeek(FUTURE_DATE.getDayOfWeek())
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(10, 30))
+                .build()));
+        stubTakenAppointments(doctorId, FUTURE_DATE, List.of());
+
+        // Act
+        AvailableSlotsResponse result = serviceAt(FUTURE_DATE.atTime(9, 30)).getAvailableSlots(doctorId, FUTURE_DATE);
+
+        // Assert
+        assertThat(result.getAvailableSlots()).containsExactly(FUTURE_DATE.atTime(9, 30), FUTURE_DATE.atTime(10, 0));
+    }
+
+    @Test
+    void getAvailableSlots_dayAfterNow_shouldNotApplyPastSlotFilter() {
+        // Arrange: late evening the day before FUTURE_DATE
+        UUID doctorId = UUID.randomUUID();
+        stubDoctorOpeningHours(doctorId, Set.of(OpeningHours.builder()
+                .dayOfWeek(FUTURE_DATE.getDayOfWeek())
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(10, 0))
+                .build()));
+        stubTakenAppointments(doctorId, FUTURE_DATE, List.of());
+
+        // Act
+        AvailableSlotsResponse result = serviceAt(FUTURE_DATE.minusDays(1).atTime(23, 0))
+                .getAvailableSlots(doctorId, FUTURE_DATE);
+
+        // Assert
+        assertThat(result.getAvailableSlots()).containsExactly(FUTURE_DATE.atTime(9, 0), FUTURE_DATE.atTime(9, 30));
+    }
 }

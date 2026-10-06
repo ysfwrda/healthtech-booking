@@ -7,11 +7,11 @@ import com.healthtech.doctor.dto.DoctorLoginRequest;
 import com.healthtech.doctor.dto.DoctorRegistrationRequest;
 import com.healthtech.doctor.event.DoctorRegistered;
 import com.healthtech.doctor.event.OpeningHoursData;
+import com.healthtech.doctor.event.DomainEventPublisher;
 import com.healthtech.doctor.exception.EmailAlreadyExistsException;
 import com.healthtech.doctor.exception.InvalidCredentialsException;
 import com.healthtech.doctor.exception.SpecialtyNotFoundException;
 import com.healthtech.doctor.mapper.DoctorMapper;
-import com.healthtech.doctor.outbox.OutboxEventWriter;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
 import com.healthtech.doctor.security.DoctorTokenProvider;
@@ -34,7 +34,7 @@ public class DoctorAuthService {
     private final DoctorMapper doctorMapper;
     private final DoctorTokenProvider doctorTokenProvider;
     private final PasswordEncoder passwordEncoder;
-    private final OutboxEventWriter outboxEventWriter;
+    private final DomainEventPublisher eventPublisher;
 
     @Transactional
     public DoctorAuthResponse register(DoctorRegistrationRequest request) {
@@ -63,7 +63,7 @@ public class DoctorAuthService {
                 .openingHours(OpeningHoursData.fromAll(savedDoctor.getOpeningHours()))
                 .registeredAt(savedDoctor.getRegisteredAt())
                 .build();
-        outboxEventWriter.write("doctor.registered", savedDoctor.getId(), event.getEventId(), event);
+        eventPublisher.publish("doctor.registered", savedDoctor.getId(), event.getEventId(), event);
 
         String token = doctorTokenProvider.generateToken(savedDoctor.getId());
         return DoctorAuthResponse.builder()

@@ -11,6 +11,7 @@ import com.healthtech.appointment.repository.AppointmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -26,6 +27,7 @@ public class AvailabilityService {
     private final ValidDoctorRepository validDoctorRepository;
     private final AppointmentRepository appointmentRepository;
     private final SlotPolicy slotPolicy;
+    private final Clock clock;
 
     public AvailableSlotsResponse getAvailableSlots(UUID doctorId, LocalDate date) {
         ValidDoctor doctor = validDoctorRepository.findById(doctorId)
@@ -48,8 +50,8 @@ public class AvailabilityService {
 
         availableSlots.removeAll(takenAppointmentSlots);
 
-        if(date.isEqual(LocalDate.now())) {
-            availableSlots.removeIf(slot -> slot.isBefore(LocalDateTime.now()));
+        if(date.isEqual(LocalDate.now(clock))) {
+            availableSlots.removeIf(slot -> slot.isBefore(LocalDateTime.now(clock)));
         }
 
         return AvailableSlotsResponse.builder()

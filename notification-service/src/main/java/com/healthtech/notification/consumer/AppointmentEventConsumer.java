@@ -2,8 +2,8 @@ package com.healthtech.notification.consumer;
 
 import com.healthtech.notification.event.AppointmentBooked;
 import com.healthtech.notification.event.AppointmentCancelled;
-import com.healthtech.notification.filter.ConsumerCorrelation;
-import com.healthtech.notification.filter.CorrelationIdFilter;
+import com.healthtech.notification.correlation.ConsumerCorrelation;
+import com.healthtech.notification.correlation.CorrelationId;
 import com.healthtech.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -27,7 +27,7 @@ public class AppointmentEventConsumer {
     )
     public void consumeBookedEvent(
             AppointmentBooked event,
-            @Header(value = CorrelationIdFilter.CORRELATION_ID_HEADER, required = false) byte[] correlationIdHeader) {
+            @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
         ConsumerCorrelation.runWith(correlationIdHeader, () -> {
             try {
                 notificationService.createForBookedAppointment(event);
@@ -47,7 +47,7 @@ public class AppointmentEventConsumer {
     )
     public void consumeCancelledEvent(
             AppointmentCancelled event,
-            @Header(value = CorrelationIdFilter.CORRELATION_ID_HEADER, required = false) byte[] correlationIdHeader) {
+            @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
         ConsumerCorrelation.runWith(correlationIdHeader, () -> {
             try {
                 notificationService.createForCancelledAppointment(event);

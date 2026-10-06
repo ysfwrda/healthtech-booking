@@ -1,4 +1,4 @@
-package com.healthtech.notification.filter;
+package com.healthtech.notification.correlation;
 
 import org.slf4j.MDC;
 
@@ -14,11 +14,11 @@ public final class ConsumerCorrelation {
     }
 
     public static void runWith(byte[] correlationIdHeader, Runnable work) {
-        MDC.put(CorrelationIdFilter.MDC_KEY, resolveCorrelationId(correlationIdHeader));
+        MDC.put(CorrelationId.MDC_KEY, resolveCorrelationId(correlationIdHeader));
         try {
             work.run();
         } finally {
-            MDC.remove(CorrelationIdFilter.MDC_KEY);
+            MDC.remove(CorrelationId.MDC_KEY);
         }
     }
 
