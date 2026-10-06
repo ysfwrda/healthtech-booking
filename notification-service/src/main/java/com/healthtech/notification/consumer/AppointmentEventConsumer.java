@@ -29,7 +29,7 @@ public class AppointmentEventConsumer {
     public void consumeBookedEvent(
             AppointmentBooked event,
             @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
-        handle(event, correlationIdHeader, "booked");
+        handle(event, correlationIdHeader);
     }
 
     @KafkaListener(
@@ -40,19 +40,20 @@ public class AppointmentEventConsumer {
     public void consumeCancelledEvent(
             AppointmentCancelled event,
             @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
-        handle(event, correlationIdHeader, "cancelled");
+        handle(event, correlationIdHeader);
     }
 
     // One listener per topic (Kafka binds topics per method); the correlation, recording and
     // logging around each message are shared here.
-    private void handle(AppointmentNotificationEvent event, byte[] correlationIdHeader, String kind) {
+    private void handle(AppointmentNotificationEvent event, byte[] correlationIdHeader) {
         ConsumerCorrelation.runWith(correlationIdHeader, () -> {
             try {
                 notificationService.record(event);
-                log.info("Notification recorded for {} appointment, appointmentId {}", kind, event.getAppointmentId());
+                log.info("Notification recorded, type {}, appointmentId {}",
+                        event.notificationType(), event.getAppointmentId());
             } catch (RuntimeException e) {
-                log.error("Failed to record notification for {} appointment, appointmentId {}",
-                        kind, event.getAppointmentId(), e);
+                log.error("Failed to record notification, type {}, appointmentId {}",
+                        event.notificationType(), event.getAppointmentId(), e);
                 throw e;
             }
         });

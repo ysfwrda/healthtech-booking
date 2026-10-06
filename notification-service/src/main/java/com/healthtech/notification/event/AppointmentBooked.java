@@ -32,9 +32,4 @@ public class AppointmentBooked implements AppointmentNotificationEvent {
     public NotificationType notificationType() {
         return NotificationType.APPOINTMENT_BOOKED;
     }
-
-    @Override
-    public String notificationMessage() {
-        return "Appointment booked for " + dateTime;
-    }
 }

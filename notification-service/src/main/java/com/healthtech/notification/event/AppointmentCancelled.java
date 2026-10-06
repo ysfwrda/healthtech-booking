@@ -28,9 +28,4 @@ public class AppointmentCancelled implements AppointmentNotificationEvent {
     public NotificationType notificationType() {
         return NotificationType.APPOINTMENT_CANCELLED;
     }
-
-    @Override
-    public String notificationMessage() {
-        return "Appointment cancelled for " + dateTime;
-    }
 }

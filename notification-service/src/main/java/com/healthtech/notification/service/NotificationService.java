@@ -17,7 +17,7 @@ public class NotificationService {
                 .patientId(event.getPatientId())
                 .doctorId(event.getDoctorId())
                 .type(event.notificationType())
-                .message(event.notificationMessage())
+                .message(event.notificationType().messageFor(event.getDateTime()))
                 .build();
 
         notificationRepository.save(notification);
