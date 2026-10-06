@@ -115,20 +115,12 @@ public class DoctorSeeder implements CommandLineRunner {
 
         Doctor saved = doctorRepository.saveAndFlush(doctor);
 
-        Set<OpeningHoursData> openingHoursData = saved.getOpeningHours().stream()
-                .map(oh -> OpeningHoursData.builder()
-                        .dayOfWeek(oh.getDayOfWeek())
-                        .startTime(oh.getStartTime())
-                        .endTime(oh.getEndTime())
-                        .build())
-                .collect(Collectors.toSet());
-
         DoctorRegistered event = DoctorRegistered.builder()
                 .eventId(UUID.randomUUID())
                 .doctorId(saved.getId())
                 .firstName(saved.getFirstName())
                 .lastName(saved.getLastName())
-                .openingHours(openingHoursData)
+                .openingHours(OpeningHoursData.fromAll(saved.getOpeningHours()))
                 .registeredAt(saved.getRegisteredAt())
                 .build();
         kafkaTemplate.send("doctor.registered", event);

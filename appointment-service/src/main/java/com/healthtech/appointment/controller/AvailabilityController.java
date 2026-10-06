@@ -1,7 +1,7 @@
 package com.healthtech.appointment.controller;
 
 import com.healthtech.appointment.dto.AvailableSlotsResponse;
-import com.healthtech.appointment.service.AppointmentService;
+import com.healthtech.appointment.service.AvailabilityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,7 +20,7 @@ import java.util.UUID;
 @RequestMapping("/api/availability")
 @RequiredArgsConstructor
 public class AvailabilityController {
-    private final AppointmentService appointmentService;
+    private final AvailabilityService availabilityService;
 
     @Operation(summary = "Get a doctor's available slots for a date")
     @SecurityRequirements
@@ -28,6 +28,6 @@ public class AvailabilityController {
     public AvailableSlotsResponse getAvailability(
             @RequestParam UUID doctorId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return appointmentService.getAvailableSlots(doctorId, date);
+        return availabilityService.getAvailableSlots(doctorId, date);
     }
 }

@@ -1,5 +1,6 @@
 package com.healthtech.notification.event;
 
+import com.healthtech.notification.domain.NotificationType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -14,7 +15,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AppointmentCancelled {
+public class AppointmentCancelled implements AppointmentNotificationEvent {
     private UUID eventId;
     private UUID appointmentId;
     private UUID patientId;
@@ -22,4 +23,9 @@ public class AppointmentCancelled {
     private Integer duration;
     private LocalDateTime dateTime;
     private LocalDateTime cancelledAt;
+
+    @Override
+    public NotificationType notificationType() {
+        return NotificationType.APPOINTMENT_CANCELLED;
+    }
 }
