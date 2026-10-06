@@ -1,5 +1,7 @@
 package com.healthtech.patient.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.patient.domain.Patient;
 import com.healthtech.patient.dto.AuthResponse;
 import com.healthtech.patient.dto.LoginRequest;
@@ -10,17 +12,17 @@ import com.healthtech.patient.exception.InvalidCredentialsException;
 import com.healthtech.patient.exception.UsernameAlreadyExistsException;
 import com.healthtech.patient.filter.CorrelationIdFilter;
 import com.healthtech.patient.mapper.PatientMapper;
+import com.healthtech.patient.outbox.OutboxMessage;
+import com.healthtech.patient.outbox.OutboxRepository;
 import com.healthtech.patient.repository.PatientRepository;
 import com.healthtech.patient.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 @Service
@@ -30,8 +32,10 @@ public class AuthService {
     private final PatientRepository patientRepository;
     private final PatientMapper patientMapper;
     private final PasswordEncoder passwordEncoder;
-    private final KafkaTemplate<String, PatientRegistered> kafkaTemplate;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
+    @Transactional
     public AuthResponse register(RegisterRequest registerRequest) {
         Patient patient = patientMapper.toEntity(registerRequest);
         patient.setPasswordHash(passwordEncoder.encode(registerRequest.getPassword()));
@@ -55,11 +59,13 @@ public class AuthService {
                 .lastName(patient.getLastName())
                 .email(patient.getEmail())
                 .registeredAt(patient.getRegisteredAt()).build();
-        ProducerRecord<String, PatientRegistered> record =
-                new ProducerRecord<>("patient.registered", event);
-        record.headers().add(CorrelationIdFilter.CORRELATION_ID_HEADER,
-                correlationIdOrGenerate().getBytes(StandardCharsets.UTF_8));
-        kafkaTemplate.send(record);
+        outboxRepository.save(OutboxMessage.builder()
+                .id(event.getEventId())
+                .aggregateId(patient.getId().toString())
+                .topic("patient.registered")
+                .payload(serialize(event))
+                .correlationId(correlationIdOrGenerate())
+                .build());
 
         return AuthResponse.builder()
                 .username(patient.getUsername())
@@ -90,5 +96,13 @@ public class AuthService {
     private String correlationIdOrGenerate() {
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         return correlationId != null ? correlationId : UUID.randomUUID().toString();
+    }
+
+    private String serialize(PatientRegistered event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize PatientRegistered event", ex);
+        }
     }
 }

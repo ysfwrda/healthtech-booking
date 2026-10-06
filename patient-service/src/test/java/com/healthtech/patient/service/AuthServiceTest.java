@@ -1,27 +1,26 @@
 package com.healthtech.patient.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.patient.domain.InsuranceType;
 import com.healthtech.patient.domain.Patient;
 import com.healthtech.patient.dto.AuthResponse;
 import com.healthtech.patient.dto.LoginRequest;
 import com.healthtech.patient.dto.RegisterRequest;
-import com.healthtech.patient.event.PatientRegistered;
 import com.healthtech.patient.exception.EmailAlreadyExistsException;
 import com.healthtech.patient.exception.InvalidCredentialsException;
 import com.healthtech.patient.exception.UsernameAlreadyExistsException;
 import com.healthtech.patient.mapper.PatientMapper;
+import com.healthtech.patient.outbox.OutboxRepository;
 import com.healthtech.patient.repository.PatientRepository;
 import com.healthtech.patient.security.JwtTokenProvider;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentMatcher;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDate;
@@ -41,7 +40,8 @@ class AuthServiceTest {
     @Mock private PatientMapper patientMapper;
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private PasswordEncoder passwordEncoder;
-    @Mock private KafkaTemplate<String, PatientRegistered> patientRegisteredKafkaTemplate;
+    @Mock private OutboxRepository outboxRepository;
+    @Spy private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @InjectMocks
     private AuthService authService;
@@ -94,9 +94,10 @@ class AuthServiceTest {
         verify(passwordEncoder).encode("secret123");
         verify(patientRepository).saveAndFlush(patient);
         verify(jwtTokenProvider).generateToken(patientId);
-        ArgumentMatcher<ProducerRecord<String, PatientRegistered>> matchesRegisteredRecord = record ->
-                record.topic().equals("patient.registered") && record.value() instanceof PatientRegistered;
-        verify(patientRegisteredKafkaTemplate, times(1)).send(argThat(matchesRegisteredRecord));
+        verify(outboxRepository, times(1)).save(argThat(row ->
+                row.getTopic().equals("patient.registered")
+                        && row.getAggregateId().equals(patientId.toString())
+                        && row.getPayload() != null));
     }
 
     @Test

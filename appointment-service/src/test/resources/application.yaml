@@ -8,7 +8,7 @@ spring:
   sql:
     init:
       mode: always
-      platform: postgres
+      platform: postgresql
   kafka:
     bootstrap-servers: localhost:9092
     producer:

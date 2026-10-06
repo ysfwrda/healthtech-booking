@@ -1,5 +1,7 @@
 package com.healthtech.appointment.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.appointment.domain.Appointment;
 import com.healthtech.appointment.domain.AppointmentStatus;
 import com.healthtech.appointment.dto.AppointmentRequest;
@@ -10,18 +12,18 @@ import com.healthtech.appointment.event.AppointmentCancelled;
 import com.healthtech.appointment.exception.*;
 import com.healthtech.appointment.filter.CorrelationIdFilter;
 import com.healthtech.appointment.mapper.AppointmentMapper;
+import com.healthtech.appointment.outbox.OutboxMessage;
+import com.healthtech.appointment.outbox.OutboxRepository;
 import com.healthtech.appointment.readmodel.*;
 import com.healthtech.appointment.repository.AppointmentRepository;
 import lombok.RequiredArgsConstructor;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -43,9 +45,10 @@ public class AppointmentService {
     private final AppointmentMapper appointmentMapper;
     private final ValidPatientRepository validPatientRepository;
     private final ValidDoctorRepository validDoctorRepository;
-    private final KafkaTemplate <String, AppointmentBooked> bookedEventKafkaTemplate;
-    private final KafkaTemplate<String, AppointmentCancelled> cancelledEventKafkaTemplate;
+    private final OutboxRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
+    @Transactional
     public AppointmentResponse bookAppointment(AppointmentRequest request, UUID patientId) {
         Appointment appointment = appointmentMapper.toEntity(request);
         appointment.setPatientId(patientId);
@@ -83,7 +86,11 @@ public class AppointmentService {
 
         Appointment saved;
         try {
-            saved = appointmentRepository.save(appointment);
+            // saveAndFlush, not save: bookAppointment is now @Transactional, so a plain save()
+            // would just enqueue the insert and defer the actual flush to commit time - well
+            // after this catch block - letting the constraint violation escape untranslated
+            // instead of becoming SlotAlreadyBookedException.
+            saved = appointmentRepository.saveAndFlush(appointment);
         }
         catch (DataIntegrityViolationException e) {
             throw new SlotAlreadyBookedException(appointment.getDoctorId(), appointment.getDateTime());
@@ -103,15 +110,12 @@ public class AppointmentService {
                 .bookedAt(saved.getCreatedAt())
                 .build();
 
-        ProducerRecord<String, AppointmentBooked> bookedRecord =
-                new ProducerRecord<>("appointment.booked", event);
-        bookedRecord.headers().add(CorrelationIdFilter.CORRELATION_ID_HEADER,
-                correlationIdOrGenerate().getBytes(StandardCharsets.UTF_8));
-        bookedEventKafkaTemplate.send(bookedRecord);
+        saveOutboxRow(event.getEventId(), saved.getId(), "appointment.booked", event);
         log.info("Appointment booked, appointmentId {}", saved.getId());
         return appointmentMapper.toResponse(saved);
     }
 
+    @Transactional
     public AppointmentResponse cancelAppointment(UUID appointmentId, UUID patientId) {
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new AppointmentNotFoundException("Appointment not found: " + appointmentId));
@@ -131,11 +135,7 @@ public class AppointmentService {
                 .cancelledAt(LocalDateTime.now())
                 .build();
 
-        ProducerRecord<String, AppointmentCancelled> cancelledRecord =
-                new ProducerRecord<>("appointment.cancelled", event);
-        cancelledRecord.headers().add(CorrelationIdFilter.CORRELATION_ID_HEADER,
-                correlationIdOrGenerate().getBytes(StandardCharsets.UTF_8));
-        cancelledEventKafkaTemplate.send(cancelledRecord);
+        saveOutboxRow(event.getEventId(), saved.getId(), "appointment.cancelled", event);
         log.info("Appointment cancelled, appointmentId {}", saved.getId());
         return appointmentMapper.toResponse(saved);
     }
@@ -194,5 +194,23 @@ public class AppointmentService {
     private String correlationIdOrGenerate() {
         String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
         return correlationId != null ? correlationId : UUID.randomUUID().toString();
+    }
+
+    private String serialize(Object event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to serialize " + event.getClass().getSimpleName() + " event", ex);
+        }
+    }
+
+    private void saveOutboxRow(UUID eventId, UUID aggregateId, String topic, Object event) {
+        outboxRepository.save(OutboxMessage.builder()
+                .id(eventId)
+                .aggregateId(aggregateId.toString())
+                .topic(topic)
+                .payload(serialize(event))
+                .correlationId(correlationIdOrGenerate())
+                .build());
     }
 }

@@ -1,5 +1,6 @@
 package com.healthtech.appointment.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.appointment.domain.Appointment;
 import com.healthtech.appointment.domain.AppointmentStatus;
 import com.healthtech.appointment.dto.AppointmentRequest;
@@ -12,22 +13,20 @@ import com.healthtech.appointment.exception.AppointmentNotFoundException;
 import com.healthtech.appointment.exception.SlotAlreadyBookedException;
 import com.healthtech.appointment.exception.DoctorNotFoundException;
 import com.healthtech.appointment.mapper.AppointmentMapper;
+import com.healthtech.appointment.outbox.OutboxRepository;
 import com.healthtech.appointment.readmodel.OpeningHours;
 import com.healthtech.appointment.readmodel.ValidDoctor;
 import com.healthtech.appointment.readmodel.ValidDoctorRepository;
 import com.healthtech.appointment.readmodel.ValidPatient;
 import com.healthtech.appointment.readmodel.ValidPatientRepository;
 import com.healthtech.appointment.repository.AppointmentRepository;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatcher;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.kafka.core.KafkaTemplate;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -60,10 +59,9 @@ class AppointmentServiceTest {
     private ValidDoctorRepository validDoctorRepository;
 
     @Mock
-    private KafkaTemplate<String, AppointmentBooked> bookedEventKafkaTemplate;
+    private OutboxRepository outboxRepository;
 
-    @Mock
-    private KafkaTemplate<String, AppointmentCancelled> cancelledEventKafkaTemplate;
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     private AppointmentService appointmentService;
 
@@ -74,8 +72,8 @@ class AppointmentServiceTest {
                 appointmentMapper,
                 validPatientRepository,
                 validDoctorRepository,
-                bookedEventKafkaTemplate,
-                cancelledEventKafkaTemplate
+                outboxRepository,
+                objectMapper
         );
     }
 
@@ -101,7 +99,9 @@ class AppointmentServiceTest {
         UUID patientId = UUID.randomUUID();
         UUID doctorId = UUID.randomUUID();
         LocalDateTime dateTime = LocalDateTime.of(2026, 8, 10, 10, 0);
+        UUID appointmentId = UUID.randomUUID();
         Appointment appointment = Appointment.builder()
+                .id(appointmentId)
                 .patientId(patientId)
                 .doctorId(doctorId)
                 .dateTime(dateTime)
@@ -120,7 +120,7 @@ class AppointmentServiceTest {
 
         stubValidReadModel(patientId, doctorId, dateTime);
         when(appointmentMapper.toEntity(request)).thenReturn(appointment);
-        when(appointmentRepository.save(any(Appointment.class))).thenReturn(appointment);
+        when(appointmentRepository.saveAndFlush(any(Appointment.class))).thenReturn(appointment);
         when(appointmentMapper.toResponse(appointment)).thenReturn(response);
 
         // Act
@@ -129,10 +129,11 @@ class AppointmentServiceTest {
         // Assert
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
         assertThat(result.getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
-        verify(appointmentRepository, times(1)).save(appointment);
-        ArgumentMatcher<ProducerRecord<String, AppointmentBooked>> matchesBookedRecord = record ->
-                record.topic().equals("appointment.booked") && record.value() instanceof AppointmentBooked;
-        verify(bookedEventKafkaTemplate, times(1)).send(argThat(matchesBookedRecord));
+        verify(appointmentRepository, times(1)).saveAndFlush(appointment);
+        verify(outboxRepository, times(1)).save(argThat(row ->
+                row.getTopic().equals("appointment.booked")
+                        && row.getAggregateId().equals(appointmentId.toString())
+                        && row.getPayload() != null));
     }
 
     @Test
@@ -145,6 +146,7 @@ class AppointmentServiceTest {
         LocalDateTime dateTime = LocalDateTime.of(2026, 8, 10, 10, 0);
 
         Appointment appointment = Appointment.builder()
+                .id(UUID.randomUUID())
                 .patientId(mapperPatientId)
                 .doctorId(doctorId)
                 .dateTime(dateTime)
@@ -159,7 +161,7 @@ class AppointmentServiceTest {
 
         stubValidReadModel(tokenPatientId, doctorId, dateTime);
         when(appointmentMapper.toEntity(request)).thenReturn(appointment);
-        when(appointmentRepository.save(any(Appointment.class))).thenReturn(appointment);
+        when(appointmentRepository.saveAndFlush(any(Appointment.class))).thenReturn(appointment);
         when(appointmentMapper.toResponse(appointment)).thenReturn(AppointmentResponse.builder().build());
 
         // Act
@@ -167,7 +169,7 @@ class AppointmentServiceTest {
 
         // Assert: the persisted appointment carries the token's patientId, not the mapper's
         ArgumentCaptor<Appointment> savedCaptor = ArgumentCaptor.forClass(Appointment.class);
-        verify(appointmentRepository).save(savedCaptor.capture());
+        verify(appointmentRepository).saveAndFlush(savedCaptor.capture());
         assertThat(savedCaptor.getValue().getPatientId()).isEqualTo(tokenPatientId);
         assertThat(savedCaptor.getValue().getPatientId()).isNotEqualTo(mapperPatientId);
     }
@@ -197,9 +199,10 @@ class AppointmentServiceTest {
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
         assertThat(result.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
         verify(appointmentRepository, times(1)).save(appointment);
-        ArgumentMatcher<ProducerRecord<String, AppointmentCancelled>> matchesCancelledRecord = record ->
-                record.topic().equals("appointment.cancelled") && record.value() instanceof AppointmentCancelled;
-        verify(cancelledEventKafkaTemplate, times(1)).send(argThat(matchesCancelledRecord));
+        verify(outboxRepository, times(1)).save(argThat(row ->
+                row.getTopic().equals("appointment.cancelled")
+                        && row.getAggregateId().equals(appointment.getId().toString())
+                        && row.getPayload() != null));
     }
 
     @Test
@@ -222,7 +225,7 @@ class AppointmentServiceTest {
 
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
         verify(appointmentRepository, never()).save(any());
-        verify(cancelledEventKafkaTemplate, never()).send(any(ProducerRecord.class));
+        verify(outboxRepository, never()).save(any());
     }
 
     @Test
@@ -237,7 +240,7 @@ class AppointmentServiceTest {
                 .hasMessage("Appointment not found: " + appointmentId);
 
         verify(appointmentRepository, never()).save(any());
-        verify(cancelledEventKafkaTemplate, never()).send(any(ProducerRecord.class));
+        verify(outboxRepository, never()).save(any());
     }
 
     @Test
@@ -265,18 +268,18 @@ class AppointmentServiceTest {
 
         stubValidReadModel(patientId, doctorId, dateTime);
         when(appointmentMapper.toEntity(request)).thenReturn(appointment);
-        when(appointmentRepository.save(any(Appointment.class)))
+        when(appointmentRepository.saveAndFlush(any(Appointment.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate key"));
 
         // Act & Assert
         assertThatThrownBy(() -> appointmentService.bookAppointment(request, patientId))
                 .isInstanceOf(SlotAlreadyBookedException.class);
 
-        verify(bookedEventKafkaTemplate, never()).send(any(ProducerRecord.class));
+        verify(outboxRepository, never()).save(any());
     }
 
     @Test
-    void bookAppointment_shouldPublishEventWithCorrectAppointmentFields() {
+    void bookAppointment_shouldPublishEventWithCorrectAppointmentFields() throws Exception {
         // Arrange
         UUID patientId = UUID.randomUUID();
         UUID doctorId = UUID.randomUUID();
@@ -299,17 +302,18 @@ class AppointmentServiceTest {
 
         stubValidReadModel(patientId, doctorId, dateTime);
         when(appointmentMapper.toEntity(request)).thenReturn(appointment);
-        when(appointmentRepository.save(any(Appointment.class))).thenReturn(appointment);
+        when(appointmentRepository.saveAndFlush(any(Appointment.class))).thenReturn(appointment);
         when(appointmentMapper.toResponse(appointment)).thenReturn(AppointmentResponse.builder().build());
 
         // Act
         appointmentService.bookAppointment(request, patientId);
 
         // Assert: event carries the saved appointment's IDs
-        ArgumentCaptor<ProducerRecord<String, AppointmentBooked>> recordCaptor = ArgumentCaptor.forClass(ProducerRecord.class);
-        verify(bookedEventKafkaTemplate).send(recordCaptor.capture());
-        assertThat(recordCaptor.getValue().topic()).isEqualTo("appointment.booked");
-        AppointmentBooked event = recordCaptor.getValue().value();
+        ArgumentCaptor<com.healthtech.appointment.outbox.OutboxMessage> rowCaptor =
+                ArgumentCaptor.forClass(com.healthtech.appointment.outbox.OutboxMessage.class);
+        verify(outboxRepository).save(rowCaptor.capture());
+        assertThat(rowCaptor.getValue().getTopic()).isEqualTo("appointment.booked");
+        AppointmentBooked event = objectMapper.readValue(rowCaptor.getValue().getPayload(), AppointmentBooked.class);
         assertThat(event.getAppointmentId()).isEqualTo(appointment.getId());
         assertThat(event.getPatientId()).isEqualTo(patientId);
         assertThat(event.getDoctorId()).isEqualTo(doctorId);
@@ -328,6 +332,7 @@ class AppointmentServiceTest {
         UUID doctorId = UUID.randomUUID();
         LocalDateTime dateTime = LocalDateTime.of(2026, 8, 10, 10, 0);
         Appointment appointment = Appointment.builder()
+                .id(UUID.randomUUID())
                 .patientId(patientId)
                 .doctorId(doctorId)
                 .dateTime(dateTime)
@@ -342,7 +347,7 @@ class AppointmentServiceTest {
 
         stubValidReadModel(patientId, doctorId, dateTime);
         when(appointmentMapper.toEntity(request)).thenReturn(appointment);
-        when(appointmentRepository.save(any(Appointment.class))).thenReturn(appointment);
+        when(appointmentRepository.saveAndFlush(any(Appointment.class))).thenReturn(appointment);
         when(appointmentMapper.toResponse(appointment)).thenReturn(AppointmentResponse.builder().build());
 
         // Act
@@ -374,9 +379,10 @@ class AppointmentServiceTest {
 
         // Assert
         assertThat(result.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
-        ArgumentMatcher<ProducerRecord<String, AppointmentCancelled>> matchesCancelledRecord = record ->
-                record.topic().equals("appointment.cancelled") && record.value() instanceof AppointmentCancelled;
-        verify(cancelledEventKafkaTemplate, times(1)).send(argThat(matchesCancelledRecord));
+        verify(outboxRepository, times(1)).save(argThat(row ->
+                row.getTopic().equals("appointment.cancelled")
+                        && row.getAggregateId().equals(appointment.getId().toString())
+                        && row.getPayload() != null));
     }
 
     @Test
