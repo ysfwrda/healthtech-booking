@@ -268,6 +268,32 @@ public class DoctorIntegrationTest {
     }
 
     @Test
+    void register_offGridOpeningHours_returns400WithGridError() throws Exception {
+        // Arrange
+        OpeningHoursDto offGrid = OpeningHoursDto.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(9, 15))
+                .endTime(LocalTime.of(12, 0))
+                .build();
+
+        DoctorRegistrationRequest request = validRequestBuilder("offgrid.doctor@example.com")
+                .openingHours(Set.of(offGrid))
+                .build();
+
+        // Act
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                "/api/doctors/register", request, String.class);
+
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        JsonNode problem = new ObjectMapper().readTree(response.getBody());
+        assertThat(problem.get("title").asText()).isEqualTo("Validation Error");
+        assertThat(problem.get("errors").get("openingHours").asText())
+                .isEqualTo("Opening hours for MONDAY must start and end on the hour or half hour");
+        assertThat(doctorRepository.findByEmail("offgrid.doctor@example.com")).isEmpty();
+    }
+
+    @Test
     void register_backToBackOpeningHours_returns201() {
         OpeningHoursDto morning = OpeningHoursDto.builder()
                 .dayOfWeek(DayOfWeek.MONDAY)

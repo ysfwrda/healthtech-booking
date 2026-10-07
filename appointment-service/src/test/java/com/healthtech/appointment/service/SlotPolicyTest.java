@@ -63,4 +63,71 @@ class SlotPolicyTest {
         // Act and Assert
         assertThat(slotPolicy.slotsWithin(DATE, hours)).isEmpty();
     }
+
+    @Test
+    void slotsWithin_offGridStart_shouldStartAtNextAlignedSlot() {
+        // Arrange: a block stored before doctor-service rejected off-grid opening hours
+        OpeningHours hours = OpeningHours.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(9, 15))
+                .endTime(LocalTime.of(11, 0))
+                .build();
+
+        // Act and Assert
+        assertThat(slotPolicy.slotsWithin(DATE, hours)).containsExactly(
+                DATE.atTime(9, 30), DATE.atTime(10, 0), DATE.atTime(10, 30));
+    }
+
+    @Test
+    void slotsWithin_offGridSecondsInStart_shouldStartAtNextAlignedSlot() {
+        // Arrange
+        OpeningHours hours = OpeningHours.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(9, 0, 30))
+                .endTime(LocalTime.of(10, 0))
+                .build();
+
+        // Act and Assert
+        assertThat(slotPolicy.slotsWithin(DATE, hours)).containsExactly(DATE.atTime(9, 30));
+    }
+
+    @Test
+    void slotsWithin_offGridEnd_shouldStopAtLastSlotEndingBeforeClosing() {
+        // Arrange
+        OpeningHours hours = OpeningHours.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(10, 45))
+                .build();
+
+        // Act and Assert
+        assertThat(slotPolicy.slotsWithin(DATE, hours)).containsExactly(
+                DATE.atTime(9, 0), DATE.atTime(9, 30), DATE.atTime(10, 0));
+    }
+
+    @Test
+    void slotsWithin_blockEndingJustAfterMidnight_shouldBeEmpty() {
+        // Arrange: endTime minus one slot would wrap to 23:40 if computed on LocalTime
+        OpeningHours hours = OpeningHours.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.MIDNIGHT)
+                .endTime(LocalTime.of(0, 10))
+                .build();
+
+        // Act and Assert
+        assertThat(slotPolicy.slotsWithin(DATE, hours)).isEmpty();
+    }
+
+    @Test
+    void slotsWithin_offGridStartInLastHalfHour_shouldNotRollIntoNextDay() {
+        // Arrange: rounding 23:45 up to the grid lands on the next day's midnight
+        OpeningHours hours = OpeningHours.builder()
+                .dayOfWeek(DayOfWeek.MONDAY)
+                .startTime(LocalTime.of(23, 45))
+                .endTime(LocalTime.of(23, 59))
+                .build();
+
+        // Act and Assert
+        assertThat(slotPolicy.slotsWithin(DATE, hours)).isEmpty();
+    }
 }
