@@ -1,5 +1,6 @@
 package com.healthtech.patient.controller;
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import com.healthtech.patient.dto.PatientResponse;
 import com.healthtech.patient.service.PatientService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +21,10 @@ public class PatientController {
     private final PatientService patientService;
 
     @Operation(summary = "Get a patient profile (own profile only)")
+    @ApiResponse(responseCode = "200", description = "Profile returned")
+    @ApiResponse(responseCode = "401", description = "Missing, invalid or expired token")
+    @ApiResponse(responseCode = "403", description = "The token does not belong to a patient, or the resource belongs to another patient")
+    @ApiResponse(responseCode = "404", description = "Patient not found")
     @GetMapping("/{id}")
     public ResponseEntity<PatientResponse> getPatientProfile(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt){
         UUID requesterId = UUID.fromString(jwt.getSubject());

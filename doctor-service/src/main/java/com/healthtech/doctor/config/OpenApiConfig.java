@@ -23,14 +23,15 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Doctor Service API")
-                        .description("Doctor registration, login, search and specialties.")
+                        .description("Doctor registration, login, search and specialties.\n\n**Authentication:** most endpoints require a JWT. Obtain one via POST /api/doctors/login (or /api/doctors/register) on this service, click **Authorize** and paste the token (without the \"Bearer \" prefix). Endpoints without a lock icon are public.")
                         .version("v1"))
                 .addServersItem(new Server().url(serverUrl))
                 .components(new Components().addSecuritySchemes(BEARER_SCHEME,
                         new SecurityScheme()
                                 .type(SecurityScheme.Type.HTTP)
                                 .scheme("bearer")
-                                .bearerFormat("JWT")))
+                                .bearerFormat("JWT")
+                                .description("JWT from the login endpoint; send as \"Authorization: Bearer <token>\".")))
                 // Applied to every operation; public endpoints opt out with @SecurityRequirements.
                 .addSecurityItem(new SecurityRequirement().addList(BEARER_SCHEME));
     }
