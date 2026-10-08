@@ -70,9 +70,9 @@ them in the same PR.
 3. **The change has been reviewed by someone other than its author.**
    `verify` has run. The subagents it requires reviewed the change from
    the task and the diff alone, at the depth its risk tier sets. Every
-   blocking `code-reviewer` finding went to a `finding-verifier`. Confirmed findings are
-   fixed and the fixes re-reviewed. Refuted findings are listed in the PR
-   with the verifier's evidence.
+   blocking `code-reviewer` finding went to a `finding-verifier`.
+   Confirmed findings are fixed and the fixes re-reviewed. Refuted
+   findings are listed in the PR with the verifier's evidence.
 4. **Endpoint changes are checked on the live stack**
    (`docker compose up -d --build`, then `endpoint-tester` or the scripts),
    not only in tests.

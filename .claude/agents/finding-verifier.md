@@ -1,6 +1,6 @@
 ---
 name: finding-verifier
-description: Tries to refute one review finding against the code before it is acted on. Use from the verify skill for every blocking finding a reviewing agent reports, one verifier per finding. Input is the task, the diff reference and the finding as the reviewer wrote it. Returns CONFIRMED, REFUTED or UNCERTAIN with file:line evidence. Does not look for new problems, propose fixes, or judge style.
+description: Tries to refute one review finding against the code before it is acted on. Use from the verify skill for every blocking finding `code-reviewer` reports, one verifier per finding, and for a second check of a refuted security finding. Input is the task, the diff reference and the finding as the reviewer wrote it. Returns CONFIRMED, REFUTED or UNCERTAIN with file:line evidence. Does not look for new problems, propose fixes, or judge style.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

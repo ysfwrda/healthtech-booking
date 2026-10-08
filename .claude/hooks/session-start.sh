@@ -1,6 +1,8 @@
 #!/bin/bash
 # Prepares a Claude Code cloud session so every test layer can run:
 # Docker for Testcontainers, a JWT key pair in keys/, Maven and npm deps.
+# Registered without a matcher on purpose: a resumed session can land on a
+# fresh container, and on a prepared one this takes about a second.
 set -euo pipefail
 
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then

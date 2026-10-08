@@ -52,8 +52,9 @@ subagents, which start without this session's context. Keep it that way.
 ### Which agents
 
 Apply the trigger list in CLAUDE.md to the changed files:
-- Any change outside `docs/` and `*.md`: `code-reviewer`, at the depth
-  below.
+- Any change outside `docs/` and `*.md`, and any change under `.claude/`
+  including its Markdown (rules, agents, skills): `code-reviewer`, at the
+  depth below.
 - `*Controller.java`, `dto/**`, `SecurityConfig`, or JWT classes: also
   `endpoint-tester`. It needs the stack running
   (`docker compose up -d --build`). If you can't start it, say so.
@@ -66,12 +67,13 @@ Apply the trigger list in CLAUDE.md to the changed files:
 ### How deep: set by what the change touches
 
 The deepest tier any changed file falls into applies to the whole change.
-A file that fits no row (tests only, `infrastructure/`, Dockerfiles, build
-config) counts as tier 2.
+A file that fits no row counts as tier 2: test files, `infrastructure/`,
+Dockerfiles, and build config such as plugin or version changes in a
+pom. A new library in a `pom.xml` or `package.json` is tier 3.
 
 | Tier | The change touches | `code-reviewer` first round | Final round |
 |---|---|---|---|
-| 1 | Only tooling: `scripts/`, `.github/`, `.claude/` hooks and settings | One agent, no lens | None |
+| 1 | Only tooling: `scripts/`, `.github/`, anything under `.claude/` | One agent, no lens | None |
 | 2 | Service or frontend code, or service config (`application.yaml`, compose files) | Three agents in parallel: `Lens: correctness`, `Lens: security`, `Lens: consistency` | None |
 | 3 | An "Ask first" area: API contract, schema or events, security, dependencies | As tier 2 | One more full review, no lens, of the whole diff after all fixes |
 
@@ -107,10 +109,17 @@ or an in-session review skill as the review.
 
 This applies to `code-reviewer`, whose findings are judgments labelled
 blocking or optional. The other agents report observed results with
-evidence, and those count as confirmed blocking findings without a
-verifier: a failed `endpoint-tester` case, a Contradicted ADR claim, a
-Missing requirement or un-agreed addition from `spec-to-diff-reviewer`,
-and a mismatch from `config-dependency-auditor`.
+evidence. These count as confirmed blocking findings without a verifier:
+- a failed `endpoint-tester` case
+- a Contradicted claim from `adr-consistency-checker`
+- a Missing or Partially implemented requirement from
+  `spec-to-diff-reviewer`
+- from `config-dependency-auditor`, an unresolved placeholder, an address
+  or wiring mismatch, or anything its verdict says would break the stack
+
+Their other reports are facts, not verdicts, and count as optional:
+dependency version drift, un-agreed additions to a spec, and Unverifiable
+ADR claims. List them in the PR.
 
 For every `code-reviewer` finding labelled blocking, start one
 `finding-verifier` with the task, the same diff reference and the
@@ -121,7 +130,10 @@ nothing of your own: no rebuttal, no context.
   finding the verifier couldn't refute. If you think it's wrong, hand it
   back to the user (see the stop rules in the definition of done).
 - **REFUTED**: don't fix it. List it in the PR with the verifier's
-  evidence.
+  evidence. A refuted security finding (from `Lens: security`, or from the
+  Security section of an unlensed review) first goes to a second, fresh
+  verifier with the same inputs. It counts as refuted only if both refute
+  it; otherwise fix it.
 
 Optional findings aren't verified and never start another round. Fold
 the plainly correct ones into a fix you're already making, and list the
@@ -130,13 +142,18 @@ rest in the PR.
 ### Re-review the fixes only
 
 After fixing, commit and start a fresh `code-reviewer` on the fix
-commits alone (`<base>` = the last reviewed commit), no lens. Verify its
+commits alone (`<base>` = the last reviewed commit), no lens. A fix for
+another agent's finding is also re-checked by a fresh run of that agent
+(`endpoint-tester` on the affected endpoints, `adr-consistency-checker`
+on the ADR, and so on). Verify its
 blocking findings the same way. Repeat until a fix-only round has no
 confirmed blocking findings, unless a stop rule in the definition of
 done applies first. Then run the tier-3 final round if the tier calls for
 it. Its confirmed blocking findings are fixed and re-reviewed with
-fix-only rounds as above; there is no second final round. Never continue an earlier agent with SendMessage; that passes it
-your arguments.
+fix-only rounds as above; there is no second final round.
+
+Never continue an earlier agent with SendMessage; that passes it your
+arguments.
 
 ## 4. Check the conventions CLAUDE.md lists
 
