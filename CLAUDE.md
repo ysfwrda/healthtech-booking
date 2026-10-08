@@ -12,13 +12,13 @@ asked:
   `adr-consistency-checker` against that ADR.
 - When reviewing a diff, PR, or branch against a separate written spec
   document: run `spec-to-diff-reviewer`.
-- After changing `docker-compose.yml` or `docker-compose.images.yml`, any
-  `application.yaml`, or any `pom.xml`: run `config-dependency-auditor`.
+- After changing `docker-compose.yml`, any `application.yaml`, or any
+  `pom.xml`: run `config-dependency-auditor`.
 
 A change is never reviewed by its author. Give each agent only the task
 (verbatim) and the diff or document to check, never your reasoning, your
-summary or the PR description. Every blocking finding goes to
-`finding-verifier` before you act on it. The `verify` skill has the exact
+summary or the PR description. Every blocking `code-reviewer` finding
+goes to `finding-verifier` before you act on it. The `verify` skill has the exact
 prompts, the review depth for each kind of change, and when review stops.
 
 Each agent's file documents its own scope boundary — don't ask one to do

@@ -199,7 +199,7 @@ a known cost, accepted deliberately rather than left as an implicit finding.
 Until extraction, `scripts/check-outbox-drift.sh` runs in CI and fails when the copies of the
 `outbox` package or `DomainEventPublisher` differ in anything other than their package name. It
 does not cover the outbox tests, which are adapted per service, or any other duplicated class
-(for example those listed below, `SecurityConfig` and `OpenApiErrorCustomizer`).
+(for example those listed below, as well as `SecurityConfig` and `OpenApiErrorCustomizer`).
 
 Extraction into a shared module is intended, not rejected. It is deferred because it requires
 either a multi-module Maven build (an aggregator POM) or a versioned artifact published somewhere

@@ -28,7 +28,7 @@ fixed list for every change, so it isn't the author steering you.
 ## Lens
 
 When the prompt has a `Lens:` line, check only that part of "What to
-check", but still report anything critical you come across:
+check", but still report any blocking finding you come across:
 - `Lens: security` → the Security section.
 - `Lens: correctness` → the Code quality section.
 - `Lens: consistency` → the Consistency section, including every claim

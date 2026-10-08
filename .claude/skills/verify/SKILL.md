@@ -58,13 +58,16 @@ Apply the trigger list in CLAUDE.md to the changed files:
   `endpoint-tester`. It needs the stack running
   (`docker compose up -d --build`). If you can't start it, say so.
 - `docs/adr/**`: `adr-consistency-checker` on each changed ADR.
-- `docker-compose*.yml`, `application.yaml`, or `pom.xml`:
-  `config-dependency-auditor`.
+- `docker-compose.yml`, `application.yaml`, or `pom.xml`:
+  `config-dependency-auditor`. (`docker-compose.images.yml` only sets
+  image tags and has nothing for it to check.)
 - A spec document is part of the task: `spec-to-diff-reviewer`.
 
 ### How deep: set by what the change touches
 
 The deepest tier any changed file falls into applies to the whole change.
+A file that fits no row (tests only, `infrastructure/`, Dockerfiles, build
+config) counts as tier 2.
 
 | Tier | The change touches | `code-reviewer` first round | Final round |
 |---|---|---|---|
@@ -102,7 +105,14 @@ or an in-session review skill as the review.
 
 ### Verify each blocking finding before acting on it
 
-For every finding a reviewer labels blocking, start one
+This applies to `code-reviewer`, whose findings are judgments labelled
+blocking or optional. The other agents report observed results with
+evidence, and those count as confirmed blocking findings without a
+verifier: a failed `endpoint-tester` case, a Contradicted ADR claim, a
+Missing requirement or un-agreed addition from `spec-to-diff-reviewer`,
+and a mismatch from `config-dependency-auditor`.
+
+For every `code-reviewer` finding labelled blocking, start one
 `finding-verifier` with the task, the same diff reference and the
 finding copied as the reviewer wrote it. Run them in parallel. Add
 nothing of your own: no rebuttal, no context.
@@ -124,7 +134,8 @@ commits alone (`<base>` = the last reviewed commit), no lens. Verify its
 blocking findings the same way. Repeat until a fix-only round has no
 confirmed blocking findings, unless a stop rule in the definition of
 done applies first. Then run the tier-3 final round if the tier calls for
-it. Never continue an earlier agent with SendMessage; that passes it
+it. Its confirmed blocking findings are fixed and re-reviewed with
+fix-only rounds as above; there is no second final round. Never continue an earlier agent with SendMessage; that passes it
 your arguments.
 
 ## 4. Check the conventions CLAUDE.md lists
@@ -147,7 +158,8 @@ End with a block ready to paste as the PR's Testing section:
 - <service>: `mvn -B test`: N tests, 0 failures
 - Frontend: lint and build pass
 - Outbox copies: identical
-- Agents: code-reviewer (no findings / fixed X), endpoint-tester (N/N cases pass)
+- Agents: code-reviewer (tier N; no findings / fixed X), endpoint-tester (N/N cases pass)
+- Refuted findings: <finding>: <verifier's evidence> (or "none")
 - Not run: <check>: <reason>
 ```
 
