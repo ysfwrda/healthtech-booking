@@ -47,9 +47,19 @@ jobs:
       - name: Test ${{ matrix.service }}
         working-directory: ${{ matrix.service }}
         run: mvn -B test ${{ matrix.test_args }}
+  outbox-drift:
+    name: outbox copies in sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check outbox copies
+        run: scripts/check-outbox-drift.sh
+
   build-and-push:
     name: push ${{ matrix.service }}
-    needs: test                 # waits for every test-matrix leg to pass
+    needs: [ test, outbox-drift ] # waits for every test leg and the drift check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

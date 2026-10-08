@@ -24,6 +24,11 @@ from how `code-reviewer` uses ADRs (trusts the ADR, checks the code).
 
 # Build and test
 
+- Before committing a finished change or opening a PR, run the `verify`
+  skill: it runs the checks below for the files you touched and writes the
+  PR's Testing section.
+- Cloud sessions run `.claude/hooks/session-start.sh`, which starts Docker,
+  generates `keys/`, and downloads Maven and npm dependencies.
 - There is no root pom. Run `mvn -B test` inside each service you touched.
 - The Spring-context tests in patient-service and doctor-service
   (`*IntegrationTest`, `*ApplicationTests`) need `keys/private.pem`; generate
@@ -45,6 +50,8 @@ from how `code-reviewer` uses ADRs (trusts the ADR, checks the code).
   `OutboxEventWriter`) in patient, doctor and appointment services (ADR-008),
   plus `OpenApiErrorCustomizer`, `SecurityConfig` and each `pom.xml`. A fix
   to one copy goes into every copy in the same PR, tests included.
+  `scripts/check-outbox-drift.sh` (also run in CI) fails when the outbox
+  copies differ.
 - Domain events are published through `DomainEventPublisher` inside the
   caller's `@Transactional` method, never with `KafkaTemplate` directly
   (the demo `DoctorSeeder` is the one existing exception).
