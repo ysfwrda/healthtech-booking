@@ -50,9 +50,10 @@ Check every criterion. Each problem is one finding.
    needs; criterion 10 covers that.
 5. **Hard-to-reverse decisions**: data ownership, the data model, event
    payloads and API shapes are expensive to change once built and
-   consumed. Each such decision is justified in the note. One that later
-   work must respect needs an ADR; if the note doesn't plan one, that is a
-   blocking (factual) finding.
+   consumed. Each such decision is justified in the note. A new event
+   payload, endpoint or table whose note says nothing about an ADR is a
+   blocking (factual) finding. Whether some other decision deserves an ADR
+   is a judgment: report it as blocking (trade-off) or optional.
 6. **Boundaries and contracts**: which service owns each piece of data,
    and what each changed API or event looks like to its consumers.
 7. **Hidden "Ask first" changes**: an API contract change, a schema or
@@ -86,10 +87,6 @@ Verdict: approve | revise | needs the user's decision
 | 1 | Task fit | pass / finding / n.a. |
 | ... one row for each criterion above ... |
 
-Rows 4 and 5 always carry their evidence, even on a pass: row 4 names
-the next change you checked against ("pass, next change: <change>"), row
-5 lists the hard-to-reverse decisions you found.
-
 Findings (only for rows marked "finding"):
 - [blocking (factual) | blocking (trade-off) | optional] #<criterion>:
   one or two sentences. Evidence: file:line or ADR section.
@@ -105,6 +102,13 @@ Decisions for the user (only for blocking trade-offs):
 - **blocking (trade-off)**: a judgment call the user should make. It also
   goes under "Decisions for the user".
 - **optional**: improves the design but doesn't block it. At most three.
+
+Rows 4 and 5 are the one exception to "no comments on rows that pass":
+their Result cell always names what you checked, whatever the result.
+- Row 4: `pass, next change: <change>` or `finding, next change: <change>`,
+  or `n.a.` when the task has no plausible follow-up in this area.
+- Row 5: `pass, decisions: <list>` or `finding, decisions: <list>`, or
+  `n.a.` when the design makes no hard-to-reverse decision.
 
 Nothing outside this structure: no restating the design, no comments on
 rows that pass. Keep each finding to two sentences plus its evidence; the

@@ -37,7 +37,7 @@ one can't do the job>
 
 ## Hard-to-reverse decisions
 <data ownership, data model, event payloads, API shapes: each with its
-justification; whether it needs an ADR>
+justification and "ADR planned: yes (which) / no (why not)">
 
 ## Contracts
 <changed endpoints, events, schema; "none" if none>
