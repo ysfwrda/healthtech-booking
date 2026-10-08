@@ -120,7 +120,7 @@ Availability is modeled as a **first-class resource** (`GET /api/availability`),
 is computed from appointment data plus doctor opening hours.
 
 * Slots are a fixed 30-minute grid generated from a doctor's opening hours for the requested day, minus already-taken (
-  non-cancelled) appointments, minus past slots for the current day.
+  non-cancelled) appointments, minus slots that already started today. A date before today has no slots.
 * **Double-booking is prevented at the database level, race-safe.** A Postgres **partial unique index** on
   `(doctor_id, date_time) WHERE status <> 'CANCELLED'` makes concurrent double-bookings impossible: the database rejects
   the second insert atomically, which is mapped to `409`. This avoids the check-then-insert race that application-level
@@ -203,7 +203,7 @@ Documented in [`docs/adr/`](docs/adr/):
 |----------------------------------------------------|-----------------------------------------------------------------------------------------|
 | Notification Service down                          | Kafka retains the event; consumer resumes from last offset on restart, no data loss     |
 | Concurrent double-booking                          | Rejected atomically by the partial unique index, returned as `409`                      |
-| Booking outside opening hours or off the slot grid | Rejected with `400`                                                                     |
+| Booking outside opening hours, off the slot grid, or in the past | Rejected with `400` (a slot starting exactly now is accepted) |
 | Booking for an unknown patient/doctor              | Rejected with `404` (validated against the read-model)                                  |
 | Cancelling another patient's appointment           | Rejected with `403`; no state change                                                    |
 | Appointment not found on cancel                    | `404` problem+json; no partial state change                                             |

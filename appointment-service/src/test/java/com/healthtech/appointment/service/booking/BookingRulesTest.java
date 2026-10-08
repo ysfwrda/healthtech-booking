@@ -49,7 +49,7 @@ class BookingRulesTest {
     void slotAligned_onGrid_shouldPass() {
         // Arrange: the Monday 9-17 doctor fixture
 
-        // Act and Assert
+        // Act & Assert
         assertThatCode(() -> slotAligned.check(MONDAY.atTime(10, 30), mondayNineToFive)).doesNotThrowAnyException();
     }
 
@@ -57,7 +57,7 @@ class BookingRulesTest {
     void slotAligned_offGrid_shouldThrowSlotNotAligned() {
         // Arrange: the Monday 9-17 doctor fixture
 
-        // Act and Assert
+        // Act & Assert
         assertThatThrownBy(() -> slotAligned.check(MONDAY.atTime(10, 15), mondayNineToFive))
                 .isInstanceOf(SlotNotAlignedException.class);
         assertThatThrownBy(() -> slotAligned.check(MONDAY.atTime(10, 0, 30), mondayNineToFive))
@@ -68,7 +68,7 @@ class BookingRulesTest {
     void withinOpeningHours_lastSlotEndingAtClosing_shouldPass() {
         // Arrange: the Monday 9-17 doctor fixture
 
-        // Act and Assert
+        // Act & Assert
         assertThatCode(() -> withinOpeningHours.check(MONDAY.atTime(16, 30), mondayNineToFive))
                 .doesNotThrowAnyException();
     }
@@ -77,7 +77,7 @@ class BookingRulesTest {
     void withinOpeningHours_atClosingOrOnClosedDay_shouldThrowOutsideOpeningHours() {
         // Arrange: the Monday 9-17 doctor fixture
 
-        // Act and Assert
+        // Act & Assert
         assertThatThrownBy(() -> withinOpeningHours.check(MONDAY.atTime(17, 0), mondayNineToFive))
                 .isInstanceOf(OutsideOpeningHoursException.class);
         assertThatThrownBy(() -> withinOpeningHours.check(MONDAY.plusDays(1).atTime(10, 0), mondayNineToFive))
@@ -88,7 +88,7 @@ class BookingRulesTest {
     void notInPast_slotBeforeNow_shouldThrowSlotInPast() {
         // Arrange: now is 12:00
 
-        // Act and Assert
+        // Act & Assert
         assertThatThrownBy(() -> notInPast.check(MONDAY.atTime(11, 30), mondayNineToFive))
                 .isInstanceOf(SlotInPastException.class);
         assertThatThrownBy(() -> notInPast.check(MONDAY.minusDays(7).atTime(12, 0), mondayNineToFive))
@@ -99,7 +99,7 @@ class BookingRulesTest {
     void notInPast_slotExactlyNowOrLater_shouldPass() {
         // Arrange: now is 12:00; a slot starting exactly now is kept, as in availability
 
-        // Act and Assert
+        // Act & Assert
         assertThatCode(() -> notInPast.check(NOW, mondayNineToFive)).doesNotThrowAnyException();
         assertThatCode(() -> notInPast.check(MONDAY.atTime(12, 30), mondayNineToFive)).doesNotThrowAnyException();
         assertThatCode(() -> notInPast.check(MONDAY.plusDays(7).atTime(9, 0), mondayNineToFive))
