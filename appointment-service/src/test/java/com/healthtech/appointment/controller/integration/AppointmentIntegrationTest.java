@@ -222,6 +222,52 @@ public class AppointmentIntegrationTest {
     }
 
     @Test
+    void createAppointment_pastSlot_returns400SlotInThePast() throws Exception {
+        // An aligned slot inside opening hours on a past date: only NotInPastRule rejects it.
+        LocalDate pastDate = LocalDate.now().minusWeeks(1);
+        Set<OpeningHours> openingHours = new HashSet<OpeningHours>();
+        openingHours.add(OpeningHours.builder()
+                .dayOfWeek(pastDate.getDayOfWeek())
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(17, 0)).build());
+
+        final ValidDoctor seededDoctor = ValidDoctor.builder()
+                .doctorId(UUID.randomUUID())
+                .firstName("Valid")
+                .lastName("Doctor")
+                .openingHours(openingHours)
+                .build();
+        validDoctorRepository.save(seededDoctor);
+
+        ValidPatient patient = validPatientRepository.save(ValidPatient.builder()
+                .patientId(UUID.randomUUID())
+                .firstName("Patient")
+                .lastName("Past")
+                .build());
+
+        String token = TestJwtFactory.patientToken(patient.getPatientId(), (RSAPrivateKey) KEY_PAIR.getPrivate());
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        AppointmentRequest request = AppointmentRequest.builder()
+                .doctorId(seededDoctor.getDoctorId())
+                .dateTime(LocalDateTime.of(pastDate, LocalTime.of(9, 0)))
+                .notes("Past slot")
+                .type(AppointmentType.VACCINATION)
+                .build();
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "/api/appointments", HttpMethod.POST,
+                new HttpEntity<>(request, headers),
+                String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        JsonNode problem = new ObjectMapper().readTree(response.getBody());
+        assertThat(problem.get("status").asInt()).isEqualTo(400);
+        assertThat(problem.get("title").asText()).isEqualTo("Slot In The Past");
+    }
+
+    @Test
     void cancelAppointment_notOwner_returns403() throws Exception {
         LocalDate target = LocalDate.now().plusWeeks(1);
         Set<OpeningHours> openingHours = new HashSet<OpeningHours>();

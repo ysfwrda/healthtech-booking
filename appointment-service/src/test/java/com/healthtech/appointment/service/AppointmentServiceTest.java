@@ -10,6 +10,7 @@ import com.healthtech.appointment.event.AppointmentCancelled;
 import com.healthtech.appointment.exception.AppointmentAccessDeniedException;
 import com.healthtech.appointment.exception.AppointmentNotFoundException;
 import com.healthtech.appointment.exception.SlotAlreadyBookedException;
+import com.healthtech.appointment.exception.SlotInPastException;
 import com.healthtech.appointment.mapper.AppointmentMapper;
 import com.healthtech.appointment.outbox.OutboxEventWriter;
 import com.healthtech.appointment.outbox.OutboxRepository;
@@ -20,6 +21,7 @@ import com.healthtech.appointment.readmodel.ValidPatient;
 import com.healthtech.appointment.readmodel.ValidPatientRepository;
 import com.healthtech.appointment.repository.AppointmentRepository;
 import com.healthtech.appointment.service.booking.BookingRule;
+import com.healthtech.appointment.service.booking.NotInPastRule;
 import com.healthtech.appointment.service.booking.SlotAlignedRule;
 import com.healthtech.appointment.service.booking.WithinOpeningHoursRule;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,10 +68,16 @@ class AppointmentServiceTest {
 
     private AppointmentService appointmentService;
 
-    // The production rules, in their @Order: alignment, then opening hours.
+    // "Now" for booking tests is fixed well before the hardcoded 2026-08-10 slots, so they
+    // stay in the future whenever the suite runs.
+    private static final Clock BOOKING_CLOCK =
+            Clock.fixed(LocalDateTime.of(2026, 8, 1, 12, 0).toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+
+    // The production rules, in their @Order: alignment, opening hours, not in the past.
     private static List<BookingRule> bookingRules() {
         SlotPolicy slotPolicy = new SlotPolicy();
-        return List.of(new SlotAlignedRule(slotPolicy), new WithinOpeningHoursRule(slotPolicy));
+        return List.of(new SlotAlignedRule(slotPolicy), new WithinOpeningHoursRule(slotPolicy),
+                new NotInPastRule(BOOKING_CLOCK));
     }
 
     @BeforeEach
@@ -81,7 +89,7 @@ class AppointmentServiceTest {
                 validDoctorRepository,
                 bookingRules(),
                 new OutboxEventWriter(outboxRepository, objectMapper),
-                Clock.systemDefaultZone()
+                BOOKING_CLOCK
         );
     }
 
@@ -283,6 +291,35 @@ class AppointmentServiceTest {
         assertThatThrownBy(() -> appointmentService.bookAppointment(request, patientId))
                 .isInstanceOf(SlotAlreadyBookedException.class);
 
+        verify(outboxRepository, never()).save(any());
+    }
+
+    @Test
+    void bookAppointment_slotInThePast_shouldThrowSlotInPastAndNotSaveOrPublish() {
+        // Arrange: aligned, within opening hours, but before the fixed "now" (2026-08-01 12:00)
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        LocalDateTime pastSlot = LocalDateTime.of(2026, 7, 27, 10, 0);
+        Appointment appointment = Appointment.builder()
+                .patientId(patientId)
+                .doctorId(doctorId)
+                .dateTime(pastSlot)
+                .type(INITIAL_CONSULTATION)
+                .build();
+        AppointmentRequest request = AppointmentRequest.builder()
+                .doctorId(doctorId)
+                .dateTime(pastSlot)
+                .type(INITIAL_CONSULTATION)
+                .build();
+
+        stubValidReadModel(patientId, doctorId, pastSlot);
+        when(appointmentMapper.toEntity(request)).thenReturn(appointment);
+
+        // Act & Assert
+        assertThatThrownBy(() -> appointmentService.bookAppointment(request, patientId))
+                .isInstanceOf(SlotInPastException.class);
+
+        verify(appointmentRepository, never()).saveAndFlush(any());
         verify(outboxRepository, never()).save(any());
     }
 

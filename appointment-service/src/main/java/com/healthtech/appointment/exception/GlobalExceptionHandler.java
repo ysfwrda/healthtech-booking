@@ -71,6 +71,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problemDetail;
     }
 
+    @ExceptionHandler(SlotInPastException.class)
+    public ProblemDetail handleSlotInPastException(SlotInPastException ex) {
+        log.warn("{}, status 400", ex.getMessage());
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problemDetail.setTitle("Slot In The Past");
+        return problemDetail;
+    }
+
     @ExceptionHandler(SlotAlreadyBookedException.class)
     public ProblemDetail handleSlotAlreadyBookedException(SlotAlreadyBookedException ex) {
         log.warn("Double-book conflict for doctorId {} at slot {}, status 409", ex.getDoctorId(), ex.getSlot());

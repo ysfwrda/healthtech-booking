@@ -29,7 +29,7 @@ public class AppointmentController {
     @Operation(summary = "Book an appointment for the authenticated patient")
     @ApiResponse(responseCode = "201", description = "Appointment booked",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = AppointmentResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failed, malformed request, slot not aligned to the slot grid, or outside the doctor's opening hours")
+    @ApiResponse(responseCode = "400", description = "Validation failed, malformed request, slot not aligned to the slot grid, outside the doctor's opening hours, or slot in the past")
     @ApiResponse(responseCode = "404", description = "Doctor or patient not found. A patient who just registered may briefly get this until their record reaches the appointment service")
     @ApiResponse(responseCode = "409", description = "Slot already booked")
     @PostMapping

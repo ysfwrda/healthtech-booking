@@ -33,6 +33,14 @@ public class AvailabilityService {
         ValidDoctor doctor = validDoctorRepository.findById(doctorId)
                 .orElseThrow(() -> new DoctorNotFoundException(doctorId));
 
+        if (date.isBefore(LocalDate.now(clock))) {
+            return AvailableSlotsResponse.builder()
+                    .doctorId(doctorId)
+                    .date(date)
+                    .availableSlots(List.of())
+                    .build();
+        }
+
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.plusDays(1).atStartOfDay();
 
