@@ -311,7 +311,8 @@ to point at a mounted secret instead (see the Docker Compose table below).
 
 ### Requirements
 
-* Docker and Docker Compose v2 (primary; runs the whole system, from prebuilt images or built from source)
+* Docker and Docker Compose v2 (primary; runs the whole system, from prebuilt images or built from source). Building
+  from source needs BuildKit (the default since Docker 23); the Dockerfiles cache the Maven repository with `RUN --mount=type=cache`
 * Java 21 and Maven 3.9+ (optional; only to run a service on the host or to build the images yourself)
 * `openssl` (to generate the JWT key pair, see Step 2)
 * `curl` and `jq` (for the test script)
@@ -402,6 +403,14 @@ which plain `docker compose pull` and `docker compose up -d` use the images.
 Both options start the services alongside Kafka, Zookeeper, Kafka UI (`http://localhost:8090`), and the four PostgreSQL
 instances, all on a shared Docker network. The services connect to Kafka and their databases by container name. The
 images contain no keys; `./keys` is mounted into the containers at runtime (see Step 2).
+
+**Startup order and recovery.** Each container has a healthcheck, and a service starts only once its dependencies are
+healthy: Zookeeper, then Kafka and the databases, then the three backend services, then the gateway, then the frontend.
+A cold start takes a minute or two. If one of the appointment, patient or doctor services fails to become healthy, the
+gateway and frontend are deliberately not started and `docker compose up -d` exits with an error; look at
+`docker compose ps` and `docker compose logs <service>`. Zookeeper, Kafka and the PostgreSQL containers restart
+automatically after a crash or a reboot of Docker, but the application services do not: after a reboot, run
+`docker compose up -d` again to bring the whole stack back.
 
 Option B reads two optional environment variables:
 
