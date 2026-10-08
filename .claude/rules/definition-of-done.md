@@ -39,8 +39,8 @@ them in the same PR.
 
 1. **Every behavior and path is tested.** Each new or changed behavior
    has unit tests for its happy path and for each failure path:
-   - validation errors, including boundary values on both sides (7, 8, 72
-     and 73 characters in #52)
+   - validation errors, including the values on both sides of each limit
+     (for a password of 8 to 72 characters: 7, 8, 72 and 73)
    - not found, conflict and invalid state
    - 401, 403 and ownership violations
    - failures of a dependency it calls
@@ -59,7 +59,8 @@ them in the same PR.
 
    For a bug, a test reproduces it first and passes after the fix. When
    the fix is a guard (lock, constraint, validation), show the test fails
-   with the guard removed, as #51 did. The frontend has no test setup, so
+   with the guard removed. For example, with a row lock replaced by a
+   plain `findById`, a concurrent-cancel test must fail. The frontend has no test setup, so
    a frontend change says in the PR that it is untested and how it was
    checked by hand. Adding a test runner is a new dependency: ask first.
 2. **Every affected suite passes**, integration tests included. The cloud

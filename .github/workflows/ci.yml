@@ -47,6 +47,7 @@ jobs:
       - name: Test ${{ matrix.service }}
         working-directory: ${{ matrix.service }}
         run: mvn -B test ${{ matrix.test_args }}
+
   outbox-drift:
     name: outbox copies in sync
     runs-on: ubuntu-latest

@@ -22,3 +22,4 @@ set by item 1 of `.claude/rules/definition-of-done.md`.
   doesn't test outbox delivery sets `outbox.relay.fixed-delay-ms=3600000`,
   so the relay doesn't poll Kafka every second during the test.
 - An outbox test change goes into all three services' copies of that test.
+  The copies are adapted per service, so the drift check doesn't cover them.

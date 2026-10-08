@@ -34,8 +34,11 @@ if [ ! -f keys/private.pem ]; then
 fi
 
 # Compile and resolve test plugins for each service without running tests.
+# Best effort: one failing service (e.g. a network hiccup) shouldn't skip the rest.
 for service in api-gateway appointment-service doctor-service notification-service patient-service; do
-  (cd "$service" && mvn -B -q test -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false)
+  (cd "$service" && mvn -B -q test -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false) \
+    || echo "warning: could not prepare $service" >&2
 done
 
-(cd frontend && npm install --no-audit --no-fund --loglevel=error --no-update-notifier)
+(cd frontend && npm install --no-audit --no-fund --loglevel=error --no-update-notifier) \
+  || echo "warning: npm install failed in frontend" >&2

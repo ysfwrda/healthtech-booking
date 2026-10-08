@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Run the checks this repo needs for the current change (per-service Maven tests, frontend lint/build, outbox drift check, and the subagents CLAUDE.md requires for the files touched), then write the PR's Testing section. Use before committing a finished change or opening a PR, or when the user asks to verify, test, or check a change.
+description: Run the checks this repo needs for the current change (per-service Maven tests, frontend lint/build, outbox drift check, and independent review by the subagents CLAUDE.md requires for the files touched), then write the PR's Testing section. Use after committing a finished change and before opening a PR, or when the user asks to verify, test, or check a change.
 ---
 
 # Verify the current change

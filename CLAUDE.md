@@ -35,9 +35,10 @@ call.
 
 # Build and test
 
-- Before committing a finished change or opening a PR, run the `verify`
-  skill: it runs the checks below for the files you touched and writes the
-  PR's Testing section.
+- When a change is finished, commit it, then run the `verify` skill before
+  opening the PR. It runs the checks below for the files you touched, sends
+  the committed diff to the reviewing agents and writes the PR's Testing
+  section.
 - Cloud sessions run `.claude/hooks/session-start.sh`, which starts Docker,
   generates `keys/`, and downloads Maven and npm dependencies.
 - There is no root pom. Run `mvn -B test` inside each service you touched.
@@ -61,8 +62,9 @@ call.
   `OutboxEventWriter`) in patient, doctor and appointment services (ADR-008),
   plus `OpenApiErrorCustomizer`, `SecurityConfig` and each `pom.xml`. A fix
   to one copy goes into every copy in the same PR, tests included.
-  `scripts/check-outbox-drift.sh` (also run in CI) fails when the outbox
-  copies differ.
+  `scripts/check-outbox-drift.sh` (also run in CI) fails when the copies
+  of the `outbox/` package or `DomainEventPublisher` differ. Nothing checks
+  the other copies or the outbox tests, which are adapted per service.
 - Domain events are published through `DomainEventPublisher` inside the
   caller's `@Transactional` method, never with `KafkaTemplate` directly
   (the demo `DoctorSeeder` is the one existing exception).
