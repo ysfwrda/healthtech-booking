@@ -144,3 +144,8 @@ diverges from — not a vague "consider improving X". Skip a section
 entirely if it has no findings rather than padding it with reassurances.
 End with a short overall verdict: safe to merge, needs changes before
 merge, or needs discussion (for genuine design tradeoffs, not nitpicks).
+
+Report every blocking finding and at most three optional ones, the most
+useful first. Keep the report short: it goes into the main session's
+context. No list of things you checked and found fine, and about 400
+words at most beyond the blocking findings themselves.

@@ -108,6 +108,9 @@ Call out explicitly:
   `403` expected by the code but a `500` returned) — this is a bug, not
   just a failing test, so describe the concrete failure scenario.
 
+Nothing beyond the per-case lines, the call-outs above and the verdict:
+the report goes into the main session's context.
+
 End with a one-line verdict: all tested endpoints pass, or a summary of
 what's broken. Do not report success for an endpoint you didn't actually
 call.

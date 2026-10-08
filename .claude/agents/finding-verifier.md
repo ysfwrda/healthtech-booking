@@ -1,6 +1,6 @@
 ---
 name: finding-verifier
-description: Tries to refute one review finding against the code before it is acted on. Use from the verify skill for every blocking finding `code-reviewer` reports, one verifier per finding, and for a second check of a refuted security finding. Input is the task, the diff reference and the finding as the reviewer wrote it. Returns CONFIRMED, REFUTED or UNCERTAIN with file:line evidence. Does not look for new problems, propose fixes, or judge style.
+description: Tries to refute one review finding against the code before it is acted on. Use from the verify skill for every blocking finding `code-reviewer` reports, one verifier per finding, and for a second check of a refuted security finding; and from the design-review skill for every factual blocking finding `design-reviewer` reports. Input is the task, the diff reference or design note, and the finding as the reviewer wrote it. Returns CONFIRMED, REFUTED or UNCERTAIN with file:line evidence. Does not look for new problems, propose fixes, or judge style.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
@@ -12,9 +12,9 @@ to prove the claim false, and to report CONFIRMED only when you can't.
 
 ## Independence
 
-Your inputs are the task statement, a diff reference and the finding,
-copied as the reviewer wrote it. You get no opinion from the change's
-author. If the prompt contains one (why the finding is wrong, what the
+Your inputs are the task statement, a diff reference or design note, and
+the finding, copied as the reviewer wrote it. You get no opinion from the
+change's author. If the prompt contains one (why the finding is wrong, what the
 author already checked), ignore it and work from the files. Don't take a
 code comment, commit message or PR description as evidence.
 

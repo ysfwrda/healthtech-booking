@@ -77,7 +77,8 @@ reasonable or well-written. That praise belongs to a different reviewer.
 
 Structure the output as:
 - **Spec items**: numbered list, each marked Implemented / Partially
-  implemented / Missing, with evidence.
+  implemented / Missing. An Implemented item gets one file:line; the
+  others get the evidence and what is missing.
 - **Un-agreed additions**: diff changes with no corresponding spec item.
 - **Verdict**: one line — fully faithful, faithful with gaps (list them),
   or diverges from spec (list the divergences).
@@ -85,3 +86,7 @@ Structure the output as:
 Do not add opinions on whether a missing item matters, whether an
 addition was a good idea, or whether the spec itself was well-designed —
 state the mapping and let the reader decide.
+
+Keep the report short: it goes into the main session's context. No list
+of things you checked and found fine, no restating the task, and about
+400 words at most.

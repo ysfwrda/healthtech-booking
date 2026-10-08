@@ -72,7 +72,8 @@ for the recurring categories in this repo:
 ## 3. Report
 
 For each numbered claim, mark:
-- **Supported** — cite the file:line evidence that confirms it.
+- **Supported** — one line: the claim number and one file:line. No
+  explanation.
 - **Contradicted** — cite the file:line evidence that disagrees, and
   state the concrete discrepancy (what the ADR says vs. what the code
   does).
@@ -84,3 +85,7 @@ which claims, with the discrepancy). Do not comment on whether the
 underlying architectural decision was sound, and do not review any diff —
 if the user wants that, tell them to use `code-reviewer` or
 `spec-to-diff-reviewer` instead.
+
+Keep the report short: it goes into the main session's context. No list
+of things you checked and found fine, no restating the task, and about
+400 words at most.

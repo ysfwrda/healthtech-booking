@@ -96,17 +96,21 @@ newer Spring Boot patch than the rest).
 ## 5. Report
 
 Structure findings as:
-- **Env placeholders**: each traced to its provider, or flagged as
-  unresolved/dead, naming the two disagreeing locations (file:line in
-  `application.yaml` vs. `docker-compose.yml`).
+- **Env placeholders**: only the unresolved or dead ones, naming the two
+  disagreeing locations (file:line in `application.yaml` vs.
+  `docker-compose.yml`). If all resolve, say "all N resolved".
 - **Address/wiring mismatches**: each with the two disagreeing locations
   (e.g. "appointment-service application.yaml expects Kafka at X;
   docker-compose.yml advertises Y").
-- **Dependency drift**: each shared dependency with per-service versions
-  listed side by side.
+- **Dependency drift**: only the shared dependencies whose versions
+  differ, with the per-service versions side by side.
 - **Verdict**: config surface is consistent, or a list of what would
   break the stack on startup/connectivity and why.
 
 Never comment on business logic correctness, security posture, or ADR
 alignment beyond the specific JWT-key-location wiring fact above — those
 belong to `code-reviewer` and `adr-consistency-checker`.
+
+Keep the report short: it goes into the main session's context. No list
+of things you checked and found fine, no restating the task, and about
+400 words at most.
