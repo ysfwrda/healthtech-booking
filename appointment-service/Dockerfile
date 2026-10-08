@@ -7,13 +7,20 @@ WORKDIR /app
 # Copy ONLY the pom first, resolve dependencies, and cache that as its
 # own layer. This layer rebuilds only when pom.xml changes, not when you
 # edit source. This is the single most important trick for Java builds.
+#
+# The cache mount keeps ~/.m2 between builds (it is not part of the image), so
+# even when the pom or source changes, only new artifacts are downloaded.
+# go-offline alone does not fetch every plugin dependency that `package` needs.
+# The cache is shared by all services built in parallel (default `sharing=shared`).
+# Maven only locks within one process, so a parallel cold build can very rarely
+# hit a corrupted-jar error; rebuilding fixes it and the image is never affected.
 COPY pom.xml .
-RUN mvn dependency:go-offline -B
+RUN --mount=type=cache,target=/root/.m2 mvn dependency:go-offline -B
 
 # Now copy source and build. Editing a .java file invalidates the cache
 # from HERE down only, so your dependencies stay cached.
 COPY src ./src
-RUN mvn clean package -DskipTests -B
+RUN --mount=type=cache,target=/root/.m2 mvn clean package -DskipTests -B
 
 # ---------- Runtime stage ----------
 FROM eclipse-temurin:21-jre AS runtime
