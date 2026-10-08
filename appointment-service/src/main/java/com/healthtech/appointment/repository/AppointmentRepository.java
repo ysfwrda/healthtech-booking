@@ -3,9 +3,11 @@ package com.healthtech.appointment.repository;
 import com.healthtech.appointment.domain.Appointment;
 import com.healthtech.appointment.domain.AppointmentStatus;
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -24,7 +26,11 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
 
     // Row lock for cancel: concurrent cancels of one appointment queue up, so the second sees CANCELLED
     // and takes the idempotent no-op path instead of writing a duplicate appointment.cancelled event.
+    // The wait is capped at 3s via the JDBC query timeout (ms): Hibernate's PostgreSQL dialect ignores
+    // jakarta.persistence.lock.timeout, so a stuck holder would otherwise block the cancel indefinitely.
+    // On expiry the driver cancels the statement and GlobalExceptionHandler answers 503.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.query.timeout", value = "3000"))
     @Query("select a from Appointment a where a.id = :id")
     Optional<Appointment> findByIdForUpdate(@Param("id") UUID id);
 }

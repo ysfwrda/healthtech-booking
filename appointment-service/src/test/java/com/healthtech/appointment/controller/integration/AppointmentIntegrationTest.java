@@ -18,6 +18,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.*;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -39,6 +42,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -73,6 +78,10 @@ public class AppointmentIntegrationTest {
     TestRestTemplate restTemplate;
     @Autowired
     OutboxRepository outboxRepository;
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+    @Autowired
+    PlatformTransactionManager transactionManager;
 
     @Test
     void createAppointment_concurrentUsers_returnStatus409() throws Exception {
@@ -289,66 +298,14 @@ public class AppointmentIntegrationTest {
         assertThat(problem.get("detail").asText()).contains(appointmentId.toString());
     }
 
-    @Test
-    void cancelAppointment_calledTwice_secondCallIsNoOpAndPublishesOneEvent() {
-        LocalDate target = LocalDate.now().plusWeeks(1);
-        Set<OpeningHours> openingHours = new HashSet<OpeningHours>();
-        openingHours.add(OpeningHours.builder()
-                .dayOfWeek(target.getDayOfWeek())
-                .startTime(LocalTime.of(9, 0))
-                .endTime(LocalTime.of(17, 0)).build());
-
-        final ValidDoctor seededDoctor = ValidDoctor.builder()
-                .doctorId(UUID.randomUUID())
-                .firstName("Valid")
-                .lastName("Doctor")
-                .openingHours(openingHours)
-                .build();
-        validDoctorRepository.save(seededDoctor);
-
-        ValidPatient patient = ValidPatient.builder()
-                .patientId(UUID.randomUUID())
-                .firstName("Valid")
-                .lastName("Patient")
-                .build();
-        patient = validPatientRepository.save(patient);
-
-        String token = TestJwtFactory.patientToken(patient.getPatientId(), (RSAPrivateKey) KEY_PAIR.getPrivate());
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(token);
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        AppointmentRequest bookingRequest = AppointmentRequest.builder()
-                .doctorId(seededDoctor.getDoctorId())
-                .dateTime(LocalDateTime.of(target, LocalTime.of(9, 0)))
-                .notes("To be cancelled twice")
-                .type(AppointmentType.VACCINATION)
-                .build();
-        ResponseEntity<AppointmentResponse> bookingResponse = restTemplate.exchange(
-                "/api/appointments", HttpMethod.POST,
-                new HttpEntity<>(bookingRequest, headers),
-                AppointmentResponse.class);
-        assertThat(bookingResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        UUID appointmentId = bookingResponse.getBody().getId();
-
-        String cancelUrl = "/api/appointments/" + appointmentId + "/cancel";
-        ResponseEntity<AppointmentResponse> first = restTemplate.exchange(
-                cancelUrl, HttpMethod.PUT, new HttpEntity<>(headers), AppointmentResponse.class);
-        ResponseEntity<AppointmentResponse> second = restTemplate.exchange(
-                cancelUrl, HttpMethod.PUT, new HttpEntity<>(headers), AppointmentResponse.class);
-
-        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(second.getBody().getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
-        long cancelledRows = outboxRepository.findAll().stream()
-                .filter(m -> m.getAggregateId().equals(appointmentId.toString())
-                        && m.getTopic().equals("appointment.cancelled"))
-                .count();
-        assertThat(cancelledRows).isEqualTo(1);
+    // Seeds a doctor and patient, books a slot a week out and returns what a cancel call needs.
+    private record BookedAppointment(UUID id, HttpHeaders headers) {
+        String cancelUrl() {
+            return "/api/appointments/" + id + "/cancel";
+        }
     }
 
-    @Test
-    void cancelAppointment_concurrentCalls_allReturn200AndPublishOneEvent() throws Exception {
+    private BookedAppointment bookAppointmentForCancel() {
         LocalDate target = LocalDate.now().plusWeeks(1);
         Set<OpeningHours> openingHours = new HashSet<OpeningHours>();
         openingHours.add(OpeningHours.builder()
@@ -377,12 +334,39 @@ public class AppointmentIntegrationTest {
                 new HttpEntity<>(AppointmentRequest.builder()
                         .doctorId(seededDoctor.getDoctorId())
                         .dateTime(LocalDateTime.of(target, LocalTime.of(9, 0)))
-                        .notes("Cancelled concurrently")
+                        .notes("To be cancelled")
                         .type(AppointmentType.VACCINATION)
                         .build(), headers),
                 AppointmentResponse.class);
         assertThat(booking.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        UUID appointmentId = booking.getBody().getId();
+        return new BookedAppointment(booking.getBody().getId(), headers);
+    }
+
+    private long cancelledEventCount(UUID appointmentId) {
+        return outboxRepository.findAll().stream()
+                .filter(m -> m.getAggregateId().equals(appointmentId.toString())
+                        && m.getTopic().equals("appointment.cancelled"))
+                .count();
+    }
+
+    @Test
+    void cancelAppointment_calledTwice_secondCallIsNoOpAndPublishesOneEvent() {
+        BookedAppointment booked = bookAppointmentForCancel();
+
+        ResponseEntity<AppointmentResponse> first = restTemplate.exchange(
+                booked.cancelUrl(), HttpMethod.PUT, new HttpEntity<>(booked.headers()), AppointmentResponse.class);
+        ResponseEntity<AppointmentResponse> second = restTemplate.exchange(
+                booked.cancelUrl(), HttpMethod.PUT, new HttpEntity<>(booked.headers()), AppointmentResponse.class);
+
+        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(second.getBody().getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+        assertThat(cancelledEventCount(booked.id())).isEqualTo(1);
+    }
+
+    @Test
+    void cancelAppointment_concurrentCalls_allReturn200AndPublishOneEvent() throws Exception {
+        BookedAppointment booked = bookAppointmentForCancel();
 
         // All cancels are released together; without the row lock several read "not cancelled"
         // and each writes its own appointment.cancelled outbox row.
@@ -395,8 +379,8 @@ public class AppointmentIntegrationTest {
                     try {
                         countDownLatch.await();
                         ResponseEntity<String> response = restTemplate.exchange(
-                                "/api/appointments/" + appointmentId + "/cancel", HttpMethod.PUT,
-                                new HttpEntity<>(headers), String.class);
+                                booked.cancelUrl(), HttpMethod.PUT,
+                                new HttpEntity<>(booked.headers()), String.class);
                         statusPool.add(response.getStatusCode());
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
@@ -407,11 +391,50 @@ public class AppointmentIntegrationTest {
         }
 
         assertThat(statusPool).hasSize(numberOfCalls).allMatch(s -> s.equals(HttpStatus.OK));
-        long cancelledRows = outboxRepository.findAll().stream()
-                .filter(m -> m.getAggregateId().equals(appointmentId.toString())
-                        && m.getTopic().equals("appointment.cancelled"))
-                .count();
-        assertThat(cancelledRows).isEqualTo(1);
+        assertThat(cancelledEventCount(booked.id())).isEqualTo(1);
+    }
+
+    @Test
+    void cancelAppointment_rowHeldByAnotherTransaction_returns503ThenSucceedsOnceReleased() throws Exception {
+        BookedAppointment booked = bookAppointmentForCancel();
+        CountDownLatch rowLocked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+
+        try (ExecutorService holderExecutor = Executors.newSingleThreadExecutor()) {
+            // Another transaction holds the appointment row, as a long-running writer would.
+            Future<?> holder = holderExecutor.submit(() ->
+                    new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                        jdbcTemplate.queryForList("select id from appointments where id = ? for update", booked.id());
+                        rowLocked.countDown();
+                        try {
+                            release.await(30, TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }));
+            assertThat(rowLocked.await(10, TimeUnit.SECONDS)).isTrue();
+
+            long startNanos = System.nanoTime();
+            ResponseEntity<String> blocked = restTemplate.exchange(
+                    booked.cancelUrl(), HttpMethod.PUT, new HttpEntity<>(booked.headers()), String.class);
+            long waitedSeconds = TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - startNanos);
+
+            // The cancel gives up after the lock timeout (3s) instead of waiting for the holder.
+            assertThat(blocked.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+            assertThat(blocked.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("1");
+            assertThat(new ObjectMapper().readTree(blocked.getBody()).get("title").asText()).isEqualTo("Appointment Busy");
+            assertThat(waitedSeconds).isLessThan(15);
+            assertThat(cancelledEventCount(booked.id())).isZero();
+
+            release.countDown();
+            holder.get(10, TimeUnit.SECONDS);
+        }
+
+        ResponseEntity<AppointmentResponse> retry = restTemplate.exchange(
+                booked.cancelUrl(), HttpMethod.PUT, new HttpEntity<>(booked.headers()), AppointmentResponse.class);
+        assertThat(retry.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(retry.getBody().getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+        assertThat(cancelledEventCount(booked.id())).isEqualTo(1);
     }
 
     @Test

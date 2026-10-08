@@ -3,6 +3,8 @@ package com.healthtech.appointment.exception;
 import jakarta.annotation.Nonnull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.*;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -77,6 +79,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problemDetail.setTitle("Slot Already Booked");
         return problemDetail;
+    }
+
+    // Raised when the row lock taken by cancelAppointment is not granted within the repository's query
+    // timeout, i.e. another transaction holds the appointment. Retrying shortly is safe and idempotent.
+    @ExceptionHandler({QueryTimeoutException.class, PessimisticLockingFailureException.class})
+    public ResponseEntity<ProblemDetail> handleLockNotAcquired(RuntimeException ex) {
+        log.warn("Could not lock the appointment in time ({}), status 503", ex.getClass().getSimpleName());
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+                "The appointment is being modified by another request, please retry shortly");
+        problemDetail.setTitle("Appointment Busy");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header(HttpHeaders.RETRY_AFTER, "1")
+                .body(problemDetail);
     }
 
     @ExceptionHandler(AppointmentNotFoundException.class)
