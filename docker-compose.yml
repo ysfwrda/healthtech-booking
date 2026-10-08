@@ -14,6 +14,10 @@
 # override file (see README, Local Setup). Generate the JWT keys in ./keys
 # first.
 #
+# Startup order: every service waits for its dependencies to be HEALTHY (not just
+# started). Infrastructure (Zookeeper, Kafka, Postgres) restarts itself after a
+# crash; the application services do not, so a failing service stays visibly down.
+#
 # Usage:
 #   docker compose up -d --build      → build the services from source and start everything
 #   docker compose -f docker-compose.yml -f docker-compose.images.yml pull
@@ -39,6 +43,12 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     networks:
       - healthtech-net
 
@@ -50,7 +60,8 @@ services:
     image: confluentinc/cp-kafka:7.6.0
     container_name: kafka
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     ports:
       - "9092:9092"
     environment:
@@ -61,6 +72,14 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    restart: unless-stopped
+    healthcheck:
+      # Port check on the internal listener the services use; much lighter than a Kafka CLI call.
+      test: ["CMD-SHELL", "nc -z localhost 29092"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     networks:
       - healthtech-net
 
@@ -72,7 +91,8 @@ services:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     ports:
       - "8090:8080"
     environment:
@@ -96,6 +116,12 @@ services:
       - "5432:5432"
     volumes:
       - postgres-appointment-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - healthtech-net
 
@@ -111,6 +137,12 @@ services:
       - "5433:5432"
     volumes:
       - postgres-notification-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - healthtech-net
 
@@ -127,6 +159,12 @@ services:
       - "5434:5432"
     volumes:
       - postgres-patient-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - healthtech-net
 
@@ -142,6 +180,12 @@ services:
       - "5435:5432"
     volumes:
       - postgres-doctor-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - healthtech-net
 
@@ -159,8 +203,16 @@ services:
     volumes:
       - ./keys:/run/keys:ro
     depends_on:
-      - kafka
-      - postgres-appointment
+      kafka:
+        condition: service_healthy
+      postgres-appointment:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8081/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     networks:
       - healthtech-net
 
@@ -179,8 +231,16 @@ services:
     volumes:
       - ./keys:/run/keys:ro
     depends_on:
-      - kafka
-      - postgres-patient
+      kafka:
+        condition: service_healthy
+      postgres-patient:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8083/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     networks:
       - healthtech-net
 
@@ -199,8 +259,16 @@ services:
     volumes:
       - ./keys:/run/keys:ro
     depends_on:
-      - kafka
-      - postgres-doctor
+      kafka:
+        condition: service_healthy
+      postgres-doctor:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8084/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     networks:
       - healthtech-net
 
@@ -215,8 +283,16 @@ services:
       DB_USERNAME: notification_user
       DB_PASSWORD: notification_pass
     depends_on:
-      - kafka
-      - postgres-notification
+      kafka:
+        condition: service_healthy
+      postgres-notification:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8082/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     networks:
       - healthtech-net
 
@@ -234,9 +310,18 @@ services:
     volumes:
       - ./keys:/run/keys:ro
     depends_on:
-      - appointment-service
-      - patient-service
-      - doctor-service
+      appointment-service:
+        condition: service_healthy
+      patient-service:
+        condition: service_healthy
+      doctor-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     networks:
       - healthtech-net
 
@@ -252,7 +337,8 @@ services:
     ports:
       - "5173:80"
     depends_on:
-      - api-gateway
+      api-gateway:
+        condition: service_healthy
     networks:
       - healthtech-net
 
