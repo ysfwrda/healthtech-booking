@@ -1,5 +1,6 @@
 package com.healthtech.appointment.controller;
 
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -34,7 +35,7 @@ public class AppointmentController {
     @ApiResponse(responseCode = "409", description = "Slot already booked")
     @PostMapping
     public ResponseEntity<AppointmentResponse> bookAppointment(@Valid @RequestBody AppointmentRequest request,
-                                                               @AuthenticationPrincipal Jwt jwt) {
+                                                               @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         UUID patientId = UUID.fromString(jwt.getSubject());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(appointmentService.bookAppointment(request, patientId));
@@ -43,7 +44,7 @@ public class AppointmentController {
     @Operation(summary = "List the authenticated patient's appointments")
     @ApiResponse(responseCode = "200", description = "The patient's appointments, possibly empty")
     @GetMapping
-    public ResponseEntity<List<AppointmentResponse>> getMyAppointments(@AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<List<AppointmentResponse>> getMyAppointments(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         UUID patientId = UUID.fromString(jwt.getSubject());
         return ResponseEntity.ok(appointmentService.getAppointmentsForPatient(patientId));
     }
@@ -53,7 +54,8 @@ public class AppointmentController {
     @ApiResponse(responseCode = "403", description = "The token is not a patient token, or the resource belongs to another patient")
     @ApiResponse(responseCode = "404", description = "Appointment not found")
     @PutMapping("/{id}/cancel")
-    public ResponseEntity<AppointmentResponse> cancelAppointment(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<AppointmentResponse> cancelAppointment(@PathVariable UUID id,
+                                                                 @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         UUID patientId = UUID.fromString(jwt.getSubject());
         return ResponseEntity.status(HttpStatus.OK)
                 .body(appointmentService.cancelAppointment(id, patientId));
