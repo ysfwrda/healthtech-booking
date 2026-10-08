@@ -81,8 +81,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problemDetail;
     }
 
-    // Raised when the row lock taken by cancelAppointment is not granted within the repository's query
-    // timeout, i.e. another transaction holds the appointment. Retrying shortly is safe and idempotent.
+    // The appointment row lock was not granted within the repository's query timeout.
     @ExceptionHandler({QueryTimeoutException.class, PessimisticLockingFailureException.class})
     public ResponseEntity<ProblemDetail> handleLockNotAcquired(RuntimeException ex) {
         log.warn("Could not lock the appointment in time ({}), status 503", ex.getClass().getSimpleName());

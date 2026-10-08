@@ -127,6 +127,10 @@ is computed from appointment data plus doctor opening hours.
   checks suffer from.
 * Cancellation is a **soft delete** (status set to `CANCELLED`), so the audit trail is preserved and the slot becomes
   bookable again. The partial index is what allows a cancelled slot to be re-booked without losing the record.
+* **Cancel is idempotent.** Cancelling an already-cancelled appointment returns `200` with the current state and
+  publishes no new `appointment.cancelled` event. Concurrent cancels of one appointment are serialized by a row lock. If
+  another request holds the row for more than 3 seconds, the endpoint returns `503` (`Appointment Busy`) with
+  `Retry-After: 1`; the cancel can be retried safely.
 
 ---
 
@@ -207,6 +211,8 @@ Documented in [`docs/adr/`](docs/adr/):
 | Booking for an unknown patient/doctor              | Rejected with `404` (validated against the read-model)                                  |
 | Cancelling another patient's appointment           | Rejected with `403`; no state change                                                    |
 | Appointment not found on cancel                    | `404` problem+json; no partial state change                                             |
+| Cancelling an already-cancelled appointment        | `200` with the current state; no new event                                              |
+| Cancel while the appointment row is locked > 3s    | `503` problem+json (`Appointment Busy`) with `Retry-After: 1`; safe to retry            |
 | Duplicate username/email                           | `409` problem+json                                                                      |
 | Kafka downtime                                     | Booking and registration fail explicitly; no silent data loss                           |
 | Duplicate event delivery                           | Read-model consumer is idempotent; event versioning and broader idempotency are Phase 3 |

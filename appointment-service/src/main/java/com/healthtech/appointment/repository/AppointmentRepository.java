@@ -24,11 +24,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
 
     List<Appointment> findByPatientIdOrderByDateTimeAsc(UUID patientId);
 
-    // Row lock for cancel: concurrent cancels of one appointment queue up, so the second sees CANCELLED
-    // and takes the idempotent no-op path instead of writing a duplicate appointment.cancelled event.
-    // The wait is capped at 3s via the JDBC query timeout (ms): Hibernate's PostgreSQL dialect ignores
-    // jakarta.persistence.lock.timeout, so a stuck holder would otherwise block the cancel indefinitely.
-    // On expiry the driver cancels the statement and GlobalExceptionHandler answers 503.
+    // The row lock serializes concurrent cancels. The wait is capped at 3s via the JDBC query timeout,
+    // because the Hibernate PostgreSQL dialect ignores jakarta.persistence.lock.timeout.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.query.timeout", value = "3000"))
     @Query("select a from Appointment a where a.id = :id")
