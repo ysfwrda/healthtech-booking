@@ -71,8 +71,7 @@ call.
   tests included. Nothing checks this automatically; `code-reviewer` looks
   for it.
 - Domain events are published through `DomainEventPublisher` inside the
-  caller's `@Transactional` method, never with `KafkaTemplate` directly
-  (the demo `DoctorSeeder` is the one existing exception).
+  caller's `@Transactional` method, never with `KafkaTemplate` directly.
 - When behavior changes, update the README section and any ADR that
   describes it in the same PR. ADRs must not reference ADRs or specs that
   don't exist in the repo; specs live in `docs/specs/`.
