@@ -99,10 +99,22 @@ stop condition below applies.
 
 ## When to stop and hand back
 
-- **Review**: repeat the fresh review until a round has no blocking
-  findings. Fixes for that round's optional findings don't need another
-  round. If three rounds in a row still raise blocking findings, stop and
-  hand back with the open findings.
+- **Review**: keep running fresh rounds while they find new blocking
+  problems (a bug, a security issue, or a claim the code doesn't
+  support). Optional findings never start another round. The number of
+  rounds is not a reason to stop. Stop and hand back with the evidence
+  when the review stops converging:
+  - **A finding comes back.** A fresh reviewer raises a blocking finding
+    you already fixed or rejected. Either the fix doesn't work or you and
+    the reviewer disagree, and the user should decide. Compare findings
+    across rounds yourself; don't tell the reviewer what earlier rounds
+    found.
+  - **Your fixes cause the findings.** In two rounds in a row, the
+    blocking findings are in lines your previous fixes introduced. The
+    approach needs rethinking, which is the user's call, not another
+    patch.
+  - **A fix leaves the task.** It needs an "Ask first" change, or changes
+    outside what the task asked for.
 - **CI**: a failure outside your change (a check that also fails on
   `main`, or an infrastructure error) gets one re-run. If it fails again,
   hand back with the failing check and why it isn't yours.
