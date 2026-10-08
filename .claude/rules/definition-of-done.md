@@ -40,7 +40,7 @@ them in the same PR.
 1. **Every behavior and path is tested.** Each new or changed behavior
    has unit tests for its happy path and for each failure path:
    - validation errors, including the values on both sides of each limit
-     (for a password of 8 to 72 characters: 7, 8, 72 and 73)
+     (`@Size(min = 8)` on the doctor password: test 7 and 8)
    - not found, conflict and invalid state
    - 401, 403 and ownership violations
    - failures of a dependency it calls
@@ -59,8 +59,9 @@ them in the same PR.
 
    For a bug, a test reproduces it first and passes after the fix. When
    the fix is a guard (lock, constraint, validation), show the test fails
-   with the guard removed. For example, with a row lock replaced by a
-   plain `findById`, a concurrent-cancel test must fail. The frontend has no test setup, so
+   with the guard removed. For example,
+   `createAppointment_concurrentUsers_returnStatus409` must fail without the
+   `ux_active_appointment` unique index. The frontend has no test setup, so
    a frontend change says in the PR that it is untested and how it was
    checked by hand. Adding a test runner is a new dependency: ask first.
 2. **Every affected suite passes**, integration tests included. The cloud
@@ -78,8 +79,11 @@ them in the same PR.
    OpenAPI annotations, README, ADRs, `scripts/test-flow.sh`,
    `scripts/gateway-security-smoke-test.sh` and the frontend when it calls
    the changed endpoint.
-6. **Duplicated code is changed in every copy** (see CLAUDE.md), and
-   `scripts/check-outbox-drift.sh` passes.
+6. **Duplicated code is changed in every copy** (see CLAUDE.md).
+   `scripts/check-outbox-drift.sh` must pass, but it only covers the
+   `outbox/` package and `DomainEventPublisher`. Check the other copies
+   (`OpenApiErrorCustomizer`, `SecurityConfig`, the poms, the outbox tests)
+   yourself.
 7. **You have also re-read the full diff yourself.** This is a hygiene
    pass, not the review. No debug
    output, dead code, unused imports or changes the task didn't need.
