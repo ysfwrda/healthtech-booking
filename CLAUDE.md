@@ -21,3 +21,37 @@ quality/security/consistency using its own judgment, not fidelity to any
 document; `adr-consistency-checker` checks the codebase against an ADR's
 claims (trusts the code, checks the doc), which is the opposite direction
 from how `code-reviewer` uses ADRs (trusts the ADR, checks the code).
+
+# Build and test
+
+- There is no root pom. Run `mvn -B test` inside each service you touched.
+- The Spring-context tests in patient-service and doctor-service
+  (`*IntegrationTest`, `*ApplicationTests`) need `keys/private.pem`; generate
+  the pair as in the README's "JWT Keys" step. Testcontainers needs Docker.
+- Frontend: `npm run lint && npm run build` in `frontend/`.
+- End to end against a running stack: `scripts/test-flow.sh` and
+  `scripts/gateway-security-smoke-test.sh`. Update both when request shapes
+  or demo credentials change.
+- In the PR body, say which test layers you did not run, and why.
+
+# Conventions
+
+- Every test marks its structure with `// Arrange`, `// Act`, `// Assert`
+  comments. One claim per test; class-level comments of at most two lines.
+- Comments describe what the code does today. Don't claim extensibility or
+  guarantees the code doesn't enforce, and keep them short.
+- Some code is duplicated per service on purpose: the outbox
+  (entity, repository, relay, pruning job, `DomainEventPublisher` /
+  `OutboxEventWriter`) in patient, doctor and appointment services (ADR-008),
+  plus `OpenApiErrorCustomizer`, `SecurityConfig` and each `pom.xml`. A fix
+  to one copy goes into every copy in the same PR, tests included.
+- Domain events are published through `DomainEventPublisher` inside the
+  caller's `@Transactional` method, never with `KafkaTemplate` directly
+  (the demo `DoctorSeeder` is the one existing exception).
+- When behavior changes, update the README section and any ADR that
+  describes it in the same PR. ADRs must not reference ADRs or specs that
+  don't exist in the repo; specs live in `docs/specs/`.
+- Commit subjects: `type(scope): subject`, with type one of feat, fix, docs,
+  test, refactor, infra, ci, chore.
+- PR body: `## Summary`, `## Testing` (including what wasn't run), then
+  `Closes #N` when there is an issue.

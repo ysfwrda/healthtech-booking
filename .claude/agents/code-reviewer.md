@@ -24,7 +24,8 @@ isolation — a one-line diff can hide a broken invariant three lines away.
 
 When useful, check `docs/adr/*.md` for the architectural decision a change
 touches (JWT auth: ADR-004, cross-service validation: ADR-005, service
-discovery: ADR-006, correlation IDs: ADR-007) and judge the change against
+discovery: ADR-006, correlation IDs: ADR-007, transactional outbox:
+ADR-008) and judge the change against
 the decision actually recorded there, not against a generic best practice.
 
 ## What to check
@@ -94,6 +95,12 @@ the decision actually recorded there, not against a generic best practice.
 - **Correlation IDs**: cross-service requests should propagate the
   correlation id per ADR-007 — flag new outbound calls or Kafka producers
   that drop it.
+- **Outbox**: domain events must be written through `DomainEventPublisher`
+  inside the caller's transaction (ADR-008) — flag new `KafkaTemplate`
+  sends from business code (the demo `DoctorSeeder` is the one existing
+  exception). The outbox code is deliberately duplicated in
+  patient, doctor and appointment services; flag a fix applied to one copy
+  but not the others.
 
 ## Output
 
