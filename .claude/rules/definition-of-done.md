@@ -65,8 +65,11 @@ them in the same PR.
 2. **Every affected suite passes**, integration tests included. The cloud
    session hook provides Docker and keys. If a layer still can't run, the
    reason must come from the environment, and the PR says so.
-3. **`verify` has run** and the subagents it requires have run. Confirmed
-   findings are fixed; findings you reject are explained in the PR.
+3. **The change has been reviewed by someone other than its author.**
+   `verify` has run, and the subagents it requires reviewed the change
+   from the task and the diff alone, without your reasoning. Confirmed
+   findings are fixed and re-reviewed by a fresh agent. Rejected findings
+   are listed in the PR with the evidence.
 4. **Endpoint changes are checked on the live stack**
    (`docker compose up -d --build`, then `endpoint-tester` or the scripts),
    not only in tests.
@@ -76,7 +79,8 @@ them in the same PR.
    the changed endpoint.
 6. **Duplicated code is changed in every copy** (see CLAUDE.md), and
    `scripts/check-outbox-drift.sh` passes.
-7. **You have re-read the full diff** as a reviewer would. No debug
+7. **You have also re-read the full diff yourself.** This is a hygiene
+   pass, not the review. No debug
    output, dead code, unused imports or changes the task didn't need.
 8. **The PR is open and green.** It has a `type(scope): subject` title and
    a body with `## Summary`, `## Testing` and `Closes #N`. Testing lists

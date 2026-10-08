@@ -43,19 +43,52 @@ as not run; don't call it a pass.
 
 A failing test is a finding to fix or report, never something to skip.
 
-## 3. Run the subagents CLAUDE.md requires
+## 3. Get an independent review from the subagents
 
-Apply the trigger list in CLAUDE.md to the changed files:
-- `*Controller.java`, `dto/**`, `SecurityConfig`, or JWT classes:
-  `code-reviewer` and `endpoint-tester`. `endpoint-tester` needs the stack
-  running (`docker compose up -d --build`). If you can't start it, say so.
+The author of a change doesn't review it. Review happens in the repo's
+subagents, which start without this session's context. Keep it that way.
+
+**Which agents.** Apply the trigger list in CLAUDE.md to the changed files:
+- Any change outside `docs/` and `*.md`: `code-reviewer`.
+- `*Controller.java`, `dto/**`, `SecurityConfig`, or JWT classes: also
+  `endpoint-tester`. It needs the stack running
+  (`docker compose up -d --build`). If you can't start it, say so.
 - `docs/adr/**`: `adr-consistency-checker` on each changed ADR.
 - `docker-compose*.yml`, `application.yaml`, or `pom.xml`:
   `config-dependency-auditor`.
 - A spec document is part of the task: `spec-to-diff-reviewer`.
 
-Run independent agents in parallel. Fix confirmed findings and re-run the
-checks they affect.
+**What each agent gets: the task and the diff, nothing else.** Commit
+first, then send exactly this:
+
+```text
+Task (verbatim from <issue #N | the user's request>):
+<the issue body or the user's words, copied, not paraphrased>
+
+Change: `git diff origin/main...HEAD` on branch <branch> in <repo path>.
+```
+
+`adr-consistency-checker` gets the ADR path instead of the diff, and
+`spec-to-diff-reviewer` also gets the spec path.
+
+Leave out everything that comes from you as the author:
+- your summary of the change or the approach
+- why it's correct, or what you considered and rejected
+- what you already tested or checked
+- what to focus on or skip
+- the PR description, your draft of it, and earlier review findings
+
+Use the named repo agents. Never use a `fork` subagent or any agent that
+inherits this conversation, and don't count your own reading of the diff
+or an in-session review skill as the review.
+
+Run independent agents in parallel.
+
+**Handling findings.** Fix confirmed findings. For a finding you reject,
+put it in the PR with the code evidence that refutes it, so the user
+sees the disagreement. After fixing, start a fresh agent on the updated
+diff with the same two inputs. Don't continue the earlier agent with
+SendMessage, since that passes it your arguments.
 
 ## 4. Check the conventions CLAUDE.md lists
 
