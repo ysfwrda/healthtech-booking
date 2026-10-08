@@ -26,7 +26,9 @@ else
 fi
 
 # Same key generation as CI. The new public.pem replaces the committed one
-# locally, so hide that change from git to keep it out of commits.
+# locally, so hide that change from git to keep it out of commits. If main
+# ever changes keys/public.pem, a pull will refuse to overwrite it: run
+# `git update-index --no-skip-worktree keys/public.pem` and restore it first.
 if [ ! -f keys/private.pem ]; then
   openssl genrsa -out keys/private.pem 2048 2>/dev/null
   openssl rsa -in keys/private.pem -pubout -out keys/public.pem 2>/dev/null

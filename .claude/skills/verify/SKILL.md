@@ -38,7 +38,8 @@ Prerequisites. The cloud session-start hook sets these up; locally, check them:
   a running Docker daemon (`docker info`).
 
 If a prerequisite is missing, still run the tests that don't need it:
-`mvn -B test -Dtest='!*IntegrationTest,!*ApplicationTests'`. Report the rest
+`mvn -B test -Dtest='!*IntegrationTest,!*ApplicationTests,!OutboxPruningJobTest'`
+(`OutboxPruningJobTest` also starts a Postgres container). Report the rest
 as not run; don't call it a pass.
 
 A failing test is a finding to fix or report, never something to skip.
