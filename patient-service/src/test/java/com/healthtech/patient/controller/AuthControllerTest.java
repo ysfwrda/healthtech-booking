@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -18,9 +19,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-// Imports the real SecurityConfig (with a mocked JwtDecoder, as in PatientControllerTest) so
-// the permitAll rule for POST /api/auth/register is exercised rather than Spring's default
-// deny-all fallback.
+// Slice test: real SecurityConfig, so the permitAll rule for /api/auth/register applies.
 @WebMvcTest(AuthController.class)
 @Import(SecurityConfig.class)
 class AuthControllerTest {
@@ -31,7 +30,7 @@ class AuthControllerTest {
     private AuthService authService;
 
     @MockitoBean
-    private org.springframework.security.oauth2.jwt.JwtDecoder jwtDecoder;
+    private JwtDecoder jwtDecoder;
 
     private static String registerJson(String password) {
         return """
@@ -47,15 +46,17 @@ class AuthControllerTest {
                 """.formatted(password);
     }
 
-    // ── POST /api/auth/register ───────────────────────────────────────────────
+    // POST /api/auth/register
 
     @Test
     void register_passwordTooShort_returns400WithPasswordError() throws Exception {
-        // Arrange: a 7-character password is one below the minimum of 8.
-        // Act + Assert
+        // Arrange
+        String password = "\"1234567\"";
+
+        // Act & Assert
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson("\"1234567\"")))
+                        .content(registerJson(password)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.password").exists());
         verify(authService, never()).register(any(RegisterRequest.class));
@@ -63,14 +64,15 @@ class AuthControllerTest {
 
     @Test
     void register_passwordExactlyMinimumLength_returns201() throws Exception {
-        // Arrange: an 8-character password is the shortest accepted value.
+        // Arrange
+        String password = "\"12345678\"";
         when(authService.register(any(RegisterRequest.class)))
                 .thenReturn(AuthResponse.builder().token("jwt").expiresIn(3600L).username("max.mustermann").build());
 
-        // Act + Assert
+        // Act & Assert
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson("\"12345678\"")))
+                        .content(registerJson(password)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.token").value("jwt"));
         verify(authService).register(any(RegisterRequest.class));
@@ -78,11 +80,13 @@ class AuthControllerTest {
 
     @Test
     void register_passwordTooLong_returns400WithPasswordError() throws Exception {
-        // Arrange: 73 characters is one above the BCrypt-safe maximum of 72.
-        // Act + Assert
+        // Arrange
+        String password = "\"" + "a".repeat(73) + "\"";
+
+        // Act & Assert
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson("\"" + "a".repeat(73) + "\"")))
+                        .content(registerJson(password)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.password").exists());
         verify(authService, never()).register(any(RegisterRequest.class));
@@ -90,25 +94,28 @@ class AuthControllerTest {
 
     @Test
     void register_passwordExactlyMaximumLength_returns201() throws Exception {
-        // Arrange: 72 characters is the longest accepted value.
+        // Arrange
+        String password = "\"" + "a".repeat(72) + "\"";
         when(authService.register(any(RegisterRequest.class)))
                 .thenReturn(AuthResponse.builder().token("jwt").expiresIn(3600L).username("max.mustermann").build());
 
-        // Act + Assert
+        // Act & Assert
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson("\"" + "a".repeat(72) + "\"")))
+                        .content(registerJson(password)))
                 .andExpect(status().isCreated());
         verify(authService).register(any(RegisterRequest.class));
     }
 
     @Test
     void register_blankPassword_returns400WithPasswordError() throws Exception {
-        // Arrange: a blank password violates @NotBlank (and @Size).
-        // Act + Assert
+        // Arrange
+        String password = "\"   \"";
+
+        // Act & Assert
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerJson("\"   \"")))
+                        .content(registerJson(password)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.password").exists());
         verify(authService, never()).register(any(RegisterRequest.class));

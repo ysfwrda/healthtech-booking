@@ -30,7 +30,7 @@ public class RegisterRequest {
 
     @NotBlank
     @Size(min = 8, max = 72)
-    @Schema(example = "ChangeMe123!", description = "8 to 72 characters (BCrypt ignores anything beyond 72 bytes)")
+    @Schema(example = "ChangeMe123!", description = "8 to 72 characters")
     private String password;
 
     @NotNull

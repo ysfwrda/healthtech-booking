@@ -460,6 +460,9 @@ curl -X POST http://localhost:8080/api/auth/register \
   }'
 ```
 
+The password must be 8 to 72 characters; anything else returns `400` with a `password` field error. Doctor
+registration requires at least 8 characters.
+
 Register a doctor (public, no token required; issues a DOCTOR JWT immediately, see Current Limitations for what that
 does and doesn't vouch for):
 
