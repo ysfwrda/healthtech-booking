@@ -22,9 +22,8 @@ public class PatientController {
 
     @Operation(summary = "Get a patient profile (own profile only)")
     @ApiResponse(responseCode = "200", description = "Profile returned")
-    @ApiResponse(responseCode = "401", description = "Missing, invalid or expired token")
-    @ApiResponse(responseCode = "403", description = "The token does not belong to a patient, or the resource belongs to another patient")
-    @ApiResponse(responseCode = "404", description = "Patient not found")
+    @ApiResponse(responseCode = "403", description = "The token is not a patient token, or the resource belongs to another patient")
+    @ApiResponse(responseCode = "404", description = "Patient not found (only for a valid token whose patient record no longer exists)")
     @GetMapping("/{id}")
     public ResponseEntity<PatientResponse> getPatientProfile(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt){
         UUID requesterId = UUID.fromString(jwt.getSubject());

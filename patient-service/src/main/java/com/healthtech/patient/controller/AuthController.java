@@ -24,7 +24,6 @@ public class AuthController{
     private final AuthService authService;
     @Operation(summary = "Log in as a patient and obtain a JWT")
     @ApiResponse(responseCode = "200", description = "Logged in; the response contains the JWT")
-    @ApiResponse(responseCode = "400", description = "Validation failed")
     @ApiResponse(responseCode = "401", description = "Invalid username or password")
     @SecurityRequirements
     @PostMapping("/login")
@@ -36,7 +35,6 @@ public class AuthController{
     @Operation(summary = "Register a new patient and obtain a JWT")
     @ApiResponse(responseCode = "201", description = "Registered; the response contains the JWT",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failed")
     @ApiResponse(responseCode = "409", description = "Username or email already registered")
     @SecurityRequirements
     @PostMapping("/register")

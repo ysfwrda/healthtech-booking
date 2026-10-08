@@ -26,7 +26,6 @@ public class DoctorAuthController {
     @Operation(summary = "Register a new doctor and obtain a JWT")
     @ApiResponse(responseCode = "201", description = "Registered; the response contains the JWT",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = DoctorAuthResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failed")
     @ApiResponse(responseCode = "404", description = "A specialty id does not exist")
     @ApiResponse(responseCode = "409", description = "Email already registered")
     @SecurityRequirements
@@ -37,7 +36,6 @@ public class DoctorAuthController {
 
     @Operation(summary = "Log in as a doctor and obtain a JWT")
     @ApiResponse(responseCode = "200", description = "Logged in; the response contains the JWT")
-    @ApiResponse(responseCode = "400", description = "Validation failed")
     @ApiResponse(responseCode = "401", description = "Invalid email or password")
     @SecurityRequirements
     @PostMapping("/login")
