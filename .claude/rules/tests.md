@@ -6,8 +6,9 @@ paths:
 # Java tests
 
 - Mark the structure of every new or changed test with `// Arrange`,
-  `// Act` and `// Assert` comments. Leave untouched tests that lack them
-  alone.
+  `// Act` and `// Assert` comments. When the call is the assertion
+  (`assertThrows`, `mockMvc.perform(...).andExpect(...)`), use one
+  `// Act & Assert` marker. Leave untouched tests that lack markers alone.
 - One claim per test. Split a test that checks two behaviors, and move
   shared setup into helpers.
 - Class-level comments: at most two lines.

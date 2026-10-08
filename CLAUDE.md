@@ -22,6 +22,12 @@ document; `adr-consistency-checker` checks the codebase against an ADR's
 claims (trusts the code, checks the doc), which is the opposite direction
 from how `code-reviewer` uses ADRs (trusts the ADR, checks the code).
 
+# Definition of done
+
+`.claude/rules/definition-of-done.md` says what to decide alone, what to ask
+about first, and when a task counts as done. Merging is always the user's
+call.
+
 # Build and test
 
 - Before committing a finished change or opening a PR, run the `verify`
@@ -58,7 +64,8 @@ from how `code-reviewer` uses ADRs (trusts the ADR, checks the code).
 - When behavior changes, update the README section and any ADR that
   describes it in the same PR. ADRs must not reference ADRs or specs that
   don't exist in the repo; specs live in `docs/specs/`.
-- Commit subjects: `type(scope): subject`, with type one of feat, fix, docs,
-  test, refactor, infra, ci, chore.
+- Branch commits: a plain imperative subject ("Reject slots in the past").
+  PR titles, which become the merge commit subject: `type(scope): subject`,
+  with type one of feat, fix, docs, test, refactor, infra, ci, chore.
 - PR body: `## Summary`, `## Testing` (including what wasn't run), then
   `Closes #N` when there is an issue.
