@@ -208,7 +208,7 @@ services:
       postgres-appointment:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8081/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fs http://localhost:8081/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -236,7 +236,7 @@ services:
       postgres-patient:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8083/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fs http://localhost:8083/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -264,7 +264,7 @@ services:
       postgres-doctor:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8084/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fs http://localhost:8084/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -288,7 +288,7 @@ services:
       postgres-notification:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8082/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fs http://localhost:8082/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 18
@@ -317,7 +317,7 @@ services:
       doctor-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health"]
       interval: 10s
       timeout: 5s
       retries: 18

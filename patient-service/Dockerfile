@@ -11,6 +11,9 @@ WORKDIR /app
 # The cache mount keeps ~/.m2 between builds (it is not part of the image), so
 # even when the pom or source changes, only new artifacts are downloaded.
 # go-offline alone does not fetch every plugin dependency that `package` needs.
+# The cache is shared by all services built in parallel (default `sharing=shared`).
+# Maven only locks within one process, so a parallel cold build can very rarely
+# hit a corrupted-jar error; rebuilding fixes it and the image is never affected.
 COPY pom.xml .
 RUN --mount=type=cache,target=/root/.m2 mvn dependency:go-offline -B
 
