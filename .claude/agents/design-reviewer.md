@@ -51,7 +51,8 @@ Check every criterion. Each problem is one finding.
 5. **Hard-to-reverse decisions**: data ownership, the data model, event
    payloads and API shapes are expensive to change once built and
    consumed. Each such decision is justified in the note. One that later
-   work must respect needs an ADR; say so if the note doesn't plan one.
+   work must respect needs an ADR; if the note doesn't plan one, that is a
+   blocking (factual) finding.
 6. **Boundaries and contracts**: which service owns each piece of data,
    and what each changed API or event looks like to its consumers.
 7. **Hidden "Ask first" changes**: an API contract change, a schema or
@@ -83,7 +84,11 @@ Verdict: approve | revise | needs the user's decision
 | # | Criterion | Result |
 |---|---|---|
 | 1 | Task fit | pass / finding / n.a. |
-| ... one row for each of the 11 criteria ... |
+| ... one row for each criterion above ... |
+
+Rows 4 and 5 always carry their evidence, even on a pass: row 4 names
+the next change you checked against ("pass, next change: <change>"), row
+5 lists the hard-to-reverse decisions you found.
 
 Findings (only for rows marked "finding"):
 - [blocking (factual) | blocking (trade-off) | optional] #<criterion>:
