@@ -6,7 +6,6 @@ import com.healthtech.doctor.dto.AddressDto;
 import com.healthtech.doctor.dto.DoctorAuthResponse;
 import com.healthtech.doctor.dto.DoctorRegistrationRequest;
 import com.healthtech.doctor.dto.OpeningHoursDto;
-import com.healthtech.doctor.event.DoctorRegistered;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
 import org.junit.jupiter.api.Test;
@@ -16,8 +15,6 @@ import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -30,7 +27,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 // Relay delay pushed out to an hour so it never fires, keeping 'unpublished' assertions deterministic.
-// No Kafka container: nothing sends, and DoctorSeeder's KafkaTemplate is mocked.
+// No Kafka container: nothing sends.
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "outbox.relay.fixed-delay-ms=3600000")
 @Testcontainers
@@ -40,9 +37,6 @@ class OutboxAtomicityIntegrationTest {
     @ServiceConnection
     static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16-alpine")
             .withStartupTimeout(Duration.ofMinutes(2));
-
-    @MockitoBean
-    KafkaTemplate<String, DoctorRegistered> kafkaTemplate;
 
     @Autowired
     DoctorRepository doctorRepository;

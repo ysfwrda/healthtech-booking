@@ -555,8 +555,9 @@ The docs endpoints are public (no token needed to view them). To disable them, e
 `DoctorSeeder` runs at doctor-service startup (after `SpecialtySeeder`, which it depends on) and seeds six demo
 doctors, idempotently (skipped on restart if the email already exists). Each covers multiple specialties and
 languages, with opening hours across several weekdays, so filtering and availability have realistic overlap to
-explore. Each publishes `doctor.registered` on creation, same as a real self-registration, so they're immediately
-bookable through the normal flow.
+explore. Each publishes `doctor.registered` through the transactional outbox on creation, same as a real
+self-registration, so they're bookable through the normal flow as soon as the relay has published the event. If Kafka
+isn't reachable yet when the seeder runs, the events wait in the outbox and are published once it is.
 
 All seeded doctors share one password: **`demo12345`**. Log in as any of them via `POST /api/doctors/login`:
 
