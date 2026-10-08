@@ -60,8 +60,10 @@ call.
 - Some code is duplicated per service on purpose: the outbox
   (entity, repository, relay, pruning job, `DomainEventPublisher` /
   `OutboxEventWriter`) in patient, doctor and appointment services (ADR-008),
-  plus `OpenApiErrorCustomizer`, `SecurityConfig` and each `pom.xml`. A fix
-  to one copy goes into every copy in the same PR, tests included.
+  plus `OpenApiErrorCustomizer`, `SecurityConfig`, `JwtDecoderConfig`,
+  `RsaKeyProperties`, `GlobalExceptionHandler`, `CorrelationIdFilter` and
+  each `pom.xml` (ADR-008 lists them). A fix to one copy goes into every
+  copy in the same PR, tests included.
   `scripts/check-outbox-drift.sh` (also run in CI) fails when the copies
   of the `outbox/` package or `DomainEventPublisher` differ. Nothing checks
   the other copies or the outbox tests, which are adapted per service.
@@ -71,8 +73,7 @@ call.
 - When behavior changes, update the README section and any ADR that
   describes it in the same PR. ADRs must not reference ADRs or specs that
   don't exist in the repo; specs live in `docs/specs/`.
-- PR titles: `type(scope): subject`, the form you give merge commits when
-  editing their message, with type one of feat, fix, docs, test, refactor, infra, ci, chore.
+- PR titles: `type(scope): subject`, with type one of feat, fix, docs, test, refactor, infra, ci, chore.
   Branch commits may use the same prefix or a plain imperative subject
   ("Reject slots in the past"); recent PRs use the plain form.
 - PR body: `## Summary`, `## Testing` (including what wasn't run), then

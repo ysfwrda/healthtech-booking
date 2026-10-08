@@ -82,8 +82,8 @@ them in the same PR.
 6. **Duplicated code is changed in every copy** (see CLAUDE.md).
    `scripts/check-outbox-drift.sh` must pass, but it only covers the
    `outbox/` package and `DomainEventPublisher`. Check the other copies
-   (`OpenApiErrorCustomizer`, `SecurityConfig`, the poms, the outbox tests)
-   yourself.
+   CLAUDE.md lists (the JWT, error-handling and correlation classes, the
+   poms, the outbox tests) yourself.
 7. **You have also re-read the full diff yourself.** This is a hygiene
    pass, not the review. No debug
    output, dead code, unused imports or changes the task didn't need.
@@ -106,5 +106,6 @@ stop condition below applies.
 - **CI**: a failure outside your change (a check that also fails on
   `main`, or an infrastructure error) gets one re-run. If it fails again,
   hand back with the failing check and why it isn't yours.
-- **Environment**: a layer you can't run for an environment reason is
-  reported in the PR (item 2). It doesn't block the task.
+- **Environment**: a test layer (item 2) or the live-stack check (item 4)
+  that can't run for an environment reason is reported in the PR with the
+  reason. It doesn't block the task.
