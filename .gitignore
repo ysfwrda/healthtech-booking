@@ -2,6 +2,10 @@
 .idea/
 .claude/*
 !.claude/agents/
+!.claude/hooks/
+!.claude/rules/
+!.claude/skills/
+!.claude/settings.json
 
 # Build output
 out/
