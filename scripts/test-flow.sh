@@ -27,7 +27,7 @@ PATIENT_RESP="$(curl -s -X POST "$GATEWAY/api/auth/register" \
   -H "Content-Type: application/json" \
   -d '{
     "firstName": "John", "lastName": "Doe",
-    "username": "john.doe.'"$RANDOM"'", "password": "secret",
+    "username": "john.doe.'"$RANDOM"'", "password": "secret123",
     "dateOfBirth": "1990-01-01",
     "email": "john.doe.'"$RANDOM"'@example.com",
     "insuranceType": "PRIVATE"

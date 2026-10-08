@@ -453,7 +453,7 @@ curl -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "firstName": "John", "lastName": "Doe",
-    "username": "john.doe", "password": "secret",
+    "username": "john.doe", "password": "secret123",
     "dateOfBirth": "1990-01-01",
     "email": "john.doe@example.com",
     "insuranceType": "PRIVATE"
