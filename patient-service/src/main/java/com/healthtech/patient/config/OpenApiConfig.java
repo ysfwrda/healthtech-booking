@@ -23,14 +23,17 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Patient Service API")
-                        .description("Patient registration, login and profiles.")
+                        .description("Patient registration, login and profiles.\n\n**Authentication:** the profile endpoint requires a patient JWT; registration and login are public. Obtain a token via POST /api/auth/login (or /api/auth/register) on this service, click **Authorize** and paste the token (without the \"Bearer \" prefix). Operations with a lock icon require it.")
                         .version("v1"))
                 .addServersItem(new Server().url(serverUrl))
-                .components(new Components().addSecuritySchemes(BEARER_SCHEME,
+                .components(new Components()
+                        .addSchemas(OpenApiErrorCustomizer.PROBLEM_DETAIL, OpenApiErrorCustomizer.problemDetailSchema())
+                        .addSecuritySchemes(BEARER_SCHEME,
                         new SecurityScheme()
                                 .type(SecurityScheme.Type.HTTP)
                                 .scheme("bearer")
-                                .bearerFormat("JWT")))
+                                .bearerFormat("JWT")
+                                .description("JWT from the login endpoint; send as \"Authorization: Bearer <token>\".")))
                 // Applied to every operation; public endpoints opt out with @SecurityRequirements.
                 .addSecurityItem(new SecurityRequirement().addList(BEARER_SCHEME));
     }

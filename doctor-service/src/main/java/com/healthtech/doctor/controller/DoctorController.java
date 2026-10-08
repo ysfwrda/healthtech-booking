@@ -1,5 +1,6 @@
 package com.healthtech.doctor.controller;
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import com.healthtech.doctor.domain.Language;
 import com.healthtech.doctor.dto.DoctorResponse;
 import com.healthtech.doctor.dto.DoctorSummaryResponse;
@@ -23,6 +24,8 @@ public class DoctorController {
     private final DoctorService doctorService;
 
     @Operation(summary = "Get a doctor by id")
+    @ApiResponse(responseCode = "200", description = "Doctor returned")
+    @ApiResponse(responseCode = "404", description = "Doctor not found")
     @SecurityRequirements
     @GetMapping("/{id}")
     public ResponseEntity<DoctorResponse> getDoctorById(@PathVariable UUID id) {
@@ -30,6 +33,8 @@ public class DoctorController {
     }
 
     @Operation(summary = "Search doctors by specialty and/or language")
+    @ApiResponse(responseCode = "200", description = "Matching doctors, possibly empty")
+    @ApiResponse(responseCode = "400", description = "Unknown language")
     @SecurityRequirements
     @GetMapping
     public ResponseEntity<List<DoctorSummaryResponse>> findDoctors(

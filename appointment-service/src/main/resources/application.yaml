@@ -53,6 +53,7 @@ management:
         include: health, beans, mappings
 
 springdoc:
+  default-produces-media-type: application/json
   api-docs:
     enabled: ${SWAGGER_ENABLED:true}
   swagger-ui:

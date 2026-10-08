@@ -23,14 +23,17 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Doctor Service API")
-                        .description("Doctor registration, login, search and specialties.")
+                        .description("Doctor registration, login, search and specialties.\n\n**Authentication:** all endpoints are currently public. POST /api/doctors/login (or /api/doctors/register) issues a doctor JWT, but no operation here requires one yet.")
                         .version("v1"))
                 .addServersItem(new Server().url(serverUrl))
-                .components(new Components().addSecuritySchemes(BEARER_SCHEME,
+                .components(new Components()
+                        .addSchemas(OpenApiErrorCustomizer.PROBLEM_DETAIL, OpenApiErrorCustomizer.problemDetailSchema())
+                        .addSecuritySchemes(BEARER_SCHEME,
                         new SecurityScheme()
                                 .type(SecurityScheme.Type.HTTP)
                                 .scheme("bearer")
-                                .bearerFormat("JWT")))
+                                .bearerFormat("JWT")
+                                .description("JWT from the login endpoint; send as \"Authorization: Bearer <token>\".")))
                 // Applied to every operation; public endpoints opt out with @SecurityRequirements.
                 .addSecurityItem(new SecurityRequirement().addList(BEARER_SCHEME));
     }

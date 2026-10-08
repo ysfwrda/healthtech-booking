@@ -1,5 +1,7 @@
 package com.healthtech.appointment.controller;
 
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.Parameter;
 import com.healthtech.appointment.dto.AvailableSlotsResponse;
 import com.healthtech.appointment.service.AvailabilityService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,10 +25,15 @@ public class AvailabilityController {
     private final AvailabilityService availabilityService;
 
     @Operation(summary = "Get a doctor's available slots for a date")
+    @ApiResponse(responseCode = "200", description = "Free slots for that day, possibly empty")
+    @ApiResponse(responseCode = "400", description = "Missing or malformed doctorId or date")
+    @ApiResponse(responseCode = "404", description = "Doctor not found")
     @SecurityRequirements
     @GetMapping
     public AvailableSlotsResponse getAvailability(
+            @Parameter(description = "Id of a doctor, taken from GET /api/doctors", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
             @RequestParam UUID doctorId,
+            @Parameter(description = "Day to check, ISO format yyyy-MM-dd", example = "2026-10-12")
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return availabilityService.getAvailableSlots(doctorId, date);
     }

@@ -23,14 +23,17 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Appointment Service API")
-                        .description("Booking, cancellation and availability of appointments.")
+                        .description("Booking, cancellation and availability of appointments.\n\n**Authentication:** most endpoints require a JWT. Obtain one via POST /api/auth/login on the Patient Service (patients book appointments), click **Authorize** and paste the token (without the \"Bearer \" prefix). Endpoints without a lock icon are public.")
                         .version("v1"))
                 .addServersItem(new Server().url(serverUrl))
-                .components(new Components().addSecuritySchemes(BEARER_SCHEME,
+                .components(new Components()
+                        .addSchemas(OpenApiErrorCustomizer.PROBLEM_DETAIL, OpenApiErrorCustomizer.problemDetailSchema())
+                        .addSecuritySchemes(BEARER_SCHEME,
                         new SecurityScheme()
                                 .type(SecurityScheme.Type.HTTP)
                                 .scheme("bearer")
-                                .bearerFormat("JWT")))
+                                .bearerFormat("JWT")
+                                .description("JWT from the login endpoint; send as \"Authorization: Bearer <token>\".")))
                 // Applied to every operation; public endpoints opt out with @SecurityRequirements.
                 .addSecurityItem(new SecurityRequirement().addList(BEARER_SCHEME));
     }
