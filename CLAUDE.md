@@ -71,8 +71,8 @@ call.
 - When behavior changes, update the README section and any ADR that
   describes it in the same PR. ADRs must not reference ADRs or specs that
   don't exist in the repo; specs live in `docs/specs/`.
-- PR titles: `type(scope): subject`, the form the merge commits on main use,
-  with type one of feat, fix, docs, test, refactor, infra, ci, chore.
+- PR titles: `type(scope): subject`, the form you give merge commits when
+  editing their message, with type one of feat, fix, docs, test, refactor, infra, ci, chore.
   Branch commits may use the same prefix or a plain imperative subject
   ("Reject slots in the past"); recent PRs use the plain form.
 - PR body: `## Summary`, `## Testing` (including what wasn't run), then

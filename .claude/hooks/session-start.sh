@@ -18,6 +18,7 @@ if ! docker info >/dev/null 2>&1 && command -v dockerd >/dev/null 2>&1; then
   done
 fi
 if docker info >/dev/null 2>&1; then
+  # Keep in sync with the image tags in the Testcontainers tests.
   for image in postgres:16-alpine confluentinc/cp-kafka:7.7.0; do
     docker pull -q "$image" >/dev/null || echo "warning: could not pull $image" >&2
   done
@@ -40,8 +41,10 @@ fi
 # Best effort: one failing service (e.g. a network hiccup) shouldn't skip the rest.
 for service in api-gateway appointment-service doctor-service notification-service patient-service; do
   (cd "$service" && mvn -B -q test -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false) \
-    || echo "warning: could not prepare $service" >&2
+    >>/tmp/session-start.log 2>&1 \
+    || echo "warning: could not prepare $service (see /tmp/session-start.log)" >&2
 done
 
 (cd frontend && npm install --no-audit --no-fund --loglevel=error --no-update-notifier) \
-  || echo "warning: npm install failed in frontend" >&2
+  >>/tmp/session-start.log 2>&1 \
+  || echo "warning: npm install failed in frontend (see /tmp/session-start.log)" >&2

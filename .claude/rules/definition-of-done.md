@@ -94,4 +94,17 @@ them in the same PR.
    the latest commit and every review thread has a reply or a fix.
 
 Until all eight hold, the task isn't done. Don't report it as done, and
-don't hand it back unless one of the "Ask first" points is blocking.
+don't hand it back unless one of the "Ask first" points is blocking or a
+stop condition below applies.
+
+## When to stop and hand back
+
+- **Review**: repeat the fresh review until a round has no blocking
+  findings. Fixes for that round's optional findings don't need another
+  round. If three rounds in a row still raise blocking findings, stop and
+  hand back with the open findings.
+- **CI**: a failure outside your change (a check that also fails on
+  `main`, or an infrastructure error) gets one re-run. If it fails again,
+  hand back with the failing check and why it isn't yours.
+- **Environment**: a layer you can't run for an environment reason is
+  reported in the PR (item 2). It doesn't block the task.
