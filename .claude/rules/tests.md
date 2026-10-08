@@ -5,6 +5,9 @@ paths:
 
 # Java tests
 
+Which tests a change needs (happy and failure paths, and which layers) is
+set by item 1 of `.claude/rules/definition-of-done.md`.
+
 - Mark the structure of every new or changed test with `// Arrange`,
   `// Act` and `// Assert` comments. When the call is the assertion
   (`assertThrows`, `mockMvc.perform(...).andExpect(...)`), use one

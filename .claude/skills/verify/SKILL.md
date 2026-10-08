@@ -60,6 +60,9 @@ checks they affect.
 ## 4. Check the conventions CLAUDE.md lists
 
 Read the diff once for the conventions that tests don't catch:
+- every new or changed behavior has happy-path and failure-path tests at
+  each layer item 1 of `.claude/rules/definition-of-done.md` requires; add
+  the missing ones
 - new tests use `// Arrange`, `// Act`, `// Assert`
 - comments state only what the code does
 - changed behavior is reflected in the README and the ADRs

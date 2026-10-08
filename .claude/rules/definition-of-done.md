@@ -37,13 +37,31 @@ them in the same PR.
 
 ## Done means all of these hold
 
-1. **The behavior is proven.** For a bug, a test reproduces it first and
-   passes after the fix. When the fix is a guard (lock, constraint,
-   validation), show the test fails with the guard removed, as #51 did.
-   For a feature, the new behavior and its failure paths are tested at the
-   right layer: unit for rules and services, `@WebMvcTest` for the
-   web/security contract, Testcontainers for persistence, Kafka, locking and
-   the outbox.
+1. **Every behavior and path is tested.** Each new or changed behavior
+   has unit tests for its happy path and for each failure path:
+   - validation errors, including boundary values on both sides (7, 8, 72
+     and 73 characters in #52)
+   - not found, conflict and invalid state
+   - 401, 403 and ownership violations
+   - failures of a dependency it calls
+
+   For a controller, the `@WebMvcTest` slice test is its unit test.
+
+   Then add tests at every other layer the change reaches:
+
+   | The change touches | Also test with |
+   |---|---|
+   | Only business rules, services, mappers or a consumer's handling logic | Nothing more: unit tests (Mockito, no Spring) cover it |
+   | Controllers, request validation, security rules, error responses | `@WebMvcTest` slice test |
+   | Repositories, queries, constraints, locking, transactions | Testcontainers integration test |
+   | Kafka producers, consumers, the outbox, the read models | Testcontainers integration test with a real broker where delivery is the point |
+   | Gateway routing or edge auth | `GatewaySecurityTest`-style test in api-gateway |
+
+   For a bug, a test reproduces it first and passes after the fix. When
+   the fix is a guard (lock, constraint, validation), show the test fails
+   with the guard removed, as #51 did. The frontend has no test setup, so
+   a frontend change says in the PR that it is untested and how it was
+   checked by hand. Adding a test runner is a new dependency: ask first.
 2. **Every affected suite passes**, integration tests included. The cloud
    session hook provides Docker and keys. If a layer still can't run, the
    reason must come from the environment, and the PR says so.
