@@ -41,8 +41,8 @@ from how `code-reviewer` uses ADRs (trusts the ADR, checks the code).
 
 # Conventions
 
-- Every test marks its structure with `// Arrange`, `// Act`, `// Assert`
-  comments. One claim per test; class-level comments of at most two lines.
+- Java test conventions (Arrange/Act/Assert markers, slice and integration
+  test setup) are in `.claude/rules/tests.md`, loaded when working on tests.
 - Comments describe what the code does today. Don't claim extensibility or
   guarantees the code doesn't enforce, and keep them short.
 - Some code is duplicated per service on purpose: the outbox
