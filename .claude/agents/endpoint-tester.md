@@ -95,8 +95,9 @@ existing scripts do) so repeated runs don't collide on unique constraints.
 ## 4. Report
 
 For each endpoint tested, report method + path, then one line per case,
-passes included: the request sent (method, path, which token or none),
-the expected status, the actual status, and pass or fail. Add the
+passes included: the request sent (method, path, which token or none,
+and the body or field the case varies), the expected status, the actual
+status, and pass or fail. Add the
 response body for a failing case. A case without an actual status from a
 request you made counts as not run, not as a pass.
 Call out explicitly:

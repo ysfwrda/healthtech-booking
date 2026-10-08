@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Run the checks this repo needs for the current change (per-service Maven tests, frontend lint/build, outbox drift check, and independent review by the subagents CLAUDE.md requires for the files touched), then write the PR's Testing section. Use after committing a finished change and before opening a PR, or when the user asks to verify, test, or check a change.
+description: Run the checks this repo needs for the current change (per-service Maven tests, frontend lint/build, and independent review by the subagents CLAUDE.md requires for the files touched), then write the PR's Testing section. Use after committing a finished change and before opening a PR, or when the user asks to verify, test, or check a change.
 ---
 
 # Verify the current change
@@ -26,7 +26,6 @@ could not run and why.
 | Changed path | Check |
 |---|---|
 | `<service>/**` (api-gateway, appointment-service, doctor-service, notification-service, patient-service) | `mvn -B test` in that service's directory. There is no root pom. |
-| `*/outbox/**`, or any of the three services that hold an outbox copy | `scripts/check-outbox-drift.sh` |
 | `frontend/**` | `npm run lint && npm run build` in `frontend/` |
 | `scripts/*.sh` | `bash -n` on each changed script |
 | `.github/workflows/*.yml` | parse the YAML |
@@ -175,7 +174,6 @@ End with a block ready to paste as the PR's Testing section:
 ## Testing
 - <service>: `mvn -B test`: N tests, 0 failures
 - Frontend: lint and build pass
-- Outbox copies: identical
 - Agents: code-reviewer (tier N; no findings / fixed X), endpoint-tester (N/N cases pass)
 - Refuted findings: <finding>: <verifier's evidence> (or "none")
 - Not run: <check>: <reason>

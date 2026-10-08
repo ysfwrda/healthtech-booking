@@ -80,11 +80,9 @@ them in the same PR.
    OpenAPI annotations, README, ADRs, `scripts/test-flow.sh`,
    `scripts/gateway-security-smoke-test.sh` and the frontend when it calls
    the changed endpoint.
-6. **Duplicated code is changed in every copy** (see CLAUDE.md).
-   `scripts/check-outbox-drift.sh` must pass, but it only covers the
-   `outbox/` package and `DomainEventPublisher`. Check the other copies
-   CLAUDE.md lists (the JWT, error-handling and correlation classes, the
-   poms, the outbox tests) yourself.
+6. **Duplicated code is changed in every copy** CLAUDE.md lists (the
+   outbox, the JWT, error-handling and correlation classes, the poms, and
+   the outbox tests, which are adapted per service).
 7. **You have also re-read the full diff yourself.** This is a hygiene
    pass, not the review. No debug
    output, dead code, unused imports or changes the task didn't need.

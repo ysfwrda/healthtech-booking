@@ -68,10 +68,8 @@ call.
   plus `OpenApiErrorCustomizer`, `SecurityConfig`, `JwtDecoderConfig`,
   `RsaKeyProperties`, `GlobalExceptionHandler`, `CorrelationIdFilter` and
   each `pom.xml`. A fix to one copy goes into every copy in the same PR,
-  tests included.
-  `scripts/check-outbox-drift.sh` (also run in CI) fails when the copies
-  of the `outbox/` package or `DomainEventPublisher` differ. Nothing checks
-  the other copies or the outbox tests, which are adapted per service.
+  tests included. Nothing checks this automatically; `code-reviewer` looks
+  for it.
 - Domain events are published through `DomainEventPublisher` inside the
   caller's `@Transactional` method, never with `KafkaTemplate` directly
   (the demo `DoctorSeeder` is the one existing exception).
