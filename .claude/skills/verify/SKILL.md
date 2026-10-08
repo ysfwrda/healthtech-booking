@@ -49,8 +49,11 @@ A failing test is a finding to fix or report, never something to skip.
 The author of a change doesn't review it. Review happens in the repo's
 subagents, which start without this session's context. Keep it that way.
 
-**Which agents.** Apply the trigger list in CLAUDE.md to the changed files:
-- Any change outside `docs/` and `*.md`: `code-reviewer`.
+### Which agents
+
+Apply the trigger list in CLAUDE.md to the changed files:
+- Any change outside `docs/` and `*.md`: `code-reviewer`, at the depth
+  below.
 - `*Controller.java`, `dto/**`, `SecurityConfig`, or JWT classes: also
   `endpoint-tester`. It needs the stack running
   (`docker compose up -d --build`). If you can't start it, say so.
@@ -59,37 +62,70 @@ subagents, which start without this session's context. Keep it that way.
   `config-dependency-auditor`.
 - A spec document is part of the task: `spec-to-diff-reviewer`.
 
-**What each agent gets: the task and the diff, nothing else.** Commit
-first, then send exactly this:
+### How deep: set by what the change touches
+
+The deepest tier any changed file falls into applies to the whole change.
+
+| Tier | The change touches | `code-reviewer` first round | Final round |
+|---|---|---|---|
+| 1 | Only tooling: `scripts/`, `.github/`, `.claude/` hooks and settings | One agent, no lens | None |
+| 2 | Service or frontend code, or service config (`application.yaml`, compose files) | Three agents in parallel: `Lens: correctness`, `Lens: security`, `Lens: consistency` | None |
+| 3 | An "Ask first" area: API contract, schema or events, security, dependencies | As tier 2 | One more full review, no lens, of the whole diff after all fixes |
+
+### What each agent gets: the task and the diff, nothing else
+
+Commit first, then send exactly this:
 
 ```text
 Task (verbatim from <issue #N | the user's request>):
 <the issue body or the user's words, copied, not paraphrased>
 
-Change: `git diff origin/main...HEAD` on branch <branch> in <repo path>.
+Change: `git diff <base>...HEAD` on branch <branch> in <repo path>.
+[Lens: <correctness | security | consistency>]
 ```
 
-`adr-consistency-checker` gets the ADR path instead of the diff, and
-`spec-to-diff-reviewer` also gets the spec path.
+`<base>` is `origin/main` for a first or final round, and the last
+reviewed commit for a fix-only round. Add the `Lens:` line only where
+the tier table says so. `adr-consistency-checker` gets the ADR path
+instead of the diff, and `spec-to-diff-reviewer` also gets the spec path.
 
 Leave out everything that comes from you as the author:
 - your summary of the change or the approach
 - why it's correct, or what you considered and rejected
 - what you already tested or checked
-- what to focus on or skip
+- any focus or skip hint of your own (the fixed lenses are not yours)
 - the PR description, your draft of it, and earlier review findings
 
 Use the named repo agents. Never use a `fork` subagent or any agent that
 inherits this conversation, and don't count your own reading of the diff
 or an in-session review skill as the review.
 
-Run independent agents in parallel.
+### Verify each blocking finding before acting on it
 
-**Handling findings.** Fix confirmed findings. For a finding you reject,
-put it in the PR with the code evidence that refutes it, so the user
-sees the disagreement. After fixing, start a fresh agent on the updated
-diff with the same two inputs. Don't continue the earlier agent with
-SendMessage, since that passes it your arguments.
+For every finding a reviewer labels blocking, start one
+`finding-verifier` with the task, the same diff reference and the
+finding copied as the reviewer wrote it. Run them in parallel. Add
+nothing of your own: no rebuttal, no context.
+
+- **CONFIRMED** or **UNCERTAIN**: fix it. You don't get to reject a
+  finding the verifier couldn't refute. If you think it's wrong, hand it
+  back to the user (see the stop rules in the definition of done).
+- **REFUTED**: don't fix it. List it in the PR with the verifier's
+  evidence.
+
+Optional findings aren't verified and never start another round. Fold
+the plainly correct ones into a fix you're already making, and list the
+rest in the PR.
+
+### Re-review the fixes only
+
+After fixing, commit and start a fresh `code-reviewer` on the fix
+commits alone (`<base>` = the last reviewed commit), no lens. Verify its
+blocking findings the same way. Repeat until a fix-only round has no
+confirmed blocking findings, unless a stop rule in the definition of
+done applies first. Then run the tier-3 final round if the tier calls for
+it. Never continue an earlier agent with SendMessage; that passes it
+your arguments.
 
 ## 4. Check the conventions CLAUDE.md lists
 

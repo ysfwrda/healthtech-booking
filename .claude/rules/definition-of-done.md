@@ -68,10 +68,11 @@ them in the same PR.
    session hook provides Docker and keys. If a layer still can't run, the
    reason must come from the environment, and the PR says so.
 3. **The change has been reviewed by someone other than its author.**
-   `verify` has run, and the subagents it requires reviewed the change
-   from the task and the diff alone, without your reasoning. Confirmed
-   findings are fixed and re-reviewed by a fresh agent. Rejected findings
-   are listed in the PR with the evidence.
+   `verify` has run. The subagents it requires reviewed the change from
+   the task and the diff alone, at the depth its risk tier sets. Every
+   blocking finding went to a `finding-verifier`. Confirmed findings are
+   fixed and the fixes re-reviewed. Refuted findings are listed in the PR
+   with the verifier's evidence.
 4. **Endpoint changes are checked on the live stack**
    (`docker compose up -d --build`, then `endpoint-tester` or the scripts),
    not only in tests.
@@ -99,20 +100,20 @@ stop condition below applies.
 
 ## When to stop and hand back
 
-- **Review**: keep running fresh rounds while they find new blocking
-  problems (a bug, a security issue, or a claim the code doesn't
-  support). Optional findings never start another round. The number of
-  rounds is not a reason to stop. Stop and hand back with the evidence
-  when the review stops converging:
-  - **A finding comes back.** A fresh reviewer raises a blocking finding
-    you already fixed or rejected. Either the fix doesn't work or you and
-    the reviewer disagree, and the user should decide. Compare findings
-    across rounds yourself; don't tell the reviewer what earlier rounds
-    found.
-  - **Your fixes cause the findings.** In two rounds in a row, the
-    blocking findings are in lines your previous fixes introduced. The
-    approach needs rethinking, which is the user's call, not another
-    patch.
+- **Review**: the `verify` skill bounds the review: one first round at
+  the depth the change's risk tier sets, verification of every blocking
+  finding, then fix-only rounds until one has no confirmed blocking
+  finding. Stop and hand back with the evidence when:
+  - **A fixed finding comes back.** A fresh reviewer raises a blocking
+    finding you already fixed, and the verifier confirms it. The fix
+    doesn't work. Compare findings across rounds yourself; don't tell the
+    reviewer what earlier rounds found. A refuted finding that comes back
+    is just verified again.
+  - **You disagree with a confirmed finding.** The verifier couldn't
+    refute it, so it isn't yours to reject.
+  - **Your fixes keep causing findings.** Two fix-only rounds in a row
+    raise confirmed blocking findings. The approach needs rethinking,
+    which is the user's call, not another patch.
   - **A fix leaves the task.** It needs an "Ask first" change, or changes
     outside what the task asked for.
 - **CI**: a failure outside your change (a check that also fails on

@@ -17,7 +17,9 @@ asked:
 
 A change is never reviewed by its author. Give each agent only the task
 (verbatim) and the diff or document to check, never your reasoning, your
-summary or the PR description. The `verify` skill has the exact prompt.
+summary or the PR description. Every blocking finding goes to
+`finding-verifier` before you act on it. The `verify` skill has the exact
+prompts, the review depth for each kind of change, and when review stops.
 
 Each agent's file documents its own scope boundary — don't ask one to do
 another's job. In particular: `spec-to-diff-reviewer` checks fidelity to a
