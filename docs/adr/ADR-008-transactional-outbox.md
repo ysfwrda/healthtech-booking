@@ -151,8 +151,7 @@ not regenerate a lost event: it skips doctors that already exist, so a seeded do
 `doctor.registered` was lost would never reach appointment-service's `valid_doctor` read model and
 every booking for that doctor would return 404. The seeder therefore saves each doctor and writes
 its outbox row in one transaction, the same as a self-registration, and a Kafka outage at startup
-only delays the event. An earlier version of this ADR excluded the seeder on the opposite
-assumption.
+only delays the event.
 
 **Retention.** Published rows are pruned daily, retaining seven days. A daily job against a
 weekly retention keeps the maximum age bounded at eight days; a weekly job would allow fourteen.

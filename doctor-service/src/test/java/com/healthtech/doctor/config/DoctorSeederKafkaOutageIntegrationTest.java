@@ -90,17 +90,14 @@ class DoctorSeederKafkaOutageIntegrationTest {
         String email = "mehmet.yilmaz@demo.healthtech.com";
         removeDemoDoctor(email);
         pauseKafka();
-        try {
-            doctorSeeder.run();
-        } catch (RuntimeException ex) {
-            unpauseKafka();
-            throw ex;
-        }
-        UUID doctorId = doctorRepository.findByEmail(email).orElseThrow().getId();
-
+        boolean kafkaPaused = true;
         try (Consumer<String, String> consumer = testConsumer()) {
+            doctorSeeder.run();
+            UUID doctorId = doctorRepository.findByEmail(email).orElseThrow().getId();
+
             // Act
             unpauseKafka();
+            kafkaPaused = false;
 
             // Assert
             Awaitility.await()
@@ -121,6 +118,10 @@ class DoctorSeederKafkaOutageIntegrationTest {
                         return null;
                     }, java.util.Objects::nonNull);
             assertThat(record.topic()).isEqualTo(DOCTOR_REGISTERED_TOPIC);
+        } finally {
+            if (kafkaPaused) {
+                unpauseKafka();
+            }
         }
     }
 
