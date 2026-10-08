@@ -30,6 +30,15 @@ Status: design note, reviewed by design-reviewer
 ## Alternatives considered
 <each with one line on why not>
 
+## Fits the codebase
+<for each concern, the existing mechanism it uses (outbox, exceptions,
+mappers, read models, package layout); any new one, and why the existing
+one can't do the job>
+
+## Hard-to-reverse decisions
+<data ownership, data model, event payloads, API shapes: each with its
+justification; whether it needs an ADR>
+
 ## Contracts
 <changed endpoints, events, schema; "none" if none>
 
@@ -68,8 +77,8 @@ Add nothing else: no summary, no reasons, no focus hints.
   the task, the design note path and the finding as written. Revise the
   note for CONFIRMED or UNCERTAIN findings. List REFUTED ones in the PR
   with the verifier's evidence.
-- **blocking (trade-off)**: hand back to the user with both options and
-  wait for the answer.
+- **blocking (trade-off)**: hand back to the user with the reviewer's
+  "Decisions for the user" block and wait for the answer.
 - **A hidden "Ask first" change**: ask the user, even if the finding is
   only optional.
 - **optional**: fold in the plainly right ones; list the rest in the PR.
