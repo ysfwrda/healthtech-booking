@@ -37,7 +37,8 @@ Status: design note, reviewed by design-reviewer
 <Kafka down, duplicates, concurrency, partial failure: how each is handled>
 
 ## Test plan
-<per behavior: happy and failure paths, and the layer for each>
+<per behavior: happy and failure paths, and the layer for each,
+as `.claude/rules/tests.md` requires>
 
 ## Ask first
 <any API contract, schema/event, security or dependency change; "none">
@@ -74,9 +75,9 @@ Add nothing else: no summary, no reasons, no focus hints.
 - **optional**: fold in the plainly right ones; list the rest in the PR.
 
 After revising, start a fresh `design-reviewer` on the revised note with
-the same two inputs. Stop and hand back if a revised finding comes back
-confirmed, or if two revisions in a row still have confirmed blocking
-findings.
+the same two inputs. Stop and hand back if a finding you already revised
+for comes back and the verifier confirms it, or if two revisions in a row
+still have confirmed blocking findings.
 
 ## 5. Implement against the note
 

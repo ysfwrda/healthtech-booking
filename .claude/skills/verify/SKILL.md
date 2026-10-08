@@ -62,7 +62,9 @@ Apply the trigger list in CLAUDE.md to the changed files:
   `config-dependency-auditor`. (`docker-compose.images.yml` only sets
   image tags and has nothing for it to check.)
 - A spec document is part of the task, including a design note approved
-  through the `design-review` skill: `spec-to-diff-reviewer`.
+  through the `design-review` skill: `spec-to-diff-reviewer`. The note
+  is itself in the diff, so expect it listed as an un-agreed addition;
+  that is optional.
 
 ### How deep: set by what the change touches
 
@@ -182,7 +184,7 @@ reason doesn't block the task: report it in the PR with the reason.
 
 Read the diff once for the conventions that tests don't catch:
 - every new or changed behavior has happy-path and failure-path tests at
-  each layer item 1 of `.claude/rules/definition-of-done.md` requires; add
+  each layer `.claude/rules/tests.md` requires; add
   the missing ones
 - new tests use `// Arrange`, `// Act`, `// Assert`
 - comments state only what the code does

@@ -73,7 +73,8 @@ skip this.
    a body with `## Summary`, `## Testing`, and `Closes #N` when there is
    an issue. Testing lists what ran, with test counts, and what didn't
    run, and why. CI is green on the latest commit and every review thread
-   has a reply or a fix.
+   has a reply or a fix. A CI failure your change didn't cause gets one
+   re-run; if it fails again, hand back with the failing check.
 
 Until all eight hold, the task isn't done. Don't report it as done, and
 don't hand it back unless an "Ask first" point blocks it or a stop rule in
