@@ -33,7 +33,8 @@ if [ ! -f keys/private.pem ]; then
   git update-index --skip-worktree keys/public.pem
 fi
 
-# Compile and resolve test plugins for each service without running tests.
+# Download dependencies and compile each service without running tests. The
+# JUnit provider is only fetched by the first real test run.
 # Best effort: one failing service (e.g. a network hiccup) shouldn't skip the rest.
 for service in api-gateway appointment-service doctor-service notification-service patient-service; do
   (cd "$service" && mvn -B -q test -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false) \

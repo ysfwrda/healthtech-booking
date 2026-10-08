@@ -84,7 +84,8 @@ them in the same PR.
    pass, not the review. No debug
    output, dead code, unused imports or changes the task didn't need.
 8. **The PR is open and green.** It has a `type(scope): subject` title and
-   a body with `## Summary`, `## Testing` and `Closes #N`. Testing lists
+   a body with `## Summary`, `## Testing`, and `Closes #N` when there is
+   an issue. Testing lists
    what ran, with test counts, and what didn't run, and why. CI is green on
    the latest commit and every review thread has a reply or a fix.
 
