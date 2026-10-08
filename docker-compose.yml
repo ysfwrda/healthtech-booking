@@ -211,7 +211,7 @@ services:
       test: ["CMD-SHELL", "curl -fs http://localhost:8081/actuator/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 12
+      retries: 18
       start_period: 60s
     networks:
       - healthtech-net
@@ -239,7 +239,7 @@ services:
       test: ["CMD-SHELL", "curl -fs http://localhost:8083/actuator/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 12
+      retries: 18
       start_period: 60s
     networks:
       - healthtech-net
@@ -267,7 +267,7 @@ services:
       test: ["CMD-SHELL", "curl -fs http://localhost:8084/actuator/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 12
+      retries: 18
       start_period: 60s
     networks:
       - healthtech-net
@@ -291,7 +291,7 @@ services:
       test: ["CMD-SHELL", "curl -fs http://localhost:8082/actuator/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 12
+      retries: 18
       start_period: 60s
     networks:
       - healthtech-net
@@ -320,7 +320,7 @@ services:
       test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 12
+      retries: 18
       start_period: 60s
     networks:
       - healthtech-net
