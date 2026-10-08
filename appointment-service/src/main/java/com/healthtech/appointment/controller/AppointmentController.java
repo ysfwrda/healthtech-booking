@@ -49,7 +49,7 @@ public class AppointmentController {
     }
 
     @Operation(summary = "Cancel one of the authenticated patient's appointments")
-    @ApiResponse(responseCode = "200", description = "Appointment cancelled")
+    @ApiResponse(responseCode = "200", description = "Appointment cancelled; cancelling an already-cancelled appointment is a no-op and returns the current state without a new event")
     @ApiResponse(responseCode = "403", description = "The token is not a patient token, or the resource belongs to another patient")
     @ApiResponse(responseCode = "404", description = "Appointment not found")
     @PutMapping("/{id}/cancel")

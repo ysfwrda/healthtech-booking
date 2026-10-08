@@ -196,7 +196,7 @@ class AppointmentServiceTest {
                 .status(AppointmentStatus.CANCELLED)
                 .build();
 
-        when(appointmentRepository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(appointment)).thenReturn(appointment);
         when(appointmentMapper.toResponse(appointment)).thenReturn(response);
 
@@ -225,7 +225,7 @@ class AppointmentServiceTest {
                 .status(AppointmentStatus.CONFIRMED)
                 .build();
 
-        when(appointmentRepository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
 
         // Act and Assert
         assertThatThrownBy(() -> appointmentService.cancelAppointment(appointment.getId(), callerPatientId))
@@ -240,7 +240,7 @@ class AppointmentServiceTest {
     void cancelAppointment_appointmentNotFound_shouldThrowAppointmentNotFoundException() {
         // Arrange
         UUID appointmentId = UUID.randomUUID();
-        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.empty());
+        when(appointmentRepository.findByIdForUpdate(appointmentId)).thenReturn(Optional.empty());
 
         // Act and Assert
         assertThatThrownBy(() -> appointmentService.cancelAppointment(appointmentId, UUID.randomUUID()))
@@ -366,8 +366,7 @@ class AppointmentServiceTest {
     }
 
     @Test
-    void cancelAppointment_alreadyCancelledAppointment_shouldOverwriteStatusAndPublishEvent() {
-        // Documents current behavior: no guard against double-cancellation.
+    void cancelAppointment_alreadyCancelledAppointment_shouldReturnCurrentStateWithoutSavingOrPublishing() {
         // Arrange
         UUID patientId = UUID.randomUUID();
         Appointment appointment = Appointment.builder()
@@ -377,8 +376,7 @@ class AppointmentServiceTest {
                 .status(AppointmentStatus.CANCELLED)
                 .build();
 
-        when(appointmentRepository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
-        when(appointmentRepository.save(appointment)).thenReturn(appointment);
+        when(appointmentRepository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
         when(appointmentMapper.toResponse(appointment)).thenReturn(
                 AppointmentResponse.builder().status(AppointmentStatus.CANCELLED).build());
 
@@ -387,10 +385,28 @@ class AppointmentServiceTest {
 
         // Assert
         assertThat(result.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
-        verify(outboxRepository, times(1)).save(argThat(row ->
-                row.getTopic().equals("appointment.cancelled")
-                        && row.getAggregateId().equals(appointment.getId().toString())
-                        && row.getPayload() != null));
+        verify(appointmentRepository, never()).save(any());
+        verify(outboxRepository, never()).save(any());
+    }
+
+    @Test
+    void cancelAppointment_alreadyCancelledOwnedBySomeoneElse_shouldThrowAccessDenied() {
+        // Arrange: ownership is checked before the idempotent short-circuit
+        Appointment appointment = Appointment.builder()
+                .id(UUID.randomUUID())
+                .patientId(UUID.randomUUID())
+                .type(INITIAL_CONSULTATION)
+                .status(AppointmentStatus.CANCELLED)
+                .build();
+
+        when(appointmentRepository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
+
+        // Act and Assert
+        assertThatThrownBy(() -> appointmentService.cancelAppointment(appointment.getId(), UUID.randomUUID()))
+                .isInstanceOf(AppointmentAccessDeniedException.class);
+
+        verify(appointmentRepository, never()).save(any());
+        verify(outboxRepository, never()).save(any());
     }
 
     @Test
@@ -440,7 +456,7 @@ class AppointmentServiceTest {
                 .type(INITIAL_CONSULTATION)
                 .status(AppointmentStatus.CONFIRMED)
                 .build();
-        when(appointmentRepository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
         when(appointmentRepository.save(appointment)).thenReturn(appointment);
         when(appointmentMapper.toResponse(appointment)).thenReturn(AppointmentResponse.builder().build());
 
