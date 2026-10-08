@@ -56,7 +56,7 @@ export function RegisterPage() {
         </label>
         <label>
           Password
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} maxLength={72} />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
         </label>
         <label>
           Date of birth
