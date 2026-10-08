@@ -130,10 +130,10 @@ nothing of your own: no rebuttal, no context.
   finding the verifier couldn't refute. If you think it's wrong, hand it
   back to the user (see the stop rules in the definition of done).
 - **REFUTED**: don't fix it. List it in the PR with the verifier's
-  evidence. A refuted security finding (from `Lens: security`, or from the
-  Security section of an unlensed review) first goes to a second, fresh
-  verifier with the same inputs. It counts as refuted only if both refute
-  it; otherwise fix it.
+  evidence. A refuted security finding (any finding from
+  `Lens: security`, or one about security from an unlensed review) first
+  goes to a second, fresh verifier with the same inputs. It counts as
+  refuted only if both refute it; otherwise fix it.
 
 Optional findings aren't verified and never start another round. Fold
 the plainly correct ones into a fix you're already making, and list the
@@ -142,15 +142,16 @@ rest in the PR.
 ### Re-review the fixes only
 
 After fixing, commit and start a fresh `code-reviewer` on the fix
-commits alone (`<base>` = the last reviewed commit), no lens. A fix for
-another agent's finding is also re-checked by a fresh run of that agent
-(`endpoint-tester` on the affected endpoints, `adr-consistency-checker`
-on the ADR, and so on). Verify its
-blocking findings the same way. Repeat until a fix-only round has no
-confirmed blocking findings, unless a stop rule in the definition of
-done applies first. Then run the tier-3 final round if the tier calls for
-it. Its confirmed blocking findings are fixed and re-reviewed with
-fix-only rounds as above; there is no second final round.
+commits alone (`<base>` = the last reviewed commit), no lens. Verify its
+blocking findings the same way. A fix for another agent's finding is also
+re-checked by a fresh run of that agent (`endpoint-tester` on the
+affected endpoints, `adr-consistency-checker` on the ADR, and so on).
+
+Repeat until a fix-only round has no confirmed blocking findings, unless
+a stop rule in the definition of done applies first. Then run the tier-3
+final round if the tier calls for it. Its confirmed blocking findings are
+fixed and re-reviewed with fix-only rounds as above; there is no second
+final round.
 
 Never continue an earlier agent with SendMessage; that passes it your
 arguments.
