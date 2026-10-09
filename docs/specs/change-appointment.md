@@ -89,3 +89,10 @@ PATCH rather than POST/PUT: the client sends only the fields that change, and PU
 - ADR change: edit ADR-008 (publishing paths and the consumer-idempotency statements), as described under "Fits the codebase"; no new ADR (ADR-009 is the user's own proposal in PR #47).
 - Reuses merged PR #51 (`findByIdForUpdate` and the 503 `Appointment Busy` on lock timeout); nothing to approve.
 - No CLAUDE.md rule or ADR is departed from.
+
+## Departures from this note (recorded at implementation)
+- Tests: the PATCH slice tests (validation, security, error responses) are in a new class `AppointmentUpdateEndpointTest`, not in `AppointmentControllerTest` / `AppointmentSecurityTest`, and the integration tests are in a new class `AppointmentChangeIntegrationTest` (the existing integration class repeats its seeding code per test). Service unit tests are in `AppointmentServiceUpdateTest`.
+- ADR-009 was merged into main before this PR opened, so ADR-008's sentence "The specification is ADR-009" stays as is.
+- Frontend: the slot grid is a new `SlotPicker` component and `todayIsoDate` moved to `src/dates.ts` (used by `DoctorDetailPage` and the change form). `DoctorDetailPage` keeps its own inline slot grid.
+- Frontend: failed cancels are now shown on `MyAppointmentsPage` (they were dropped before because the error was only rendered in the load-error state), and a successful change shows "Appointment changed.".
+- The 503 status on PATCH was added to the contract after the user's approval of the status codes (it comes from the row lock reused from #51).
