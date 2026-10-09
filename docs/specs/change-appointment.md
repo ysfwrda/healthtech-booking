@@ -11,14 +11,14 @@ The work should be done on two steps::
 Clarified with the user: the 48h applies to the original appointment only; the new time only has to be in the future. Any non-cancelled appointment can be changed. The notice period is a config property.
 
 ## Approach
-appointment-service gets `PATCH /api/appointments/{id}` with body `{type?, dateTime?, notes?}` (at least one field; null/absent = unchanged), returning the updated `AppointmentResponse` (200). `AppointmentService.updateAppointment(id, request, patientId)`, `@Transactional`:
+appointment-service gets `PATCH /api/appointments/{id}` with body `{type?, dateTime?, notes?}` (at least one field; null/absent = unchanged; `notes: ""` clears the notes), returning the updated `AppointmentResponse` (200). `AppointmentService.updateAppointment(id, request, patientId)`, `@Transactional`:
 1. Load the appointment (404), check ownership (403).
 2. Status `CANCELLED` -> 409 `Appointment Not Changeable`.
 3. If `appointment.dateTime` is less than `appointment.change.min-notice-hours` (default 48) after `LocalDateTime.now(clock)` -> 409 `Change Window Closed`. Exactly 48h is allowed.
 4. If a different `dateTime` is given: it must be after now (400), then every `BookingRule` runs against it with the `ValidDoctor` from the read model (30-minute alignment, doctor's opening hours). The row is updated with `saveAndFlush`; a `DataIntegrityViolationException` from `ux_active_appointment` becomes `SlotAlreadyBookedException` (409).
 5. `type` / `notes` are applied. Doctor, patient, duration and status never change.
 
-Frontend: a "Change" button beside "Cancel" in `MyAppointmentsPage` opens an inline form (type, notes, date + slot grid from `GET /api/availability`). Disabled when the appointment is under 48h away; the backend stays authoritative.
+Frontend: a "Change" button beside "Cancel" in `MyAppointmentsPage` opens an inline form (type, notes, date + slot grid from `GET /api/availability`). The button stays enabled for every non-cancelled appointment and the 409 `Change Window Closed` message is shown, so the UI never disagrees with the configured notice period.
 
 PATCH rather than POST/PUT: the client sends only the fields that change, and PUT would imply replacing the whole resource (doctor, patient, status) while the existing `PUT /{id}/cancel` is an action. POST `/reschedule` would only cover the time, not the purpose.
 
@@ -48,6 +48,7 @@ PATCH rather than POST/PUT: the client sends only the fields that change, and PU
 - Schema: none (no column, same index). Events: none.
 
 ## Failure modes
+- A change racing a cancel (or another change) on the same appointment: `Appointment` has no `@Version`, so a plain load-then-save could write back `CONFIRMED` over a committed cancel. Both `updateAppointment` and `cancelAppointment` therefore load the row with a new repository method `findByIdForUpdate` (`@Lock(PESSIMISTIC_WRITE)`), so the second request waits, then sees the committed status (a change after a cancel gets 409). No schema change. `cancelAppointment` is touched only for this lookup; its behavior is otherwise unchanged.
 - Two patients move to the same slot concurrently: the unique index rejects one -> 409; the transaction rolls back and the old time is kept.
 - A patient moves onto a slot freed by a cancellation: allowed, the index is partial.
 - Changing to the appointment's own current time: treated as unchanged (no index conflict, no validation failure).
@@ -56,9 +57,9 @@ PATCH rather than POST/PUT: the client sends only the fields that change, and PU
 - Kafka down: not involved (no event published).
 
 ## Test plan
-- `AppointmentServiceTest` (fixed `Clock`): type only, notes only, time only, both; same time as current; exactly 48h allowed vs 48h minus a minute rejected; new time at now (rejected) and one slot after (accepted); unaligned; slot starting at opening time and slot ending at closing time accepted, one slot before/after rejected; slot taken; cancelled; not owner; not found; each failure leaves the row unsaved.
+- `AppointmentServiceTest` (fixed `Clock`): type only, notes only, time only, both; same time as current; exactly 48h allowed vs 48h minus a minute rejected; new time at now (rejected) and one slot after (accepted); unaligned; slot starting at opening time and slot ending at closing time accepted, one slot before/after rejected; slot taken; cancelled; not owner; appointment not found; doctor missing from the read model on a time change (404 `Doctor Not Found`); empty `notes` clears notes; each failure leaves the row unsaved. Cancel's existing unit tests are adapted to `findByIdForUpdate`.
 - `AppointmentControllerTest`: passes the token subject; propagates exceptions. `AppointmentSecurityTest` (`@WebMvcTest`): DOCTOR token -> 403; empty body -> 400; notes of 500 accepted, 501 -> 400.
-- `AppointmentIntegrationTest` (Testcontainers): change moves the booking and frees the old slot; concurrent changes to one slot -> one 200, rest 409; ProblemDetail titles for 403/404/409; no token 401.
+- `AppointmentIntegrationTest` (Testcontainers): change moves the booking and frees the old slot; concurrent changes to one slot -> one 200, rest 409; concurrent change and cancel on one appointment -> the final state is CANCELLED whichever runs first (change gets 409 or 200 before the cancel, never a revived appointment); ProblemDetail titles for 403/404/409; no token 401.
 - `OpenApiDocsTest`: PATCH responses documented with problem bodies.
 - Gateway: `GatewaySecurityTest` or a CORS preflight test for PATCH.
 - Scripts: `test-flow.sh` and `gateway-security-smoke-test.sh` get a change step. Frontend has no test runner; checked by hand.
