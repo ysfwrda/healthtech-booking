@@ -9,6 +9,8 @@ import java.util.UUID;
 // any of them. notificationType() has no "get" prefix, so it is not a JSON property.
 public interface AppointmentNotificationEvent {
 
+    UUID getEventId();
+
     UUID getAppointmentId();
 
     UUID getPatientId();

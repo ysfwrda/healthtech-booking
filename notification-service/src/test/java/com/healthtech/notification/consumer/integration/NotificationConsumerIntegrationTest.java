@@ -2,6 +2,7 @@ package com.healthtech.notification.consumer.integration;
 
 import com.healthtech.notification.domain.NotificationType;
 import com.healthtech.notification.event.AppointmentBooked;
+import com.healthtech.notification.event.AppointmentChanged;
 import com.healthtech.notification.repository.NotificationRepository;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -55,6 +56,10 @@ public class NotificationConsumerIntegrationTest {
     static void overrideProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.bootstrap-servers", kafkaContainer::getBootstrapServers);
         registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
+        // schema-postgresql.sql (unique index on event_id) runs after Hibernate, as in application.yaml.
+        registry.add("spring.jpa.defer-datasource-initialization", () -> "true");
+        registry.add("spring.sql.init.mode", () -> "always");
+        registry.add("spring.sql.init.platform", () -> "postgresql");
     }
 
     @Autowired
@@ -115,5 +120,59 @@ public class NotificationConsumerIntegrationTest {
         // The consumer hardcodes this to APPOINTMENT_BOOKED - it never reads event.getType()
         // (that's the appointment's medical type, e.g. VACCINATION, a different concept).
         assertThat(notification.getType()).isEqualTo(NotificationType.APPOINTMENT_BOOKED);
+    }
+
+    private AppointmentChanged changedEvent(UUID eventId, UUID appointmentId, LocalDateTime newTime) {
+        return AppointmentChanged.builder()
+                .eventId(eventId)
+                .appointmentId(appointmentId)
+                .patientId(UUID.randomUUID())
+                .doctorId(UUID.randomUUID())
+                .type("FOLLOW_UP")
+                .duration(30)
+                .dateTime(newTime)
+                .previousType("INITIAL_CONSULTATION")
+                .previousDateTime(newTime.minusDays(1))
+                .changedAt(LocalDateTime.now())
+                .build();
+    }
+
+    @Test
+    void appointmentChangedEvent_consumed_writesNotificationRowWithNewTime() throws Exception {
+        UUID appointmentId = UUID.randomUUID();
+        LocalDateTime newTime = LocalDateTime.now().plusDays(3).withNano(0);
+        AppointmentChanged event = changedEvent(UUID.randomUUID(), appointmentId, newTime);
+
+        testProducer().send("appointment.changed", event).get();
+
+        var notification = await(() -> notificationRepository.findAll().stream()
+                .filter(n -> n.getAppointmentId().equals(appointmentId))
+                .findFirst());
+        assertThat(notification.getType()).isEqualTo(NotificationType.APPOINTMENT_CHANGED);
+        assertThat(notification.getEventId()).isEqualTo(event.getEventId());
+        assertThat(notification.getPatientId()).isEqualTo(event.getPatientId());
+        assertThat(notification.getMessage()).isEqualTo("Appointment changed to " + newTime);
+    }
+
+    @Test
+    void appointmentChangedEvent_redelivered_writesOnlyOneRow() throws Exception {
+        UUID appointmentId = UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+        UUID sentinelAppointmentId = UUID.randomUUID();
+        LocalDateTime time = LocalDateTime.now().plusDays(3);
+        KafkaTemplate<String, Object> producer = testProducer();
+
+        // Same key and topic: the sentinel is consumed after both copies, so once it is stored the duplicate has been handled.
+        producer.send("appointment.changed", appointmentId.toString(), changedEvent(eventId, appointmentId, time)).get();
+        producer.send("appointment.changed", appointmentId.toString(), changedEvent(eventId, appointmentId, time)).get();
+        producer.send("appointment.changed", appointmentId.toString(),
+                changedEvent(UUID.randomUUID(), sentinelAppointmentId, time)).get();
+        await(() -> notificationRepository.findAll().stream()
+                .filter(n -> n.getAppointmentId().equals(sentinelAppointmentId))
+                .findFirst());
+
+        assertThat(notificationRepository.findAll().stream()
+                .filter(n -> n.getAppointmentId().equals(appointmentId))
+                .count()).isEqualTo(1);
     }
 }

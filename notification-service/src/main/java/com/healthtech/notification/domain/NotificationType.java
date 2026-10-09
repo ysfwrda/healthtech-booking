@@ -4,7 +4,8 @@ import java.time.LocalDateTime;
 
 public enum NotificationType {
     APPOINTMENT_BOOKED("Appointment booked for "),
-    APPOINTMENT_CANCELLED("Appointment cancelled for ");
+    APPOINTMENT_CANCELLED("Appointment cancelled for "),
+    APPOINTMENT_CHANGED("Appointment changed to ");
 
     private final String messagePrefix;
 

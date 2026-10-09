@@ -2,6 +2,7 @@ package com.healthtech.notification.config;
 
 import com.healthtech.notification.event.AppointmentBooked;
 import com.healthtech.notification.event.AppointmentCancelled;
+import com.healthtech.notification.event.AppointmentChanged;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -65,5 +66,15 @@ public class KafkaConsumerConfig {
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, AppointmentCancelled> cancelledKafkaListenerContainerFactory() {
         return listenerFactory(cancelledConsumerFactory());
+    }
+
+    @Bean
+    public ConsumerFactory<String, AppointmentChanged> changedConsumerFactory() {
+        return consumerFactory(AppointmentChanged.class);
+    }
+
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, AppointmentChanged> changedKafkaListenerContainerFactory() {
+        return listenerFactory(changedConsumerFactory());
     }
 }
