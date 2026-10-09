@@ -3,8 +3,9 @@
 # test-flow.sh - exercises the full HealthTech booking pipeline end to end.
 #
 # Flow: register patient -> register doctor -> read availability -> book a slot
-#       -> confirm slot disappears -> double-book (rejected) -> cancel
-#       -> confirm slot reappears.
+#       -> confirm slot disappears -> double-book (rejected) -> change the
+#       appointment (purpose and time) -> confirm old slot returns and new one
+#       is taken -> cancel -> confirm slot reappears.
 #
 # All calls go through the API Gateway (8080). Booking and cancel require a
 # patient JWT (Authorization: Bearer). The patient identity is taken from the
@@ -16,6 +17,11 @@ set -euo pipefail
 
 GATEWAY="http://localhost:8080"
 BOOKING_DATE="$(date -d 'next monday' +%Y-%m-%d 2>/dev/null || date -v+mon +%Y-%m-%d)"
+# Changing an appointment is only allowed more than 48h ahead; on a Sunday "next monday" is tomorrow, so use the Monday after.
+BOOKING_EPOCH="$(date -d "$BOOKING_DATE" +%s 2>/dev/null || date -j -f %Y-%m-%d "$BOOKING_DATE" +%s)"
+if [ $(( (BOOKING_EPOCH - $(date +%s)) / 3600 )) -lt 72 ]; then
+  BOOKING_DATE="$(date -d "$BOOKING_DATE + 7 days" +%Y-%m-%d 2>/dev/null || date -j -v+7d -f %Y-%m-%d "$BOOKING_DATE" +%Y-%m-%d)"
+fi
 
 section() { printf '\n\033[1;34m=== %s ===\033[0m\n' "$1"; }
 info()    { printf '\033[0;36m%s\033[0m\n' "$1"; }
@@ -87,6 +93,31 @@ DOUBLE_CODE="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$GATEWAY/api/appo
   -H "Authorization: Bearer $TOKEN" \
   -d '{ "doctorId": "'"$DOCTOR_ID"'", "dateTime": "'"$SLOT"'", "type": "INITIAL_CONSULTATION", "notes": "double booking attempt" }')"
 [ "$DOUBLE_CODE" = "409" ] && ok "double-book rejected with 409" || fail "double-book returned $DOUBLE_CODE (expected 409)"
+
+section "Change appointment (new purpose and the next free slot)"
+NEW_SLOT="$(echo "$AVAIL_BEFORE" | jq -r '.availableSlots[1]')"
+[ "$NEW_SLOT" != "null" ] && [ -n "$NEW_SLOT" ] || fail "no second slot to move to"
+CHANGE_RESP="$(curl -s -X PATCH "$GATEWAY/api/appointments/$APPOINTMENT_ID" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{ "dateTime": "'"$NEW_SLOT"'", "type": "FOLLOW_UP" }')"
+[ "$(echo "$CHANGE_RESP" | jq -r '.type')" = "FOLLOW_UP" ] || fail "change did not apply the new type: $CHANGE_RESP"
+[ "$(echo "$CHANGE_RESP" | jq -r '.dateTime' | cut -c1-16)" = "$(echo "$NEW_SLOT" | cut -c1-16)" ] || fail "change did not apply the new time: $CHANGE_RESP"
+ok "changed to $NEW_SLOT, type FOLLOW_UP"
+
+section "Availability after change (old slot back, new slot taken)"
+AVAIL_CHANGED="$(curl -s "$GATEWAY/api/availability?doctorId=$DOCTOR_ID&date=$BOOKING_DATE")"
+echo "$AVAIL_CHANGED" | jq -e --arg s "$SLOT" '.availableSlots | index($s)' >/dev/null || fail "old slot $SLOT did not reappear after the change"
+if echo "$AVAIL_CHANGED" | jq -e --arg s "$NEW_SLOT" '.availableSlots | index($s)' >/dev/null; then
+  fail "new slot $NEW_SLOT still free after the change"
+fi
+ok "old slot free again, new slot taken"
+
+section "Change with an empty body (expect 400)"
+EMPTY_CODE="$(curl -s -o /dev/null -w '%{http_code}' -X PATCH "$GATEWAY/api/appointments/$APPOINTMENT_ID" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" -d '{}')"
+[ "$EMPTY_CODE" = "400" ] && ok "empty change rejected with 400" || fail "empty change returned $EMPTY_CODE (expected 400)"
 
 section "Cancel appointment"
 CANCEL_CODE="$(curl -s -o /dev/null -w '%{http_code}' -X PUT \
