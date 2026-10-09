@@ -5,26 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.appointment.domain.Appointment;
 import com.healthtech.appointment.domain.AppointmentStatus;
 import com.healthtech.appointment.domain.AppointmentType;
-import com.healthtech.appointment.dto.AppointmentRequest;
 import com.healthtech.appointment.dto.AppointmentResponse;
 import com.healthtech.appointment.dto.AppointmentUpdateRequest;
 import com.healthtech.appointment.outbox.OutboxMessage;
-import com.healthtech.appointment.outbox.OutboxRepository;
-import com.healthtech.appointment.readmodel.OpeningHours;
 import com.healthtech.appointment.readmodel.ValidDoctor;
-import com.healthtech.appointment.readmodel.ValidDoctorRepository;
 import com.healthtech.appointment.readmodel.ValidPatient;
-import com.healthtech.appointment.readmodel.ValidPatientRepository;
-import com.healthtech.appointment.repository.AppointmentRepository;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -32,26 +18,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
 import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -63,77 +36,23 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 // PATCH /api/appointments/{id} end to end against real Postgres: the unique slot index, the row lock and the outbox.
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "outbox.relay.fixed-delay-ms=3600000")
-@Import(AppointmentChangeIntegrationTest.TestSecurityConfig.class)
-class AppointmentChangeIntegrationTest {
-
-    static final KeyPair KEY_PAIR;
-
-    @Container
-    @ServiceConnection
-    static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16-alpine")
-            .withStartupTimeout(Duration.ofMinutes(2));
-
-    static {
-        try {
-            KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-            gen.initialize(2048);
-            KEY_PAIR = gen.generateKeyPair();
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
+class AppointmentChangeIntegrationTest extends AbstractAppointmentApiTest {
 
     // A week out, so every appointment here is far outside the 48 hour notice period.
     private static final LocalDate NEXT_WEEK = LocalDate.now().plusWeeks(1);
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Autowired
-    ValidPatientRepository validPatientRepository;
-    @Autowired
-    ValidDoctorRepository validDoctorRepository;
-    @Autowired
-    AppointmentRepository appointmentRepository;
-    @Autowired
-    TestRestTemplate restTemplate;
-    @Autowired
-    OutboxRepository outboxRepository;
-    @Autowired
-    JdbcTemplate jdbcTemplate;
-    @Autowired
-    PlatformTransactionManager transactionManager;
-
     private record Patient(UUID id, HttpHeaders headers) {
     }
 
     private ValidDoctor seedDoctor() {
-        return validDoctorRepository.save(ValidDoctor.builder()
-                .doctorId(UUID.randomUUID())
-                .firstName("Valid")
-                .lastName("Doctor")
-                .openingHours(Set.of(OpeningHours.builder()
-                        .dayOfWeek(NEXT_WEEK.getDayOfWeek())
-                        .startTime(LocalTime.of(9, 0))
-                        .endTime(LocalTime.of(17, 0)).build()))
-                .build());
+        return seedDoctor(NEXT_WEEK);
     }
 
-    private Patient seedPatient() {
-        ValidPatient patient = validPatientRepository.save(ValidPatient.builder()
-                .patientId(UUID.randomUUID())
-                .firstName("Valid")
-                .lastName("Patient")
-                .build());
-        return new Patient(patient.getPatientId(), headersFor(patient.getPatientId()));
-    }
-
-    private static HttpHeaders headersFor(UUID patientId) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(TestJwtFactory.patientToken(patientId, (RSAPrivateKey) KEY_PAIR.getPrivate()));
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        return headers;
+    private Patient newPatient() {
+        ValidPatient patient = seedPatient();
+        return new Patient(patient.getPatientId(), patientHeaders(patient.getPatientId()));
     }
 
     private static LocalDateTime slot(int hour, int minute) {
@@ -141,10 +60,8 @@ class AppointmentChangeIntegrationTest {
     }
 
     private UUID book(Patient patient, ValidDoctor doctor, LocalDateTime dateTime) {
-        ResponseEntity<AppointmentResponse> response = restTemplate.exchange("/api/appointments", HttpMethod.POST,
-                new HttpEntity<>(AppointmentRequest.builder().doctorId(doctor.getDoctorId()).dateTime(dateTime)
-                        .type(AppointmentType.INITIAL_CONSULTATION).notes("original notes").build(), patient.headers()),
-                AppointmentResponse.class);
+        ResponseEntity<AppointmentResponse> response = postBooking(patient.headers(), doctor.getDoctorId(), dateTime,
+                AppointmentType.INITIAL_CONSULTATION, "original notes");
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return response.getBody().getId();
     }
@@ -155,8 +72,7 @@ class AppointmentChangeIntegrationTest {
     }
 
     private ResponseEntity<String> cancelAs(HttpHeaders headers, UUID appointmentId) {
-        return restTemplate.exchange("/api/appointments/" + appointmentId + "/cancel", HttpMethod.PUT,
-                new HttpEntity<>(headers), String.class);
+        return putCancel(headers, appointmentId);
     }
 
     private JsonNode json(ResponseEntity<String> response) throws Exception {
@@ -168,9 +84,7 @@ class AppointmentChangeIntegrationTest {
     }
 
     private List<OutboxMessage> changedEvents(UUID appointmentId) {
-        return outboxRepository.findAll().stream()
-                .filter(m -> m.getAggregateId().equals(appointmentId.toString()) && m.getTopic().equals("appointment.changed"))
-                .toList();
+        return outboxRows(appointmentId, "appointment.changed");
     }
 
     // --- happy paths ---
@@ -179,7 +93,7 @@ class AppointmentChangeIntegrationTest {
     void changeAppointment_newFreeSlot_movesItFreesTheOldSlotAndPublishesEvent() throws Exception {
         // Arrange
         ValidDoctor doctor = seedDoctor();
-        Patient patient = seedPatient();
+        Patient patient = newPatient();
         UUID id = book(patient, doctor, slot(9, 0));
 
         // Act
@@ -197,14 +111,14 @@ class AppointmentChangeIntegrationTest {
         assertThat(LocalDateTime.parse(payload.get("dateTime").asText())).isEqualTo(slot(10, 30));
         assertThat(LocalDateTime.parse(payload.get("previousDateTime").asText())).isEqualTo(slot(9, 0));
         // the vacated slot can be booked by someone else
-        book(seedPatient(), doctor, slot(9, 0));
+        book(newPatient(), doctor, slot(9, 0));
     }
 
     @Test
     void changeAppointment_typeAndNotes_updatesBothAndPublishesEventWithPreviousType() throws Exception {
         // Arrange
         ValidDoctor doctor = seedDoctor();
-        Patient patient = seedPatient();
+        Patient patient = newPatient();
         UUID id = book(patient, doctor, slot(9, 0));
 
         // Act
@@ -226,7 +140,7 @@ class AppointmentChangeIntegrationTest {
     void changeAppointment_notesOnly_publishesNoEvent() {
         // Arrange
         ValidDoctor doctor = seedDoctor();
-        Patient patient = seedPatient();
+        Patient patient = newPatient();
         UUID id = book(patient, doctor, slot(9, 0));
 
         // Act
@@ -245,9 +159,9 @@ class AppointmentChangeIntegrationTest {
     void changeAppointment_slotTakenByAnotherPatient_returns409AndKeepsTheOldTime() throws Exception {
         // Arrange
         ValidDoctor doctor = seedDoctor();
-        Patient patient = seedPatient();
+        Patient patient = newPatient();
         UUID id = book(patient, doctor, slot(9, 0));
-        book(seedPatient(), doctor, slot(10, 0));
+        book(newPatient(), doctor, slot(10, 0));
 
         // Act
         ResponseEntity<String> response = patchAs(patient.headers(), id,
@@ -264,7 +178,7 @@ class AppointmentChangeIntegrationTest {
     void changeAppointment_outsideOpeningHours_returns400() throws Exception {
         // Arrange
         ValidDoctor doctor = seedDoctor();
-        Patient patient = seedPatient();
+        Patient patient = newPatient();
         UUID id = book(patient, doctor, slot(9, 0));
 
         // Act
@@ -280,7 +194,7 @@ class AppointmentChangeIntegrationTest {
     @Test
     void changeAppointment_emptyBody_returns400() throws Exception {
         // Arrange
-        Patient patient = seedPatient();
+        Patient patient = newPatient();
         UUID id = book(patient, seedDoctor(), slot(9, 0));
 
         // Act
@@ -294,7 +208,7 @@ class AppointmentChangeIntegrationTest {
     @Test
     void changeAppointment_startsInLessThan48Hours_returns409ChangeWindowClosed() throws Exception {
         // Arrange
-        Patient patient = seedPatient();
+        Patient patient = newPatient();
         Appointment soon = appointmentRepository.save(Appointment.builder()
                 .patientId(patient.id())
                 .doctorId(UUID.randomUUID())
@@ -317,7 +231,7 @@ class AppointmentChangeIntegrationTest {
     @Test
     void changeAppointment_cancelledAppointment_returns409NotChangeable() throws Exception {
         // Arrange
-        Patient patient = seedPatient();
+        Patient patient = newPatient();
         UUID id = book(patient, seedDoctor(), slot(9, 0));
         assertThat(cancelAs(patient.headers(), id).getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -336,8 +250,8 @@ class AppointmentChangeIntegrationTest {
     @Test
     void changeAppointment_notOwner_returns403AndChangesNothing() throws Exception {
         // Arrange
-        UUID id = book(seedPatient(), seedDoctor(), slot(9, 0));
-        Patient stranger = seedPatient();
+        UUID id = book(newPatient(), seedDoctor(), slot(9, 0));
+        Patient stranger = newPatient();
 
         // Act
         ResponseEntity<String> response = patchAs(stranger.headers(), id,
@@ -352,7 +266,7 @@ class AppointmentChangeIntegrationTest {
     @Test
     void changeAppointment_unknownId_returns404() throws Exception {
         // Arrange
-        Patient patient = seedPatient();
+        Patient patient = newPatient();
 
         // Act
         ResponseEntity<String> response = patchAs(patient.headers(), UUID.randomUUID(),
@@ -404,7 +318,7 @@ class AppointmentChangeIntegrationTest {
         int movers = 5;
         List<Callable<HttpStatusCode>> moves = new ArrayList<>();
         for (int i = 0; i < movers; i++) {
-            Patient patient = seedPatient();
+            Patient patient = newPatient();
             UUID id = book(patient, doctor, slot(9 + i, 0));
             moves.add(() -> patchAs(patient.headers(), id,
                     AppointmentUpdateRequest.builder().dateTime(slot(16, 0)).build()).getStatusCode());
@@ -423,7 +337,7 @@ class AppointmentChangeIntegrationTest {
         // Arrange and Act: repeated so both orders of the race are likely to occur
         ValidDoctor doctor = seedDoctor();
         for (int round = 0; round < 6; round++) {
-            Patient patient = seedPatient();
+            Patient patient = newPatient();
             UUID id = book(patient, doctor, slot(9 + round, 0));
             List<Callable<HttpStatusCode>> race = List.of(
                     () -> cancelAs(patient.headers(), id).getStatusCode(),
@@ -442,7 +356,7 @@ class AppointmentChangeIntegrationTest {
     @Test
     void changeAppointment_rowHeldByAnotherTransaction_returns503ThenSucceedsOnceReleased() throws Exception {
         // Arrange
-        Patient patient = seedPatient();
+        Patient patient = newPatient();
         UUID id = book(patient, seedDoctor(), slot(9, 0));
         AppointmentUpdateRequest request = AppointmentUpdateRequest.builder().type(AppointmentType.FOLLOW_UP).build();
         CountDownLatch rowLocked = new CountDownLatch(1);
@@ -494,17 +408,6 @@ class AppointmentChangeIntegrationTest {
                 results.add(future.get(60, TimeUnit.SECONDS));
             }
             return results;
-        }
-    }
-
-    @TestConfiguration
-    static class TestSecurityConfig {
-        @Bean
-        @Primary
-        JwtDecoder testJwtDecoder() {
-            return NimbusJwtDecoder
-                    .withPublicKey((RSAPublicKey) KEY_PAIR.getPublic())
-                    .build();
         }
     }
 }
