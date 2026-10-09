@@ -1,10 +1,14 @@
 package com.healthtech.appointment.service;
 
+import com.healthtech.appointment.config.ChangePolicyProperties;
 import com.healthtech.appointment.domain.Appointment;
 import com.healthtech.appointment.domain.AppointmentStatus;
+import com.healthtech.appointment.domain.AppointmentType;
 import com.healthtech.appointment.dto.AppointmentRequest;
 import com.healthtech.appointment.dto.AppointmentResponse;
+import com.healthtech.appointment.dto.AppointmentUpdateRequest;
 import com.healthtech.appointment.event.AppointmentBooked;
+import com.healthtech.appointment.event.AppointmentChanged;
 import com.healthtech.appointment.event.AppointmentCancelled;
 import com.healthtech.appointment.event.DomainEventPublisher;
 import com.healthtech.appointment.exception.*;
@@ -37,6 +41,7 @@ public class AppointmentService {
     private final List<BookingRule> bookingRules;
     private final DomainEventPublisher eventPublisher;
     private final Clock clock;
+    private final ChangePolicyProperties changePolicy;
 
     @Transactional
     public AppointmentResponse bookAppointment(AppointmentRequest request, UUID patientId) {
@@ -110,6 +115,69 @@ public class AppointmentService {
 
         eventPublisher.publish("appointment.cancelled", saved.getId(), event.getEventId(), event);
         log.info("Appointment cancelled, appointmentId {}", saved.getId());
+        return appointmentMapper.toResponse(saved);
+    }
+
+    @Transactional
+    public AppointmentResponse updateAppointment(UUID appointmentId, AppointmentUpdateRequest request, UUID patientId) {
+        Appointment appointment = appointmentRepository.findByIdForUpdate(appointmentId)
+                .orElseThrow(() -> new AppointmentNotFoundException("Appointment not found: " + appointmentId));
+
+        if (!appointment.getPatientId().equals(patientId)) {
+            throw new AppointmentAccessDeniedException(appointmentId);
+        }
+        if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
+            throw new AppointmentNotChangeableException(appointmentId);
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        int minNoticeHours = changePolicy.minNoticeHours();
+        if (appointment.getDateTime().isBefore(now.plusHours(minNoticeHours))) {
+            throw new ChangeWindowClosedException(minNoticeHours);
+        }
+
+        AppointmentType previousType = appointment.getType();
+        LocalDateTime previousDateTime = appointment.getDateTime();
+
+        if (request.getDateTime() != null && !request.getDateTime().equals(previousDateTime)) {
+            ValidDoctor doctor = validDoctorRepository.findById(appointment.getDoctorId())
+                    .orElseThrow(() -> new DoctorNotFoundException(appointment.getDoctorId()));
+            bookingRules.forEach(rule -> rule.check(request.getDateTime(), doctor));
+            appointment.setDateTime(request.getDateTime());
+        }
+        if (request.getType() != null) {
+            appointment.setType(request.getType());
+        }
+        if (request.getNotes() != null) {
+            appointment.setNotes(request.getNotes().isEmpty() ? null : request.getNotes());
+        }
+
+        Appointment saved;
+        try {
+            // saveAndFlush for the same reason as in bookAppointment: the unique-index violation
+            // must surface here, not at commit.
+            saved = appointmentRepository.saveAndFlush(appointment);
+        }
+        catch (DataIntegrityViolationException e) {
+            throw new SlotAlreadyBookedException(appointment.getDoctorId(), appointment.getDateTime());
+        }
+
+        // Notes are not in the event, so a notes-only change publishes nothing.
+        if (saved.getType() != previousType || !saved.getDateTime().equals(previousDateTime)) {
+            AppointmentChanged event = AppointmentChanged.builder()
+                    .eventId(UUID.randomUUID())
+                    .appointmentId(saved.getId())
+                    .patientId(saved.getPatientId())
+                    .doctorId(saved.getDoctorId())
+                    .duration(saved.getDuration())
+                    .type(saved.getType())
+                    .dateTime(saved.getDateTime())
+                    .previousType(previousType)
+                    .previousDateTime(previousDateTime)
+                    .changedAt(now)
+                    .build();
+            eventPublisher.publish("appointment.changed", saved.getId(), event.getEventId(), event);
+        }
+        log.info("Appointment changed, appointmentId {}", saved.getId());
         return appointmentMapper.toResponse(saved);
     }
 

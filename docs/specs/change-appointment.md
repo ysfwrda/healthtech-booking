@@ -1,6 +1,6 @@
 # Design: Patient changes an appointment
 
-Status: draft
+Status: approved for the user's request of 2026-10-09: passed design-reviewer after revisions for its confirmed findings (the fifth review round was skipped at the user's instruction, so the last revision, which only added the 401/503 contract entries and an error-response slice test, was not re-reviewed); the user approved its "Ask first" items on 2026-10-09 (the 503 status on PATCH was added afterwards and is flagged in the PR). Records the design at approval; the code, README and ADRs are the current state.
 
 ## Task
 Patient should be able to change their appointment up to 48 hours before their appointment. They might change the purpose and or the time. The time should remain inside the availabillity of the doctor.

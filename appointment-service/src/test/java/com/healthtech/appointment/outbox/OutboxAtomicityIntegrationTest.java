@@ -3,6 +3,7 @@ package com.healthtech.appointment.outbox;
 import com.healthtech.appointment.controller.integration.TestJwtFactory;
 import com.healthtech.appointment.dto.AppointmentRequest;
 import com.healthtech.appointment.dto.AppointmentResponse;
+import com.healthtech.appointment.dto.AppointmentUpdateRequest;
 import com.healthtech.appointment.domain.AppointmentType;
 import com.healthtech.appointment.readmodel.OpeningHours;
 import com.healthtech.appointment.readmodel.ValidDoctor;
@@ -194,6 +195,65 @@ class OutboxAtomicityIntegrationTest {
                 .toList();
         assertThat(cancelledRows).hasSize(1);
         assertThat(cancelledRows.get(0).getPublishedAt()).isNull();
+    }
+
+    private UUID bookAt(ValidPatient patient, ValidDoctor doctor, LocalDateTime dateTime) {
+        ResponseEntity<AppointmentResponse> response = restTemplate.exchange(
+                "/api/appointments", HttpMethod.POST,
+                new HttpEntity<>(AppointmentRequest.builder().doctorId(doctor.getDoctorId()).dateTime(dateTime)
+                        .type(AppointmentType.VACCINATION).build(), authHeaders(patient.getPatientId())),
+                AppointmentResponse.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        return response.getBody().getId();
+    }
+
+    private ResponseEntity<String> moveTo(ValidPatient patient, UUID appointmentId, LocalDateTime dateTime) {
+        return restTemplate.exchange("/api/appointments/" + appointmentId, HttpMethod.PATCH,
+                new HttpEntity<>(AppointmentUpdateRequest.builder().dateTime(dateTime).build(), authHeaders(patient.getPatientId())),
+                String.class);
+    }
+
+    private long changedRowCount(UUID appointmentId) {
+        return outboxRepository.findAll().stream()
+                .filter(m -> m.getAggregateId().equals(appointmentId.toString()) && m.getTopic().equals("appointment.changed"))
+                .count();
+    }
+
+    @Test
+    void changeAppointment_success_writesOneUnpublishedChangedRow() {
+        // Arrange
+        LocalDate target = LocalDate.now().plusWeeks(1);
+        ValidDoctor doctor = seedDoctor(target);
+        ValidPatient patient = seedPatient();
+        UUID appointmentId = bookAt(patient, doctor, LocalDateTime.of(target, LocalTime.of(12, 0)));
+
+        // Act
+        ResponseEntity<String> response = moveTo(patient, appointmentId, LocalDateTime.of(target, LocalTime.of(13, 0)));
+
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        var changedRows = outboxRepository.findAll().stream()
+                .filter(m -> m.getAggregateId().equals(appointmentId.toString()) && m.getTopic().equals("appointment.changed"))
+                .toList();
+        assertThat(changedRows).hasSize(1);
+        assertThat(changedRows.get(0).getPublishedAt()).isNull();
+    }
+
+    @Test
+    void changeAppointment_rollsBackOnSlotConflict_writesNoChangedRow() {
+        // Arrange: 15:00 is already taken by another patient
+        LocalDate target = LocalDate.now().plusWeeks(1);
+        ValidDoctor doctor = seedDoctor(target);
+        ValidPatient patient = seedPatient();
+        UUID appointmentId = bookAt(patient, doctor, LocalDateTime.of(target, LocalTime.of(14, 0)));
+        bookAt(seedPatient(), doctor, LocalDateTime.of(target, LocalTime.of(15, 0)));
+
+        // Act
+        ResponseEntity<String> response = moveTo(patient, appointmentId, LocalDateTime.of(target, LocalTime.of(15, 0)));
+
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(changedRowCount(appointmentId)).isZero();
     }
 
     @TestConfiguration
