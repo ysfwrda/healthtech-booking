@@ -33,8 +33,9 @@ Also ask when the task can't be done without breaking a rule in CLAUDE.md
 or an ADR.
 
 When the user approves a design note (the `design-review` skill), that
-approval covers the "Ask first" items the note describes. Anything the
-note doesn't describe still needs asking.
+approval covers the "Ask first" items and any change to a CLAUDE.md rule
+or an ADR that the note describes. Anything the note doesn't describe
+still needs asking.
 
 Note bugs you find outside the task in the PR description. Don't fix
 them in the same PR.

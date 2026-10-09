@@ -116,8 +116,10 @@ If there is nothing to ask, go on without handing back.
 Set the note's status and commit it:
 
 ```markdown
-Status: approved for <issue #N | the user's request of <date>>. Records
-the design at approval; the code, README and ADRs are the current state.
+Status: approved for <issue #N, or the user's request of DATE>: passed
+design-reviewer[; the user approved its "Ask first" items on DATE].
+Records the design at approval; the code, README and ADRs are the
+current state.
 ```
 
 The approved note is the spec. When `verify` runs, it gives
