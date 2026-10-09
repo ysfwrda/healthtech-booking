@@ -86,11 +86,15 @@ public class AppointmentService {
 
     @Transactional
     public AppointmentResponse cancelAppointment(UUID appointmentId, UUID patientId) {
-        Appointment appointment = appointmentRepository.findById(appointmentId)
+        Appointment appointment = appointmentRepository.findByIdForUpdate(appointmentId)
                 .orElseThrow(() -> new AppointmentNotFoundException("Appointment not found: " + appointmentId));
 
         if(!appointment.getPatientId().equals(patientId)) {
             throw new AppointmentAccessDeniedException(appointmentId);
+        }
+        // Idempotent: a repeated cancel returns the current state without a new save or event.
+        if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
+            return appointmentMapper.toResponse(appointment);
         }
         appointment.setStatus(AppointmentStatus.CANCELLED);
         Appointment saved = appointmentRepository.save(appointment);

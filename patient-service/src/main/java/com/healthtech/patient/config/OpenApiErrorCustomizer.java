@@ -26,7 +26,7 @@ public class OpenApiErrorCustomizer implements OperationCustomizer {
     // Codes whose body is always a ProblemDetail. For 401/403, Spring Security's own responses (missing token,
     // wrong role) have an empty body, so those are only given a ProblemDetail when a controller declared them
     // (login 401, ownership 403); springdoc then fills in the success schema, which is replaced here.
-    private static final Set<String> PROBLEM_CODES = Set.of("400", "404", "409");
+    private static final Set<String> PROBLEM_CODES = Set.of("400", "404", "409", "503");
 
     static Schema<?> problemDetailSchema() {
         return new ObjectSchema()
