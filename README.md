@@ -43,13 +43,13 @@ Server) · MapStruct · JWT (RS256) · springdoc-openapi (Swagger UI) · Docker 
 │                 │              │ JWT validation     │              │ filtering      │
 └────────┬────────┘              └─────────┬──────────┘              └───────┬────────┘
          │ patient.registered              │ appointment.booked              │ doctor.registered
-         │                                 │ appointment.cancelled           │
+         │                                 │ appointment.cancelled / changed │
          └─────────────────────────────────┼─────────────────────────────────┘
                                            ▼
                                    ┌────────────────┐
                                    │  Apache Kafka  │
                                    └───────┬────────┘
-                                           │ appointment.booked / cancelled
+                                           │ appointment.booked / cancelled / changed
                                            ▼
                                  ┌───────────────────┐
                                  │ Notification Svc  │
@@ -67,7 +67,7 @@ Notification Service consumes.
 | Service                | Port | Responsibility                                                                                                                                                              |
 |------------------------|------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `api-gateway`          | 8080 | Single entry point for all client traffic; routes each path prefix to the owning service                                                                                    |
-| `appointment-service`  | 8081 | Booking, cancellation, availability/slot computation, read-model of valid patients/doctors, JWT validation, publishes domain events                                         |
+| `appointment-service`  | 8081 | Booking, changing, cancellation, availability/slot computation, read-model of valid patients/doctors, JWT validation, publishes domain events                                         |
 | `notification-service` | 8082 | Consumes appointment events from Kafka and persists notification records independently                                                                                      |
 | `patient-service`      | 8083 | Patient registration, login, JWT issuance (RS256), profile management                                                                                                       |
 | `doctor-service`       | 8084 | Doctor self-registration, login, JWT issuance (RS256), specialty and language filtering, opening hours, registration event publishing                                       |
@@ -83,6 +83,7 @@ Notification Service consumes.
 | `doctor.registered`     | doctor-service      | appointment-service (read-model) |
 | `appointment.booked`    | appointment-service | notification-service             |
 | `appointment.cancelled` | appointment-service | notification-service             |
+| `appointment.changed`   | appointment-service | notification-service             |
 
 Kafka was chosen over synchronous REST for temporal decoupling: a consumer does not need to be available when an event
 is produced. Events are retained in the log and consumed when the service is ready.
@@ -104,12 +105,13 @@ Authentication uses **JWT with RS256** (asymmetric signing), per [ADR-004](docs/
   token), `role`, and `exp`.
 
 **Identity is derived from the token, not the request body.** Booking takes the patient id from the token subject (
-`sub`), so a caller cannot book on behalf of another user by supplying a different id. Cancellation enforces ownership
-and requires a PATIENT token, consistent with booking: a patient can only cancel their own appointment. Requests with
+`sub`), so a caller cannot book on behalf of another user by supplying a different id. Changing and cancelling enforce
+ownership and require a PATIENT token, consistent with booking: a patient can only change or cancel their own
+appointment. Requests with
 the wrong token type or attempts to act on another user's resource are rejected with `403`.
 
 Public (no token required): patient and doctor registration/login, doctor browsing, specialty listing, and
-availability. Booking and cancellation require a valid patient token. The Swagger UI and OpenAPI spec endpoints
+availability. Booking, changing and cancellation require a valid patient token. The Swagger UI and OpenAPI spec endpoints
 (`/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**`, and the gateway's `/docs/*/v3/api-docs`) are also public.
 
 ---
@@ -131,6 +133,15 @@ is computed from appointment data plus doctor opening hours.
   publishes no new `appointment.cancelled` event. Concurrent cancels of one appointment are serialized by a row lock. If
   another request holds the row for more than 3 seconds, the endpoint returns `503` (`Appointment Busy`) with
   `Retry-After: 1`; the cancel can be retried safely.
+* **Changing an appointment** is `PATCH /api/appointments/{id}` with a partial body: any of `type`, `dateTime` and
+  `notes` (at least one; an empty `notes` string clears the notes). It is allowed up to
+  `appointment.change.min-notice-hours` (default 48) before the appointment's current start; inside that window it
+  returns `409` (`Change Window Closed`). The appointment keeps its doctor and patient. A new `dateTime` must pass the
+  same rules as a booking (slot grid, the doctor's opening hours, not in the past) and be free; the new time itself only
+  has to be in the future, not 48 hours away. A cancelled appointment returns `409` (`Appointment Not Changeable`).
+  Like cancel it takes the row lock, so it cannot race a cancel, and returns the same `503` when the lock is not
+  granted within 3 seconds. When `type` or `dateTime` actually changes it publishes `appointment.changed`; notes-only
+  and no-op changes publish nothing.
 
 ---
 
@@ -213,9 +224,15 @@ Documented in [`docs/adr/`](docs/adr/):
 | Appointment not found on cancel                    | `404` problem+json; no partial state change                                             |
 | Cancelling an already-cancelled appointment        | `200` with the current state; no new event                                              |
 | Cancel while the appointment row is locked > 3s    | `503` problem+json (`Appointment Busy`) with `Retry-After: 1`; safe to retry            |
+| Changing an appointment that starts in < 48h       | `409` problem+json (`Change Window Closed`); no state change                            |
+| Changing a cancelled appointment                   | `409` problem+json (`Appointment Not Changeable`); no state change                      |
+| Changing to a taken slot                           | `409` (`Slot Already Booked`); the appointment keeps its old time                       |
+| Changing to a time outside opening hours, off the grid or in the past | `400`; the appointment keeps its old time                    |
+| Changing another patient's appointment             | Rejected with `403`; no state change                                                    |
+| Change while the appointment row is locked > 3s    | `503` problem+json (`Appointment Busy`) with `Retry-After: 1`; safe to retry            |
 | Duplicate username/email                           | `409` problem+json                                                                      |
 | Kafka downtime                                     | Booking and registration fail explicitly; no silent data loss                           |
-| Duplicate event delivery                           | Read-model consumer is idempotent; event versioning and broader idempotency are Phase 3 |
+| Duplicate event delivery                           | Read-model consumers upsert; notification-service stores each event id once (unique index); event versioning is Phase 3 |
 
 ---
 
@@ -295,14 +312,16 @@ real persistence, real RS256 signature validation, and in some cases a real Kafk
   is published with the expected payload.
 * `doctor-service` (`DoctorIntegrationTest`): the same pattern, plus JWT-secured write paths, using a throwaway RSA
   key pair generated inside the test (its own `TestJwtFactory`), so it never reads `keys/private.pem`.
-* `appointment-service` (`AppointmentIntegrationTest`, `AvailabilityIntegrationTest`): booking, cancellation,
-  ownership checks, and availability against a real Postgres container, with Kafka mocked and JWTs minted the same
+* `appointment-service` (`AppointmentIntegrationTest`, `AppointmentChangeIntegrationTest`,
+  `AvailabilityIntegrationTest`): booking, cancellation, changing (including a change racing a cancel and concurrent
+  moves to one slot), ownership checks, and availability against a real Postgres container, with Kafka mocked and JWTs minted the same
   throwaway way. `ReadModelProjectionIntegrationTest` instead runs a real `ConfluentKafkaContainer` alongside
   Postgres, publishes real `patient.registered`/`doctor.registered` events, and asserts the read-model consumer
   projects them correctly, exercising the actual Kafka listener rather than a mock.
 * `notification-service` (`NotificationConsumerIntegrationTest`): the same real-Kafka-container approach, publishing
-  a real `appointment.booked` event and asserting a notification row gets persisted, verifying the consumer wiring
-  end to end.
+  a real `appointment.booked` or `appointment.changed` event and asserting a notification row gets persisted (and that a
+  redelivered event is stored once), verifying the consumer wiring end to end. `NotificationSchemaUpgradeIntegrationTest`
+  starts the service on a notification table created by an earlier version and checks the startup schema script.
 
 The `*ApplicationTests` smoke tests (`PatientServiceApplicationTests`, `DoctorServiceApplicationTests`,
 `AppointmentServiceApplicationTests`) also load the full application, including `JwtDecoderConfig`, and each starts
@@ -518,6 +537,13 @@ curl -X POST http://localhost:8080/api/appointments \
   }'
 ```
 
+Change an appointment's purpose and/or time (requires the owning patient's token, at least 48 hours before it
+starts; send only the fields to change):
+
+```bash
+curl -X PATCH http://localhost:8080/api/appointments/<appointment-id> \n  -H "Authorization: Bearer <token>" \n  -H "Content-Type: application/json" \n  -d '{ "dateTime": "2026-07-13T11:00:00", "type": "FOLLOW_UP" }'
+```
+
 Cancel an appointment (requires the owning patient's token):
 
 ```bash
@@ -583,8 +609,8 @@ curl -X POST http://localhost:8080/api/doctors/login \
 
 ### Step 5 — Verify the Event Flow
 
-* Kafka UI (`http://localhost:8090`): confirm `patient.registered`, `doctor.registered`, `appointment.booked`, and
-  `appointment.cancelled` have messages.
+* Kafka UI (`http://localhost:8090`): confirm `patient.registered`, `doctor.registered`, `appointment.booked`,
+  `appointment.cancelled` and `appointment.changed` have messages.
 * Appointment Service: confirm `valid_patient` / `valid_doctor` rows appear in `appointment_db` (the read-model).
 * Notification Service: confirm the booking event was consumed and a notification record was saved in `notification_db`.
 
