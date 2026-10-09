@@ -15,7 +15,7 @@ appointment-service gets `PATCH /api/appointments/{id}` with body `{type?, dateT
 1. Load the appointment (404), check ownership (403).
 2. Status `CANCELLED` -> 409 `Appointment Not Changeable`.
 3. If `appointment.dateTime` is less than `appointment.change.min-notice-hours` (default 48) after `LocalDateTime.now(clock)` -> 409 `Change Window Closed`. Exactly 48h is allowed.
-4. If a different `dateTime` is given: it must be after now (400), then every `BookingRule` runs against it with the `ValidDoctor` from the read model (30-minute alignment, doctor's opening hours). The row is updated with `saveAndFlush`; a `DataIntegrityViolationException` from `ux_active_appointment` becomes `SlotAlreadyBookedException` (409).
+4. If a different `dateTime` is given: every `BookingRule` runs against it with the `ValidDoctor` from the read model (not in the past via `NotInPastRule`, 30-minute alignment, doctor's opening hours; a past time gives the existing 400 `Slot In The Past`). The row is updated with `saveAndFlush`; a `DataIntegrityViolationException` from `ux_active_appointment` becomes `SlotAlreadyBookedException` (409).
 5. `type` / `notes` are applied. Doctor, patient, duration and status never change.
 
 Frontend: a "Change" button beside "Cancel" in `MyAppointmentsPage` opens an inline form (type, notes, date + slot grid from `GET /api/availability`). The button stays enabled for every non-cancelled appointment and the 409 `Change Window Closed` message is shown, so the UI never disagrees with the configured notice period.
@@ -33,7 +33,7 @@ PATCH rather than POST/PUT: the client sends only the fields that change, and PU
 - Concurrency reuses the partial unique index `ux_active_appointment (doctor_id, date_time) WHERE status <> 'CANCELLED'` and the `saveAndFlush` + catch pattern from `bookAppointment`.
 - Time comes from the injected `Clock`, as for `cancelledAt` and past-slot hiding.
 - Errors: new exceptions plus handlers in `GlobalExceptionHandler` producing RFC 9457 `ProblemDetail`, like the existing ones. `AppointmentAccessDeniedException`'s message is cancel-specific; it is reworded to be generic.
-- The "past time" check is new and applies only to change; booking is left as it is (noted as an existing gap, not fixed here).
+- The past-time check is the existing `NotInPastRule` (added to main for booking); change reuses it, nothing new.
 - Config: `@ConfigurationProperties`-style/`@Value` property in `application.yaml`, default 48.
 - No new Kafka event (see below), so no outbox use.
 
@@ -53,7 +53,7 @@ PATCH rather than POST/PUT: the client sends only the fields that change, and PU
 - A patient moves onto a slot freed by a cancellation: allowed, the index is partial.
 - Changing to the appointment's own current time: treated as unchanged (no index conflict, no validation failure).
 - doctor/patient missing in read model: existing 404 `Doctor Not Found` for time changes; type/notes-only changes need no doctor lookup.
-- Clock-boundary: the notice check and "after now" use one `now` read per request.
+- Clock-boundary: the notice check uses the injected `Clock`; `NotInPastRule` reads it separately, so a request at the exact boundary instant is not a case worth pinning beyond the two sides tested.
 - Kafka down: not involved (no event published).
 
 ## Test plan
