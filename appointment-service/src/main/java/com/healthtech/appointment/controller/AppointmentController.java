@@ -50,9 +50,10 @@ public class AppointmentController {
     }
 
     @Operation(summary = "Cancel one of the authenticated patient's appointments")
-    @ApiResponse(responseCode = "200", description = "Appointment cancelled")
+    @ApiResponse(responseCode = "200", description = "Appointment cancelled; cancelling an already-cancelled appointment is a no-op and returns the current state without a new event")
     @ApiResponse(responseCode = "403", description = "The token is not a patient token, or the resource belongs to another patient")
     @ApiResponse(responseCode = "404", description = "Appointment not found")
+    @ApiResponse(responseCode = "503", description = "The appointment is locked by another request and could not be cancelled within 3 seconds; retry shortly (Retry-After: 1). The cancel is idempotent, so retrying is safe")
     @PutMapping("/{id}/cancel")
     public ResponseEntity<AppointmentResponse> cancelAppointment(@PathVariable UUID id,
                                                                  @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {

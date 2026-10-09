@@ -18,7 +18,8 @@ domain events, and all four write to the database and to Kafka as two independen
 * `AppointmentService.bookAppointment`: persists the appointment, then publishes
   `AppointmentBooked` to `appointment.booked` for notification-service.
 * `AppointmentService.cancelAppointment`: updates the appointment status, then publishes
-  `AppointmentCancelled` to `appointment.cancelled` for notification-service.
+  `AppointmentCancelled` to `appointment.cancelled` for notification-service. It locks the row first
+  and publishes nothing when the appointment is already cancelled, so a repeated cancel adds no event.
 
 Postgres and Kafka are separate systems with no shared transaction, so these two writes cannot
 succeed or fail together. This is the dual-write problem, and it appears here in two directions.
