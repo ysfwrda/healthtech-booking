@@ -58,7 +58,8 @@ justification and "ADR planned: yes (which) / no (why not)">
 the layer for each, as `.claude/rules/tests.md` requires>
 
 ## Ask first
-<any API contract, schema/event, security or dependency change; "none">
+<any API contract, schema/event, security or dependency change, and any
+departure from a CLAUDE.md rule or an ADR; "none">
 ```
 
 Keep it to what the implementation needs, about a page. Commit the note.
