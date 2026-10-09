@@ -32,25 +32,36 @@ Stop and ask before any of these, even when the task seems to require it:
 Also ask when the task can't be done without breaking a rule in CLAUDE.md
 or an ADR.
 
+When the user approves a design note (the `design-review` skill), that
+approval covers the "Ask first" items the note describes. Anything the
+note doesn't describe still needs asking.
+
 Note bugs you find outside the task in the PR description. Don't fix
 them in the same PR.
 
 ## Design first, when there is no spec
 
-For a task without an approved spec that adds behavior across services, a
-new endpoint or a new event, write a design note and get it through
-`design-reviewer` before implementing. The `design-review` skill has the
-template and the steps. Bug fixes and changes contained in one service
-skip this.
+For a task without an approved spec that adds a new endpoint or a new
+event (even within one service), or behavior spanning services, write a
+design note and get it through `design-reviewer` before implementing.
+Bug fixes and other changes contained in one service skip this. The
+`design-review` skill has the template, the steps, and what counts as an
+approved spec.
 
 ## Done means all of these hold
 
-1. **Every behavior and path is tested**: the happy path and each failure
-   path, at every layer the change reaches. A bug is reproduced by a test
-   first; a guard is shown to fail without it. `.claude/rules/tests.md`
-   has the failure paths to cover and the layer for each kind of change.
-   The frontend has no test setup: say in the PR how a frontend change was
-   checked by hand. Adding a test runner is a new dependency: ask first.
+1. **Every behavior and path is tested.** Each new or changed behavior
+   has unit tests for its happy path and for each failure path:
+   - validation errors, including the values on both sides of each limit
+   - not found, conflict and invalid state
+   - 401, 403 and ownership violations
+   - failures of a dependency it calls
+
+   Add tests at every other layer the change reaches; the layer for each
+   kind of change is in `.claude/rules/tests.md`. A bug is reproduced by a
+   test first; a guard is shown to fail without it. The frontend has no
+   test setup: say in the PR how a frontend change was checked by hand.
+   Adding a test runner is a new dependency: ask first.
 2. **Every affected suite passes**, integration tests included. The cloud
    session hook provides Docker and keys. If a layer still can't run, the
    reason must come from the environment, and the PR says so.

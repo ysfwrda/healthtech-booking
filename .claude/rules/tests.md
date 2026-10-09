@@ -7,13 +7,9 @@ paths:
 
 ## Which tests a change needs
 
-Each new or changed behavior has unit tests for its happy path and for
-each failure path:
-- validation errors, including the values on both sides of each limit
-  (`@Size(min = 8)` on the doctor password: test 7 and 8)
-- not found, conflict and invalid state
-- 401, 403 and ownership violations
-- failures of a dependency it calls
+Item 1 of `.claude/rules/definition-of-done.md` lists the failure paths
+each behavior's unit tests cover. For a limit, test the values on both
+sides: `@Size(min = 8)` on the doctor password means testing 7 and 8.
 
 For a controller, the `@WebMvcTest` slice test is its unit test. Then add
 tests at every other layer the change reaches:

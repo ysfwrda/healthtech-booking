@@ -1,6 +1,6 @@
 ---
 name: design-reviewer
-description: Reviews a design note before any code is written, against fixed criteria (task fit, ADR consistency, existing patterns, room for the next change, hard-to-reverse decisions, service boundaries and contracts, hidden "Ask first" changes, failure modes, testability, simplicity, duplicated copies). Use from the design-review skill for tasks without an approved spec that add behavior across services, a new endpoint or a new event. Input is the task and the path of the design note. Labels each finding factual, trade-off or optional. Does not review code or diffs.
+description: Reviews a design note before any code is written, against fixed criteria (task fit, ADR consistency, existing patterns, room for the next change, hard-to-reverse decisions, service boundaries and contracts, hidden "Ask first" changes, failure modes, testability, simplicity, duplicated copies). Use from the design-review skill for tasks without an approved spec that add a new endpoint or a new event, or behavior spanning services. Input is the task and the path of the design note. Labels each finding factual, trade-off or optional. Does not review code or diffs.
 tools: Read, Grep, Glob
 model: opus
 ---
@@ -64,8 +64,8 @@ Check every criterion. Each problem is one finding.
    concurrent requests, a step failing halfway. Each is handled or
    explicitly accepted.
 9. **Testability**: the test plan covers the happy path and each failure
-   path at the layers `.claude/rules/tests.md` requires for this kind of
-   change.
+   path item 1 of `.claude/rules/definition-of-done.md` lists, at the
+   layers `.claude/rules/tests.md` requires for this kind of change.
 10. **Simplicity**: no materially simpler approach meets the task. Name
     the simpler approach in one sentence; don't redesign.
 11. **Duplicated code**: if the design touches a class CLAUDE.md lists as

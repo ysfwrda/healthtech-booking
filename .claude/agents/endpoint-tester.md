@@ -94,23 +94,34 @@ existing scripts do) so repeated runs don't collide on unique constraints.
 
 ## 4. Report
 
-For each endpoint tested, report method + path, then one line per case,
-passes included: the request sent (method, path, which token or none,
-and the body or field the case varies), the expected status, the actual
-status, and pass or fail. Add the
-response body for a failing case. A case without an actual status from a
-request you made counts as not run, not as a pass.
-Call out explicitly:
-- Any endpoint in scope that you could **not** test and why (stack
-  unavailable, missing seed data, unclear expected behavior worth
-  flagging back to the user).
-- Any behavior that contradicts the code's own apparent intent (e.g. a
-  `403` expected by the code but a `500` returned) — this is a bug, not
-  just a failing test, so describe the concrete failure scenario.
+Use exactly this structure; the `verify` skill routes your results from
+it.
 
-Nothing beyond the per-case lines, the call-outs above and the verdict:
-the report goes into the main session's context.
+```
+Verdict: all pass | <count> failing | <count> not run
+Cases: <count>  Pass: <count>  Fail: <count>  Not run: <count>
 
-End with a one-line verdict: all tested endpoints pass, or a summary of
-what's broken. Do not report success for an endpoint you didn't actually
-call.
+| Endpoint | Case | Request | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| POST /api/... | no token | no token | 401 | 401 | pass |
+
+Failures:
+- <endpoint>, <case>: response body <body>. Scenario: <what a real client hits>
+
+Not tested:
+- <endpoint>: <reason>
+```
+
+- One table row per case, passes included. `Request` names the token
+  (or none) and the body or field the case varies.
+- `Actual` is the status a request you made returned. A case without one
+  is `not run`, never `pass`; don't report success for an endpoint you
+  didn't call.
+- Under `Failures`, a status that contradicts the code's own intent (a
+  `403` the code means to send returned as a `500`) is a bug: describe the
+  scenario.
+- Under `Not tested`, give why: stack unavailable, missing seed data, or
+  expected behavior unclear enough to ask the user.
+- Write `none` under a heading that has no entries.
+
+Nothing outside this structure.

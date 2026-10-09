@@ -71,21 +71,26 @@ for the recurring categories in this repo:
 
 ## 3. Report
 
-For each numbered claim, mark:
-- **Supported** — one line: the claim number and one file:line. No
+Use exactly this structure, one block per ADR; the `verify` skill routes
+your results from it.
+
+```
+ADR: <path>
+Verdict: accurate | drifted
+Claims: <count>  Supported: <count>  Contradicted: <count>  Unverifiable: <count>
+
+| # | Claim | Status | Evidence |
+|---|---|---|---|
+| 1 | <the claim in a few words> | Supported | <file:line> |
+| 2 | ... | Contradicted | ADR says <X>; code does <Y>. <file:line> |
+| 3 | ... | Unverifiable | <why: not concrete enough, or the code doesn't exist yet> |
+```
+
+- One row per numbered claim. A Supported row gets one file:line and no
   explanation.
-- **Contradicted** — cite the file:line evidence that disagrees, and
-  state the concrete discrepancy (what the ADR says vs. what the code
-  does).
-- **Unverifiable** — the claim isn't concrete enough to check, or the
-  relevant code doesn't exist yet; say why.
+- A Contradicted row states the concrete discrepancy and cites the
+  file:line that disagrees.
 
-Finish with a one-line verdict: ADR is accurate, or ADR has drifted (list
-which claims, with the discrepancy). Do not comment on whether the
-underlying architectural decision was sound, and do not review any diff —
-if the user wants that, tell them to use `code-reviewer` or
-`spec-to-diff-reviewer` instead.
-
-Keep the report short: it goes into the main session's context. No list
-of things you checked and found fine, no restating the task, and about
-400 words at most.
+Nothing outside this structure: no restating the task, no comment on
+whether the decision was sound. Don't review any diff; if the user wants
+that, tell them to use `code-reviewer` or `spec-to-diff-reviewer`.

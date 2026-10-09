@@ -4,9 +4,10 @@ This repo defines custom Claude Code subagents in `.claude/agents/`. Use the
 relevant one proactively at these trigger points, not only when explicitly
 asked:
 
-- Before implementing a task that has no approved spec and adds behavior
-  across services, a new endpoint or a new event: run `design-reviewer` on
-  a design note (the `design-review` skill).
+- Before implementing a task that has no approved spec and adds a new
+  endpoint or a new event (even within one service), or behavior spanning
+  services: run `design-reviewer` on a design note (the `design-review`
+  skill).
 - After any change outside `docs/` and Markdown files, and after any change
   under `.claude/` (its rules, agents and skills are policy): run
   `code-reviewer`.
@@ -21,7 +22,9 @@ asked:
   `pom.xml`: run `config-dependency-auditor`.
 
 A change is never reviewed by its author: each agent gets only the task
-(verbatim) and the diff or document to check. The `verify` and
+(verbatim) and the diff or document to check. Every blocking
+`code-reviewer` finding and every blocking (factual) `design-reviewer`
+finding goes to `finding-verifier` before you act on it. The `verify` and
 `design-review` skills have the exact prompts and the rest of the review
 process.
 

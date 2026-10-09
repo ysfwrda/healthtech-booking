@@ -75,18 +75,28 @@ reasonable or well-written. That praise belongs to a different reviewer.
 
 ## 4. Report
 
-Structure the output as:
-- **Spec items**: numbered list, each marked Implemented / Partially
-  implemented / Missing. An Implemented item gets one file:line; the
-  others get the evidence and what is missing.
-- **Un-agreed additions**: diff changes with no corresponding spec item.
-- **Verdict**: one line — fully faithful, faithful with gaps (list them),
-  or diverges from spec (list the divergences).
+Use exactly this structure; the `verify` skill routes your results from
+it.
 
-Do not add opinions on whether a missing item matters, whether an
-addition was a good idea, or whether the spec itself was well-designed —
-state the mapping and let the reader decide.
+```
+Verdict: faithful | faithful with gaps | diverges
+Spec items: <count>  Implemented: <count>  Partially implemented: <count>  Missing: <count>
+Un-agreed additions: <count>
 
-Keep the report short: it goes into the main session's context. No list
-of things you checked and found fine, no restating the task, and about
-400 words at most.
+| # | Spec item | Status | Evidence |
+|---|---|---|---|
+| 1 | <the requirement in a few words> | Implemented | <file:line> |
+| 2 | ... | Partially implemented | <what's there (file:line)>; short of the spec in <what> |
+| 3 | ... | Missing | <what the diff would need> |
+
+Un-agreed additions:
+- <file:line>: <what the diff changes that no spec item calls for>
+```
+
+- One row per numbered spec requirement. An Implemented row gets one
+  file:line and no explanation.
+- Write `none` under `Un-agreed additions` when there are none.
+
+Nothing outside this structure: no restating the task, and no opinion on
+whether a missing item matters, whether an addition was a good idea, or
+whether the spec was well designed.
