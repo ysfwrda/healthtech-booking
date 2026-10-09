@@ -5,8 +5,30 @@ paths:
 
 # Java tests
 
-Which tests a change needs (happy and failure paths, and which layers) is
-set by item 1 of `.claude/rules/definition-of-done.md`.
+## Which tests a change needs
+
+Item 1 of `.claude/rules/definition-of-done.md` lists the failure paths
+each behavior's unit tests cover. For a limit, test the values on both
+sides: `@Size(min = 8)` on the doctor password means testing 7 and 8.
+
+For a controller, the `@WebMvcTest` slice test is its unit test. Then add
+tests at every other layer the change reaches:
+
+| The change touches | Also test with |
+|---|---|
+| Only business rules, services, mappers or a consumer's handling logic | Nothing more: unit tests (Mockito, no Spring) cover it |
+| Controllers, request validation, security rules, error responses | `@WebMvcTest` slice test |
+| Repositories, queries, constraints, locking, transactions | Testcontainers integration test |
+| Kafka producers, consumers, the outbox, the read models | Testcontainers integration test with a real broker where delivery is the point |
+| Gateway routing or edge auth | `GatewaySecurityTest`-style test in api-gateway |
+
+For a bug, a test reproduces it first and passes after the fix. When the
+fix is a guard (lock, constraint, validation), show the test fails with
+the guard removed. For example,
+`createAppointment_concurrentUsers_returnStatus409` must fail without the
+`ux_active_appointment` unique index.
+
+## How to write them
 
 - Mark the structure of every new or changed test with `// Arrange`,
   `// Act` and `// Assert` comments. When the call is the assertion

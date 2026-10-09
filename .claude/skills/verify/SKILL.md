@@ -61,7 +61,10 @@ Apply the trigger list in CLAUDE.md to the changed files:
 - `docker-compose.yml`, `application.yaml`, or `pom.xml`:
   `config-dependency-auditor`. (`docker-compose.images.yml` only sets
   image tags and has nothing for it to check.)
-- A spec document is part of the task: `spec-to-diff-reviewer`.
+- A spec document is part of the task, including a design note approved
+  through the `design-review` skill: `spec-to-diff-reviewer`. The note
+  is itself in the diff, so expect it listed as an un-agreed addition;
+  that is optional.
 
 ### How deep: set by what the change touches
 
@@ -127,7 +130,7 @@ nothing of your own: no rebuttal, no context.
 
 - **CONFIRMED** or **UNCERTAIN**: fix it. You don't get to reject a
   finding the verifier couldn't refute. If you think it's wrong, hand it
-  back to the user (see the stop rules in the definition of done).
+  back to the user (see "When to stop and hand back" below).
 - **REFUTED**: don't fix it. List it in the PR with the verifier's
   evidence. A refuted security finding (any finding from
   `Lens: security`, or one about security from an unlensed review) first
@@ -147,7 +150,7 @@ re-checked by a fresh run of that agent (`endpoint-tester` on the
 affected endpoints, `adr-consistency-checker` on the ADR, and so on).
 
 Repeat until a fix-only round has no confirmed blocking findings, unless
-a stop rule in the definition of done applies first. Then run the tier-3
+a hand-back rule below applies first. Then run the tier-3
 final round if the tier calls for it. Its confirmed blocking findings are
 fixed and re-reviewed with fix-only rounds as above; there is no second
 final round.
@@ -155,11 +158,33 @@ final round.
 Never continue an earlier agent with SendMessage; that passes it your
 arguments.
 
+### When to stop and hand back to the user
+
+Stop and hand back with the evidence when:
+- **A fixed finding comes back.** A fresh reviewer raises a blocking
+  finding you already fixed, and the verifier confirms it. The fix
+  doesn't work. Compare findings across rounds yourself; don't tell the
+  reviewer what earlier rounds found. A refuted finding that comes back
+  is just verified again.
+- **You disagree with a confirmed finding.** The verifier couldn't refute
+  it, so it isn't yours to reject.
+- **Your fixes keep causing findings.** Two fix-only rounds in a row raise
+  confirmed blocking findings. The approach needs rethinking, which is
+  the user's call, not another patch.
+- **A fix leaves the task.** It needs an "Ask first" change, or changes
+  outside what the task asked for.
+- **CI fails outside your change** (a check that also fails on `main`, or
+  an infrastructure error) twice: once, then after one re-run. Hand back
+  with the failing check and why it isn't yours.
+
+A test layer or the live-stack check that can't run for an environment
+reason doesn't block the task: report it in the PR with the reason.
+
 ## 4. Check the conventions CLAUDE.md lists
 
 Read the diff once for the conventions that tests don't catch:
 - every new or changed behavior has happy-path and failure-path tests at
-  each layer item 1 of `.claude/rules/definition-of-done.md` requires; add
+  each layer `.claude/rules/tests.md` requires; add
   the missing ones
 - new tests use `// Arrange`, `// Act`, `// Assert`
 - comments state only what the code does

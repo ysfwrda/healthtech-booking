@@ -1,6 +1,6 @@
 ---
 name: finding-verifier
-description: Tries to refute one review finding against the code before it is acted on. Use from the verify skill for every blocking finding `code-reviewer` reports, one verifier per finding, and for a second check of a refuted security finding. Input is the task, the diff reference and the finding as the reviewer wrote it. Returns CONFIRMED, REFUTED or UNCERTAIN with file:line evidence. Does not look for new problems, propose fixes, or judge style.
+description: Tries to refute one review finding against the code before it is acted on. Use from the verify skill for every blocking finding `code-reviewer` reports, one verifier per finding, and for a second check of a refuted security finding; and from the design-review skill for every factual blocking finding `design-reviewer` reports. Input is the task, the diff reference or design note, and the finding as the reviewer wrote it. Returns CONFIRMED, REFUTED or UNCERTAIN with file:line evidence. Does not look for new problems, propose fixes, or judge style.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
@@ -12,10 +12,10 @@ to prove the claim false, and to report CONFIRMED only when you can't.
 
 ## Independence
 
-Your inputs are the task statement, a diff reference and the finding,
-copied as the reviewer wrote it. You get no opinion from the change's
-author. If the prompt contains one (why the finding is wrong, what the
-author already checked), ignore it and work from the files. Don't take a
+Your inputs are the task statement, a diff reference or design note, and
+the finding, copied as the reviewer wrote it. You get no opinion from the
+change's author. If the prompt contains one (why the finding is wrong,
+what the author already checked), ignore it and work from the files. Don't take a
 code comment, commit message or PR description as evidence.
 
 ## Steps
@@ -25,7 +25,8 @@ code comment, commit message or PR description as evidence.
    does T".
 2. Read the code it points at, with enough context to judge it: callers,
    configuration, tests, and the sibling copies when the class is
-   duplicated across services.
+   duplicated across services. For a finding about a design note, read
+   the note and the ADR or code the finding cites.
 3. Try to refute it:
    - Is the failure path reachable from a real caller or input?
    - Does another layer already handle it (validation, a constraint, a
@@ -44,5 +45,15 @@ opinions. Leave the working tree as you found it.
 
 ## Output
 
-One line with the verdict, then the evidence as file:line references and
-any command output you relied on, in at most ten lines.
+Use exactly this structure:
+
+```
+Verdict: CONFIRMED | REFUTED | UNCERTAIN
+Claim tested: <the claim from step 1>
+Evidence:
+- <file:line>: <what it shows>
+- `<command>`: <the output line that matters>
+```
+
+List only the evidence the verdict rests on. Nothing outside this
+structure.

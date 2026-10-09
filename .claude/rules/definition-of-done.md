@@ -32,47 +32,43 @@ Stop and ask before any of these, even when the task seems to require it:
 Also ask when the task can't be done without breaking a rule in CLAUDE.md
 or an ADR.
 
+When the user approves a design note (the `design-review` skill), that
+approval covers the "Ask first" items and any change to a CLAUDE.md rule
+or an ADR that the note describes. Anything the note doesn't describe
+still needs asking.
+
 Note bugs you find outside the task in the PR description. Don't fix
 them in the same PR.
+
+## Design first, when there is no spec
+
+For a task without an approved spec that adds a new endpoint or a new
+event (even within one service), or behavior spanning services, write a
+design note and get it through `design-reviewer` before implementing.
+Bug fixes and other changes contained in one service skip this. The
+`design-review` skill has the template, the steps, and what counts as an
+approved spec.
 
 ## Done means all of these hold
 
 1. **Every behavior and path is tested.** Each new or changed behavior
    has unit tests for its happy path and for each failure path:
    - validation errors, including the values on both sides of each limit
-     (`@Size(min = 8)` on the doctor password: test 7 and 8)
    - not found, conflict and invalid state
    - 401, 403 and ownership violations
    - failures of a dependency it calls
 
-   For a controller, the `@WebMvcTest` slice test is its unit test.
-
-   Then add tests at every other layer the change reaches:
-
-   | The change touches | Also test with |
-   |---|---|
-   | Only business rules, services, mappers or a consumer's handling logic | Nothing more: unit tests (Mockito, no Spring) cover it |
-   | Controllers, request validation, security rules, error responses | `@WebMvcTest` slice test |
-   | Repositories, queries, constraints, locking, transactions | Testcontainers integration test |
-   | Kafka producers, consumers, the outbox, the read models | Testcontainers integration test with a real broker where delivery is the point |
-   | Gateway routing or edge auth | `GatewaySecurityTest`-style test in api-gateway |
-
-   For a bug, a test reproduces it first and passes after the fix. When
-   the fix is a guard (lock, constraint, validation), show the test fails
-   with the guard removed. For example,
-   `createAppointment_concurrentUsers_returnStatus409` must fail without the
-   `ux_active_appointment` unique index. The frontend has no test setup, so
-   a frontend change says in the PR that it is untested and how it was
-   checked by hand. Adding a test runner is a new dependency: ask first.
+   Add tests at every other layer the change reaches; the layer for each
+   kind of change is in `.claude/rules/tests.md`. A bug is reproduced by a
+   test first; a guard is shown to fail without it. The frontend has no
+   test setup: say in the PR how a frontend change was checked by hand.
+   Adding a test runner is a new dependency: ask first.
 2. **Every affected suite passes**, integration tests included. The cloud
    session hook provides Docker and keys. If a layer still can't run, the
    reason must come from the environment, and the PR says so.
-3. **The change has been reviewed by someone other than its author.**
-   `verify` has run. The subagents it requires reviewed the change from
-   the task and the diff alone, at the depth its risk tier sets. Every
-   blocking `code-reviewer` finding went to a `finding-verifier`.
-   Confirmed findings are fixed and the fixes re-reviewed. Refuted
-   findings are listed in the PR with the verifier's evidence.
+3. **The change has been reviewed by someone other than its author**,
+   through the `verify` skill. It sets the review depth, verifies
+   findings, and says when review stops and when to hand back.
 4. **Endpoint changes are checked on the live stack**
    (`docker compose up -d --build`, then `endpoint-tester` or the scripts),
    not only in tests.
@@ -80,43 +76,18 @@ them in the same PR.
    OpenAPI annotations, README, ADRs, `scripts/test-flow.sh`,
    `scripts/gateway-security-smoke-test.sh` and the frontend when it calls
    the changed endpoint.
-6. **Duplicated code is changed in every copy** CLAUDE.md lists (the
-   outbox, the JWT, error-handling and correlation classes, the poms, and
-   the outbox tests, which are adapted per service).
+6. **Duplicated code is changed in every copy** CLAUDE.md lists, and in
+   the outbox tests, which are adapted per service.
 7. **You have also re-read the full diff yourself.** This is a hygiene
-   pass, not the review. No debug
-   output, dead code, unused imports or changes the task didn't need.
+   pass, not the review: no debug output, dead code, unused imports or
+   changes the task didn't need.
 8. **The PR is open and green.** It has a `type(scope): subject` title and
    a body with `## Summary`, `## Testing`, and `Closes #N` when there is
-   an issue. Testing lists
-   what ran, with test counts, and what didn't run, and why. CI is green on
-   the latest commit and every review thread has a reply or a fix.
+   an issue. Testing lists what ran, with test counts, and what didn't
+   run, and why. CI is green on the latest commit and every review thread
+   has a reply or a fix. A CI failure your change didn't cause gets one
+   re-run; if it fails again, hand back with the failing check.
 
 Until all eight hold, the task isn't done. Don't report it as done, and
-don't hand it back unless one of the "Ask first" points is blocking or a
-stop condition below applies.
-
-## When to stop and hand back
-
-- **Review**: the `verify` skill bounds the review: one first round at
-  the depth the change's risk tier sets, verification of every blocking
-  finding, then fix-only rounds until one has no confirmed blocking
-  finding. Stop and hand back with the evidence when:
-  - **A fixed finding comes back.** A fresh reviewer raises a blocking
-    finding you already fixed, and the verifier confirms it. The fix
-    doesn't work. Compare findings across rounds yourself; don't tell the
-    reviewer what earlier rounds found. A refuted finding that comes back
-    is just verified again.
-  - **You disagree with a confirmed finding.** The verifier couldn't
-    refute it, so it isn't yours to reject.
-  - **Your fixes keep causing findings.** Two fix-only rounds in a row
-    raise confirmed blocking findings. The approach needs rethinking,
-    which is the user's call, not another patch.
-  - **A fix leaves the task.** It needs an "Ask first" change, or changes
-    outside what the task asked for.
-- **CI**: a failure outside your change (a check that also fails on
-  `main`, or an infrastructure error) gets one re-run. If it fails again,
-  hand back with the failing check and why it isn't yours.
-- **Environment**: a test layer (item 2) or the live-stack check (item 4)
-  that can't run for an environment reason is reported in the PR with the
-  reason. It doesn't block the task.
+don't hand it back unless an "Ask first" point blocks it or a stop rule in
+the `design-review` or `verify` skill applies.

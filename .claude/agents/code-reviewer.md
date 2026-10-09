@@ -132,15 +132,26 @@ the decision actually recorded there, not against a generic best practice.
 
 ## Output
 
-Report findings ordered most-severe first (security > correctness > race
-safety > consistency > minor quality). Label each finding **blocking** or
-**optional**. A finding is blocking only if it causes wrong behavior, is a
-security risk, or is a claim the code doesn't support that a reader or
-agent would act on. Everything else is optional, including design
-suggestions. For each finding give: file:line,
-a one-sentence description of the defect, and a concrete failure scenario
-(what input/state triggers it) or the specific project convention it
-diverges from — not a vague "consider improving X". Skip a section
-entirely if it has no findings rather than padding it with reassurances.
-End with a short overall verdict: safe to merge, needs changes before
-merge, or needs discussion (for genuine design tradeoffs, not nitpicks).
+Use exactly this structure; the `verify` skill routes your findings from
+it.
+
+```
+Verdict: safe to merge | needs changes | needs discussion
+Blocking: <count>  Optional: <count>
+
+Findings:
+- [blocking | optional] [security | correctness | race safety | consistency | quality] <file:line>
+  Defect: <one sentence>
+  Trigger: <the input or state that causes it, or the convention it breaks, with the file:line of the existing pattern>
+```
+
+- **blocking**: causes wrong behavior, is a security risk, or is a claim
+  the code doesn't support that a reader or agent would act on.
+- **optional**: everything else, including design suggestions. Report at
+  most three, the most useful first.
+- Order findings most severe first: security, correctness, race safety,
+  consistency, quality. Write `Findings: none` when there are none.
+- `needs discussion` is for a genuine design trade-off, not a nitpick.
+
+Nothing outside this structure: no summary of the change, no list of
+what you checked and found fine.
