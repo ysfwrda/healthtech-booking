@@ -467,7 +467,8 @@ bash scripts/test-flow.sh
 ```
 
 It registers a patient and doctor, reads availability, books a slot, confirms the slot disappears, rejects a
-double-booking, cancels, and confirms the slot reappears.
+double-booking, changes the appointment (purpose and time), confirms the old slot is free and the new one taken,
+rejects an empty change, cancels, and confirms the slot reappears.
 
 The individual calls (all through the gateway at `8080`) below show the API contract.
 
@@ -541,7 +542,10 @@ Change an appointment's purpose and/or time (requires the owning patient's token
 starts; send only the fields to change):
 
 ```bash
-curl -X PATCH http://localhost:8080/api/appointments/<appointment-id> \n  -H "Authorization: Bearer <token>" \n  -H "Content-Type: application/json" \n  -d '{ "dateTime": "2026-07-13T11:00:00", "type": "FOLLOW_UP" }'
+curl -X PATCH http://localhost:8080/api/appointments/<appointment-id> \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "dateTime": "2026-07-13T11:00:00", "type": "FOLLOW_UP" }'
 ```
 
 Cancel an appointment (requires the owning patient's token):
@@ -551,11 +555,11 @@ curl -X PUT http://localhost:8080/api/appointments/<appointment-id>/cancel \
   -H "Authorization: Bearer <token>"
 ```
 
-Re-check availability after booking or cancelling to see the slot disappear, then reappear.
+Re-check availability after booking, changing or cancelling to see the slots disappear and reappear.
 
 Prefer a browser? The same endpoints can be explored interactively in Swagger UI, see
 [API Documentation (Swagger UI)](#api-documentation-swagger-ui) below. This walkthrough remains the reference for the
-end-to-end flow (register, search, book, cancel, event verification).
+end-to-end flow (register, search, book, change, cancel, event verification).
 
 ### API Documentation (Swagger UI)
 
@@ -631,7 +635,7 @@ npm run dev
 
 The dev server also opens at `http://localhost:5173` (stop the container first to free the port). Covers both patient and doctor self-service flows end to end: patient
 register/login, doctor search with specialty/language filters, doctor detail with formatted opening hours and
-live availability, appointment booking/cancellation, and doctor register/login (`/doctors/register`,
+live availability, appointment booking, changing (purpose and time) and cancellation, and doctor register/login (`/doctors/register`,
 `/doctors/login`), mirroring the API described in Step 4.
 
 ---

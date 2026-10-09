@@ -8,6 +8,7 @@ import com.healthtech.notification.event.AppointmentChanged;
 import com.healthtech.notification.repository.NotificationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 // Starts the service against a database that already has the notification table from before event_id and
 // APPOINTMENT_CHANGED existed, as an upgraded deployment would, and checks the schema script fixes it.
@@ -144,5 +146,22 @@ class NotificationSchemaUpgradeIntegrationTest {
 
         // Assert
         assertThat(rowsFor(appointmentId)).isEqualTo(2);
+    }
+
+    @Test
+    void otherConstraintViolation_isNotSwallowed() {
+        // Arrange: a different constraint than the event id index, so only a real duplicate may be ignored
+        jdbcTemplate.execute("alter table notification add constraint test_doctor_required check (doctor_id is not null)");
+        AppointmentCancelled withoutDoctor = AppointmentCancelled.builder().eventId(UUID.randomUUID())
+                .appointmentId(UUID.randomUUID()).patientId(UUID.randomUUID()).doctorId(null)
+                .dateTime(LocalDateTime.now().plusDays(3)).build();
+
+        try {
+            // Act & Assert
+            assertThatThrownBy(() -> notificationService.record(withoutDoctor))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+        } finally {
+            jdbcTemplate.execute("alter table notification drop constraint test_doctor_required");
+        }
     }
 }
