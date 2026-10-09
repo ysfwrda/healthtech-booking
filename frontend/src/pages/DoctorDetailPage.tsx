@@ -6,12 +6,9 @@ import { bookAppointment } from "../api/appointments";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { StatusMessage } from "../components/StatusMessage";
+import { todayIsoDate } from "../dates";
 import { APPOINTMENT_TYPES, DAYS_OF_WEEK } from "../api/constants";
 import type { AppointmentType, DoctorResponse, OpeningHoursDto } from "../api/types";
-
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function formatTime(time: string): string {
   const [hourStr, minuteStr] = time.split(":");
