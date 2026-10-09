@@ -280,6 +280,26 @@ class AvailabilityServiceTest {
     }
 
     @Test
+    void getAvailableSlots_dateBeforeToday_shouldReturnNoSlots() {
+        // Arrange: it is 12:10 on FUTURE_DATE; the requested day is the day before, doctor open all day
+        UUID doctorId = UUID.randomUUID();
+        LocalDate yesterday = FUTURE_DATE.minusDays(1);
+        stubDoctorOpeningHours(doctorId, Set.of(OpeningHours.builder()
+                .dayOfWeek(yesterday.getDayOfWeek())
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(17, 0))
+                .build()));
+
+        // Act
+        AvailableSlotsResponse result = serviceAt(FUTURE_DATE.atTime(12, 10)).getAvailableSlots(doctorId, yesterday);
+
+        // Assert
+        assertThat(result.getAvailableSlots()).isEmpty();
+        assertThat(result.getDate()).isEqualTo(yesterday);
+        assertThat(result.getDoctorId()).isEqualTo(doctorId);
+    }
+
+    @Test
     void getAvailableSlots_today_slotStartingExactlyNow_shouldBeKept() {
         // Arrange
         UUID doctorId = UUID.randomUUID();

@@ -24,8 +24,9 @@ import java.util.UUID;
 public class AvailabilityController {
     private final AvailabilityService availabilityService;
 
-    @Operation(summary = "Get a doctor's available slots for a date")
-    @ApiResponse(responseCode = "200", description = "Free slots for that day, possibly empty")
+    @Operation(summary = "Get a doctor's available slots for a date",
+            description = "Slots are on the 30-minute grid within the doctor's opening hours, minus booked ones. Dates before today return an empty list; on today, slots that started before now are left out.")
+    @ApiResponse(responseCode = "200", description = "Free slots for that day, possibly empty. A date before today always returns an empty list")
     @ApiResponse(responseCode = "400", description = "Missing or malformed doctorId or date")
     @ApiResponse(responseCode = "404", description = "Doctor not found")
     @SecurityRequirements
