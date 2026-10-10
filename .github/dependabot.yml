@@ -1,0 +1,64 @@
+version: 2
+
+# Minor and patch updates are grouped into one PR per ecosystem. Major
+# updates are not grouped, so each one gets its own PR. The commit prefix
+# makes PR titles follow `type(scope): subject`.
+updates:
+  - package-ecosystem: maven
+    directories:
+      - /api-gateway
+      - /appointment-service
+      - /doctor-service
+      - /notification-service
+      - /patient-service
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      maven-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      github-actions-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directories:
+      - /api-gateway
+      - /appointment-service
+      - /doctor-service
+      - /frontend
+      - /notification-service
+      - /patient-service
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      docker-minor-patch:
+        update-types:
+          - minor
+          - patch
