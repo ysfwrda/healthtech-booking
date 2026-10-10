@@ -123,6 +123,6 @@ public class DoctorSeeder implements CommandLineRunner {
                 .openingHours(OpeningHoursData.fromAll(saved.getOpeningHours()))
                 .registeredAt(saved.getRegisteredAt())
                 .build();
-        kafkaTemplate.send("doctor.registered", event);
+        kafkaTemplate.send("doctor.registered", saved.getId().toString(), event);
     }
 }

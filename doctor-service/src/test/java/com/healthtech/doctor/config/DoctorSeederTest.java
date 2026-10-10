@@ -15,6 +15,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,14 +43,36 @@ class DoctorSeederTest {
                 .thenAnswer(inv -> Optional.of(Specialty.builder().name(inv.getArgument(0)).build()));
         when(passwordEncoder.encode(anyString())).thenReturn("$2a$hashed");
         when(doctorRepository.saveAndFlush(any(Doctor.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+                .thenAnswer(inv -> withId(inv.getArgument(0)));
 
         // Act
         doctorSeeder.run();
 
         // Assert: one save and one published event per demo doctor
         verify(doctorRepository, times(6)).saveAndFlush(any(Doctor.class));
-        verify(kafkaTemplate, times(6)).send(eq("doctor.registered"), any(DoctorRegistered.class));
+        verify(kafkaTemplate, times(6)).send(eq("doctor.registered"), anyString(), any(DoctorRegistered.class));
+    }
+
+    @Test
+    void run_doctorSaved_keysEventByDoctorId() {
+        // Arrange
+        when(doctorRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+        when(specialtyRepository.findByName(anyString()))
+                .thenAnswer(inv -> Optional.of(Specialty.builder().name(inv.getArgument(0)).build()));
+        when(passwordEncoder.encode(anyString())).thenReturn("$2a$hashed");
+        when(doctorRepository.saveAndFlush(any(Doctor.class)))
+                .thenAnswer(inv -> withId(inv.getArgument(0)));
+
+        // Act
+        doctorSeeder.run();
+
+        // Assert: each record's key is the doctor id carried in its payload
+        ArgumentCaptor<String> keys = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<DoctorRegistered> events = ArgumentCaptor.forClass(DoctorRegistered.class);
+        verify(kafkaTemplate, times(6)).send(eq("doctor.registered"), keys.capture(), events.capture());
+        for (int i = 0; i < 6; i++) {
+            assertThat(keys.getAllValues().get(i)).isEqualTo(events.getAllValues().get(i).getDoctorId().toString());
+        }
     }
 
     @Test
@@ -63,7 +86,7 @@ class DoctorSeederTest {
 
         // Assert: idempotent
         verify(doctorRepository, never()).saveAndFlush(any());
-        verify(kafkaTemplate, never()).send(anyString(), any());
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
     }
 
     @Test
@@ -88,7 +111,7 @@ class DoctorSeederTest {
                 .thenAnswer(inv -> Optional.of(Specialty.builder().name(inv.getArgument(0)).build()));
         when(passwordEncoder.encode(DoctorSeeder.DEMO_PASSWORD)).thenReturn("$2a$hashed");
         when(doctorRepository.saveAndFlush(any(Doctor.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+                .thenAnswer(inv -> withId(inv.getArgument(0)));
 
         // Act
         doctorSeeder.run();
@@ -97,5 +120,10 @@ class DoctorSeederTest {
         ArgumentCaptor<Doctor> captor = ArgumentCaptor.forClass(Doctor.class);
         verify(doctorRepository, times(6)).saveAndFlush(captor.capture());
         assertThat(captor.getAllValues()).allMatch(d -> "$2a$hashed".equals(d.getPasswordHash()));
+    }
+
+    private static Doctor withId(Doctor doctor) {
+        doctor.setId(UUID.randomUUID());
+        return doctor;
     }
 }
