@@ -15,7 +15,7 @@ jobs:
         working-directory: frontend
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node 22        # same major as frontend/Dockerfile
         uses: actions/setup-node@v4
@@ -43,7 +43,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -76,7 +76,7 @@ jobs:
         service: [ api-gateway, appointment-service, doctor-service, notification-service, patient-service, frontend ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Log in to ghcr
         uses: docker/login-action@v3
