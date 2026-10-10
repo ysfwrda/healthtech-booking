@@ -179,8 +179,29 @@ grep for one id relates a registration request to the read-model projection it t
 published outside a request context, such as the demo seeder, fall back to a generated id rather than failing.
 See [ADR-007](docs/adr/ADR-007-correlation-id-propagation.md) for the trade-off against distributed tracing.
 
-Metrics, distributed tracing (spans), retries, and a dead-letter queue for Kafka consumers are not implemented yet
-and remain Phase 3 work; see Current Limitations.
+Metrics, distributed tracing (spans), and consumer-side retries and a dead-letter topic are not implemented yet and
+remain Phase 3 work; see Reliability and Current Limitations.
+
+---
+
+## Reliability
+
+**Transactional outbox (implemented).** `patient-service`, `doctor-service` and `appointment-service` do not call Kafka
+from the request path. `DomainEventPublisher` writes each event to an `outbox` table in the same database transaction
+as the change it describes, so the event exists if and only if that change committed. A scheduled `OutboxRelay`
+(every second, batches of 100) claims unpublished rows with `FOR UPDATE SKIP LOCKED`, sends them to Kafka and marks
+them published; a row whose send fails stays unpublished and is retried on the next poll, with no retry limit. The
+correlation id is stored on the row and re-attached as the message header. Published rows are pruned after seven days;
+unpublished rows are never pruned. Delivery is therefore at-least-once: if the relay crashes after a send but before
+the row is marked, the event is sent again. The one exception is the demo `DoctorSeeder`, which still publishes
+directly with `KafkaTemplate`. See [ADR-008](docs/adr/ADR-008-transactional-outbox.md).
+
+**Consumer idempotency and dead-letter handling (specified, not implemented).**
+[ADR-009](docs/adr/ADR-009-consumer-idempotency-and-failure-handling.md) specifies deduplication by `eventId` with a
+unique index in `notification-service`, plus `ErrorHandlingDeserializer`, retry classification and a dead-letter topic
+for the consumers. None of that exists in the code yet. Today the `appointment-service` read-model consumers are
+idempotent only because they upsert by id; `notification-service` inserts a new row for every delivery, so a
+redelivered event produces a duplicate notification. No consumer has a retry policy or dead-letter topic configured.
 
 ---
 
@@ -196,7 +217,10 @@ Documented in [`docs/adr/`](docs/adr/):
 * [ADR-005](docs/adr/ADR-005-cross-service-validation.md) — Cross-Service Validation via event-driven read-model
 * [ADR-006](docs/adr/ADR-006-service-discovery.md) — Static Service discovery
 * [ADR-007](docs/adr/ADR-007-correlation-id-propagation.md) — Correlation ID Propagation for Log Correlation
- 
+* [ADR-008](docs/adr/ADR-008-transactional-outbox.md) — Transactional Outbox for Domain Event Publishing
+* [ADR-009](docs/adr/ADR-009-consumer-idempotency-and-failure-handling.md) — Consumer Idempotency and Failure Handling
+  (specified, not implemented)
+
 * Each ADR includes context, alternatives, trade-offs, and rationale.
 
 ---
@@ -214,15 +238,13 @@ Documented in [`docs/adr/`](docs/adr/):
 | Cancelling an already-cancelled appointment        | `200` with the current state; no new event                                              |
 | Cancel while the appointment row is locked > 3s    | `503` problem+json (`Appointment Busy`) with `Retry-After: 1`; safe to retry            |
 | Duplicate username/email                           | `409` problem+json                                                                      |
-| Kafka downtime                                     | Booking and registration fail explicitly; no silent data loss                           |
-| Duplicate event delivery                           | Read-model consumer is idempotent; event versioning and broader idempotency are Phase 3 |
+| Kafka downtime                                     | Booking, cancellation and registration still succeed; the event waits in the outbox and the relay publishes it when Kafka returns (see Reliability). Until then, a newly registered patient or doctor is unknown to appointment-service (booking returns `404`) and no notification is recorded |
+| Duplicate event delivery                           | Read-model consumers are idempotent (upsert by id). `notification-service` is not: a redelivered event creates a second notification row (fix specified in ADR-009, not implemented). Event versioning is Phase 3 |
 
 ---
 
 ## Current Limitations (Intentional)
 
-* **Gateway-level JWT enforcement** is deferred. Per-service validation is the authoritative boundary and is enforced;
-  the gateway edge filter is planned defense-in-depth.
 * **Doctor onboarding trust** is intentionally shallow in Phase 2. Self-registration (`POST /api/doctors/register`) is
   public and issues a DOCTOR token immediately: it proves someone can create an account, not that they are a verified
   provider. Production would gate provider visibility and trust behind credential verification (for example, an
@@ -232,8 +254,10 @@ Documented in [`docs/adr/`](docs/adr/):
 * **Refresh tokens** are not implemented; access tokens are valid for one hour.
 * **Service discovery** is static per [ADR-006](docs/adr/ADR-006-service-discovery.md); Eureka/Consul is deferred
 * **Reliability/observability**: correlation-ID propagation and structured logging are implemented across all
-  services and the gateway (see Observability above). Distributed tracing, metrics, retries, DLQ, and event
-  versioning are still Phase 3.
+  services and the gateway (see Observability above), and event publishing goes through the transactional outbox
+  (see Reliability above). Distributed tracing, metrics, consumer idempotency, consumer retries and the dead-letter
+  topic ([ADR-009](docs/adr/ADR-009-consumer-idempotency-and-failure-handling.md)), and event versioning are still
+  Phase 3.
 
 ---
 
@@ -253,9 +277,10 @@ rejection, read-model projection, ownership enforcement)
 
 ### Phase 3: Production & Intelligence Layer (in progress)
 
-Correlation-ID propagation and structured logging (done, see Observability) · metrics and distributed tracing ·
-reliability (idempotency, retries, DLQ, event versioning) · gateway-level JWT edge validation · service discovery ·
-AI-assisted symptom-to-specialty triage
+Correlation-ID propagation and structured logging (done, see Observability) · transactional outbox (done, see
+Reliability) · gateway-level JWT edge validation (done, see Authentication and Authorization) · metrics and distributed tracing ·
+consumer idempotency, retries and dead-letter topic (specified in ADR-009, not implemented) · event versioning ·
+service discovery · AI-assisted symptom-to-specialty triage
 
 ---
 
