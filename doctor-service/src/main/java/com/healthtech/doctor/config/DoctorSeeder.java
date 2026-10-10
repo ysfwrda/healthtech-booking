@@ -6,15 +6,16 @@ import com.healthtech.doctor.domain.Language;
 import com.healthtech.doctor.domain.OpeningHours;
 import com.healthtech.doctor.domain.Specialty;
 import com.healthtech.doctor.event.DoctorRegistered;
+import com.healthtech.doctor.event.DomainEventPublisher;
 import com.healthtech.doctor.event.OpeningHoursData;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.DayOfWeek;
 import java.time.LocalTime;
@@ -26,7 +27,9 @@ import java.util.stream.Collectors;
 // Demo doctors carry the SAME password (documented in README) so a reviewer can log in as
 // any of them; each publishes doctor.registered on creation because appointment-service's
 // booking/availability paths hard-require a ValidDoctor read-model row (see AppointmentService),
-// so a seeded doctor that skipped the event would 404 on every booking attempt.
+// so a seeded doctor that skipped the event would 404 on every booking attempt. Each doctor is
+// saved in its own transaction together with its outbox row (ADR-008), so the event is relayed
+// once Kafka is reachable even if it is down while the seeder runs.
 @Component
 @Order(2)
 @RequiredArgsConstructor
@@ -37,7 +40,8 @@ public class DoctorSeeder implements CommandLineRunner {
     private final DoctorRepository doctorRepository;
     private final SpecialtyRepository specialtyRepository;
     private final PasswordEncoder passwordEncoder;
-    private final KafkaTemplate<String, DoctorRegistered> kafkaTemplate;
+    private final DomainEventPublisher eventPublisher;
+    private final TransactionOperations transactionOperations;
 
     private record DemoDoctor(String firstName, String lastName, String email, String city,
                                List<String> specialtyNames, Set<Language> languages,
@@ -73,7 +77,7 @@ public class DoctorSeeder implements CommandLineRunner {
                         Set.of(DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY))
         );
 
-        demoDoctors.forEach(this::seedIfAbsent);
+        demoDoctors.forEach(demo -> transactionOperations.executeWithoutResult(status -> seedIfAbsent(demo)));
     }
 
     private void seedIfAbsent(DemoDoctor demo) {
@@ -123,6 +127,6 @@ public class DoctorSeeder implements CommandLineRunner {
                 .openingHours(OpeningHoursData.fromAll(saved.getOpeningHours()))
                 .registeredAt(saved.getRegisteredAt())
                 .build();
-        kafkaTemplate.send("doctor.registered", event);
+        eventPublisher.publish("doctor.registered", saved.getId(), event.getEventId(), event);
     }
 }

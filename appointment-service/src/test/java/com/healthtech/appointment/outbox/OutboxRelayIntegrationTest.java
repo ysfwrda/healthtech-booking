@@ -202,6 +202,8 @@ class OutboxRelayIntegrationTest {
         // Arrange
         String topic = "relay-lock-contention-test";
         int rowCount = 10;
+        // Only this test's rows may be pending, so the holder's claim covers every one of them.
+        outboxRepository.deleteAll();
         IntStream.range(0, rowCount).forEach(i -> outboxRepository.save(pendingRow(topic, null)));
 
         CountDownLatch holderHasClaimed = new CountDownLatch(1);

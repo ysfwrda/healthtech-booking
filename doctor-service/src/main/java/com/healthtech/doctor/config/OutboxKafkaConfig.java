@@ -3,7 +3,6 @@ package com.healthtech.doctor.config;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
@@ -13,35 +12,11 @@ import org.springframework.kafka.core.ProducerFactory;
 import java.util.HashMap;
 import java.util.Map;
 
-// A dedicated producer for the outbox relay, separate from the application's typed,
-// JsonSerializer-based KafkaTemplate beans (including DoctorSeeder's, which is out of scope for
-// the outbox and keeps publishing directly). The relay publishes payloads that are already
-// serialized JSON strings, so it needs a plain String value serializer. Changing the global
-// spring.kafka.producer.value-serializer instead would break the seeder's typed template.
-//
-// Declaring any KafkaTemplate bean here disables Spring Boot's own autoconfigured one: its
-// @ConditionalOnMissingBean(KafkaTemplate.class) matches on the raw KafkaTemplate type, ignoring
-// generics, so it backs off the moment outboxKafkaTemplate exists even though the two are
-// completely different types. DoctorSeeder still needs that default, JsonSerializer-based
-// KafkaTemplate<String, DoctorRegistered>, so this class rebuilds it explicitly from Spring
-// Boot's own KafkaProperties rather than leaving DoctorSeeder's dependency unsatisfied.
+// A dedicated producer for the outbox relay, which is the service's only Kafka producer. The relay
+// publishes payloads that are already serialized JSON strings, so it needs a plain String value
+// serializer rather than the global spring.kafka.producer.value-serializer.
 @Configuration
 public class OutboxKafkaConfig {
-
-    // Wildcards, not <Object, Object>: Spring's generics-aware autowiring treats an unbounded
-    // wildcard as compatible with any concrete request (this is exactly the signature Spring
-    // Boot's own KafkaAutoConfiguration.kafkaTemplate() declares) so this still satisfies
-    // DoctorSeeder's KafkaTemplate<String, DoctorRegistered> injection point. A concrete
-    // <Object, Object> declaration would not, since generics are otherwise invariant.
-    @Bean
-    public ProducerFactory<?, ?> kafkaProducerFactory(KafkaProperties kafkaProperties) {
-        return new DefaultKafkaProducerFactory<>(kafkaProperties.buildProducerProperties());
-    }
-
-    @Bean
-    public KafkaTemplate<?, ?> kafkaTemplate(ProducerFactory<Object, Object> kafkaProducerFactory) {
-        return new KafkaTemplate<>(kafkaProducerFactory);
-    }
 
     @Bean
     public ProducerFactory<String, String> outboxProducerFactory(

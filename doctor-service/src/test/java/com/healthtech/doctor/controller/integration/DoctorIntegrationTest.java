@@ -10,7 +10,6 @@ import com.healthtech.doctor.dto.DoctorLoginRequest;
 import com.healthtech.doctor.dto.DoctorRegistrationRequest;
 import com.healthtech.doctor.dto.DoctorResponse;
 import com.healthtech.doctor.dto.OpeningHoursDto;
-import com.healthtech.doctor.event.DoctorRegistered;
 import com.healthtech.doctor.outbox.OutboxRepository;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
@@ -19,7 +18,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,11 +28,9 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -51,7 +47,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.clearInvocations;
 
 // @DirtiesContext: the outbox relay's background scheduler would otherwise keep polling (and
 // failing against a torn-down container) after this class's containers are stopped.
@@ -77,11 +72,6 @@ public class DoctorIntegrationTest {
         registry.add("spring.kafka.bootstrap-servers", kafkaContainer::getBootstrapServers);
     }
 
-    // DoctorSeeder still sends directly through this mock at context startup (out of scope for
-    // the outbox); each test clears that invocation history so it never leaks between tests.
-    @MockitoBean
-    KafkaTemplate<String, DoctorRegistered> kafkaTemplate;
-
     @Autowired
     DoctorRepository doctorRepository;
     @Autowired
@@ -90,11 +80,6 @@ public class DoctorIntegrationTest {
     OutboxRepository outboxRepository;
     @Autowired
     TestRestTemplate restTemplate;
-
-    @BeforeEach
-    void resetKafkaMock() {
-        clearInvocations(kafkaTemplate);
-    }
 
     private Consumer<String, String> testConsumer(String topic) {
         Map<String, Object> props = new HashMap<>();

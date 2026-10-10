@@ -125,8 +125,7 @@ the decision actually recorded there, not against a generic best practice.
   that drop it.
 - **Outbox**: domain events must be written through `DomainEventPublisher`
   inside the caller's transaction (ADR-008) — flag new `KafkaTemplate`
-  sends from business code (the demo `DoctorSeeder` is the one existing
-  exception). The outbox code is deliberately duplicated in
+  sends from business code. The outbox code is deliberately duplicated in
   patient, doctor and appointment services; flag a fix applied to one copy
   but not the others.
 

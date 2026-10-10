@@ -1,13 +1,10 @@
 package com.healthtech.doctor.outbox;
 
-import com.healthtech.doctor.event.DoctorRegistered;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -18,8 +15,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// Relay delay pushed out to an hour; DoctorSeeder's KafkaTemplate is mocked (no broker here) so its
-// startup send does not block.
+// Relay delay pushed out to an hour: there is no broker here for it to publish the seeded rows to.
 @SpringBootTest(properties = {"outbox.pruning.retention-days=7", "outbox.relay.fixed-delay-ms=3600000"})
 @Testcontainers
 @DirtiesContext
@@ -29,9 +25,6 @@ class OutboxPruningJobTest {
     @ServiceConnection
     static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:16-alpine")
             .withStartupTimeout(Duration.ofMinutes(2));
-
-    @MockitoBean
-    KafkaTemplate<String, DoctorRegistered> kafkaTemplate;
 
     @Autowired
     OutboxRepository outboxRepository;
