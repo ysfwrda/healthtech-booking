@@ -23,7 +23,7 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.m2 mvn clean package -DskipTests -B
 
 # ---------- Runtime stage ----------
-FROM eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /app
 
 # Pull just the fat jar out of the build stage. JDK, Maven, and the
