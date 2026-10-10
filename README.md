@@ -142,6 +142,8 @@ is computed from appointment data plus doctor opening hours.
   Like cancel it takes the row lock, so it cannot race a cancel, and returns the same `503` when the lock is not
   granted within 3 seconds. When `type` or `dateTime` actually changes it publishes `appointment.changed`; notes-only
   and no-op changes publish nothing.
+  The frontend does not open the change form for an appointment starting in less than 48 hours: it shows a pop-up that
+  it can no longer be changed (it also shows it when the server answers `Change Window Closed`).
 
 ---
 

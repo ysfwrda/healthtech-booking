@@ -3,7 +3,10 @@ import { getMyAppointments, cancelAppointment } from "../api/appointments";
 import { getDoctor } from "../api/doctors";
 import { ApiError } from "../api/client";
 import { ChangeAppointmentForm } from "../components/ChangeAppointmentForm";
+import { NoticeDialog } from "../components/NoticeDialog";
 import { StatusMessage } from "../components/StatusMessage";
+import { CHANGE_MIN_NOTICE_HOURS } from "../api/constants";
+import { isWithinChangeNotice } from "../dates";
 import type { AppointmentResponse } from "../api/types";
 
 export function MyAppointmentsPage() {
@@ -16,6 +19,7 @@ export function MyAppointmentsPage() {
   // Shown above the list: the outcome of the last cancel or change.
   const [actionError, setActionError] = useState("");
   const [notice, setNotice] = useState("");
+  const [changeBlocked, setChangeBlocked] = useState(false);
 
   function load() {
     setStatus("loading");
@@ -60,6 +64,21 @@ export function MyAppointmentsPage() {
     }
   }
 
+  function blockChange() {
+    setChangingId(null);
+    setChangeBlocked(true);
+  }
+
+  function handleChangeClick(appointment: AppointmentResponse) {
+    setActionError("");
+    setNotice("");
+    if (isWithinChangeNotice(appointment.dateTime)) {
+      blockChange();
+      return;
+    }
+    setChangingId(changingId === appointment.id ? null : appointment.id);
+  }
+
   function handleChanged() {
     setChangingId(null);
     setActionError("");
@@ -80,6 +99,14 @@ export function MyAppointmentsPage() {
       {notice && <StatusMessage kind="info">{notice}</StatusMessage>}
       {actionError && <StatusMessage kind="error">{actionError}</StatusMessage>}
       {appointments.length === 0 && <StatusMessage kind="info">You have no appointments yet.</StatusMessage>}
+      {changeBlocked && (
+        <NoticeDialog title="This appointment can no longer be changed" onClose={() => setChangeBlocked(false)}>
+          <p>
+            Appointments can only be changed up to {CHANGE_MIN_NOTICE_HOURS} hours before they start. This appointment starts
+            in less than {CHANGE_MIN_NOTICE_HOURS} hours, so its purpose and time can no longer be changed.
+          </p>
+        </NoticeDialog>
+      )}
       <ul className="appointment-list">
         {appointments.map((appointment) => (
           <li key={appointment.id} className={appointment.status === "CANCELLED" ? "cancelled" : undefined}>
@@ -91,11 +118,7 @@ export function MyAppointmentsPage() {
               <>
                 <button
                   type="button"
-                  onClick={() => {
-                    setActionError("");
-                    setNotice("");
-                    setChangingId(changingId === appointment.id ? null : appointment.id);
-                  }}
+                  onClick={() => handleChangeClick(appointment)}
                   disabled={cancellingId === appointment.id}
                 >
                   Change
@@ -114,6 +137,7 @@ export function MyAppointmentsPage() {
                 appointment={appointment}
                 onSaved={handleChanged}
                 onClose={() => setChangingId(null)}
+                onWindowClosed={blockChange}
               />
             )}
           </li>

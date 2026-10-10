@@ -11,9 +11,11 @@ interface ChangeAppointmentFormProps {
   appointment: AppointmentResponse;
   onSaved: () => void;
   onClose: () => void;
+  // The server refused because the appointment starts inside the notice period.
+  onWindowClosed: () => void;
 }
 
-export function ChangeAppointmentForm({ appointment, onSaved, onClose }: ChangeAppointmentFormProps) {
+export function ChangeAppointmentForm({ appointment, onSaved, onClose, onWindowClosed }: ChangeAppointmentFormProps) {
   const [type, setType] = useState<AppointmentType>(appointment.type);
   const [notes, setNotes] = useState(appointment.notes ?? "");
   const [date, setDate] = useState(appointment.dateTime.slice(0, 10));
@@ -47,6 +49,10 @@ export function ChangeAppointmentForm({ appointment, onSaved, onClose }: ChangeA
       await updateAppointment(appointment.id, update);
       onSaved();
     } catch (err) {
+      if (err instanceof ApiError && err.title === "Change Window Closed") {
+        onWindowClosed();
+        return;
+      }
       if (err instanceof ApiError && err.title === "Slot Already Booked") {
         setError("That slot was just taken. Pick another one.");
         setSelectedSlot(null);

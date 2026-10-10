@@ -198,3 +198,18 @@ button {
   color: #d1453b;
   font-size: 0.85rem;
 }
+
+.notice-dialog {
+  max-width: 420px;
+  border: 1px solid #8884;
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+}
+
+.notice-dialog::backdrop {
+  background: #0007;
+}
+
+.notice-dialog button {
+  margin-top: 1rem;
+}
