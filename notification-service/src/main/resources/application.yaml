@@ -11,10 +11,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
     properties:
       hibernate:
-        format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   kafka:
@@ -24,7 +22,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, beans, mappings
+        include: health
 
 logging:
   pattern:

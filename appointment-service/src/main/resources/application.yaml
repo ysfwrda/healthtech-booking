@@ -12,10 +12,8 @@ spring:
     defer-datasource-initialization: true
     hibernate:
       ddl-auto: update
-    show-sql: true
     properties:
       hibernate:
-        format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   sql:
@@ -50,7 +48,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, beans, mappings
+        include: health
 
 springdoc:
   default-produces-media-type: application/json
