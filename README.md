@@ -459,12 +459,15 @@ curl -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "firstName": "John", "lastName": "Doe",
-    "username": "john.doe", "password": "secret",
+    "username": "john.doe", "password": "secret123",
     "dateOfBirth": "1990-01-01",
     "email": "john.doe@example.com",
     "insuranceType": "PRIVATE"
   }'
 ```
+
+The password must be 8 to 72 characters; anything else returns `400` with a `password` field error. Doctor
+registration requires at least 8 characters.
 
 Register a doctor (public, no token required; issues a DOCTOR JWT immediately, see Current Limitations for what that
 does and doesn't vouch for):
