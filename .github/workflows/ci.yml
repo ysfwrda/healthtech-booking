@@ -13,17 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - service: api-gateway
-            test_args: ""
-          - service: appointment-service
-            test_args: ""
-          - service: doctor-service
-            test_args: "-Dtest=!DoctorServiceApplicationTests"
-          - service: notification-service
-            test_args: ""
-          - service: patient-service
-            test_args: "-Dtest=!PatientServiceApplicationTests"
+        service: [ api-gateway, appointment-service, doctor-service, notification-service, patient-service ]
 
     steps:
       - name: Checkout
@@ -46,7 +36,7 @@ jobs:
 
       - name: Test ${{ matrix.service }}
         working-directory: ${{ matrix.service }}
-        run: mvn -B test ${{ matrix.test_args }}
+        run: mvn -B test
   build-and-push:
     name: push ${{ matrix.service }}
     needs: test                 # waits for every test-matrix leg to pass
