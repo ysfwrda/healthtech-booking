@@ -2,6 +2,7 @@ package com.healthtech.notification.consumer;
 
 import com.healthtech.notification.event.AppointmentBooked;
 import com.healthtech.notification.event.AppointmentCancelled;
+import com.healthtech.notification.event.AppointmentChanged;
 import com.healthtech.notification.event.AppointmentNotificationEvent;
 import com.healthtech.notification.correlation.ConsumerCorrelation;
 import com.healthtech.notification.correlation.CorrelationId;
@@ -39,6 +40,17 @@ public class AppointmentEventConsumer {
     )
     public void consumeCancelledEvent(
             AppointmentCancelled event,
+            @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
+        handle(event, correlationIdHeader);
+    }
+
+    @KafkaListener(
+            topics = "appointment.changed",
+            groupId = "notification-group",
+            containerFactory = "changedKafkaListenerContainerFactory"
+    )
+    public void consumeChangedEvent(
+            AppointmentChanged event,
             @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
         handle(event, correlationIdHeader);
     }

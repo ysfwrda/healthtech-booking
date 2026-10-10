@@ -35,6 +35,10 @@ app:
   jwt:
     public-key: ${JWT_PUBLIC_KEY_PATH:file:../keys/public.pem}
 
+appointment:
+  change:
+    min-notice-hours: 48
+
 outbox:
   relay:
     fixed-delay-ms: 1000

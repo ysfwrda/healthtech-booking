@@ -121,6 +121,7 @@ button {
 
 .appointment-list li {
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: 1.5rem;
 }
@@ -155,6 +156,18 @@ button {
   border-color: #4a7dfc;
 }
 
+/* The change form opens inside the appointment row, on its own line. */
+.change-form {
+  flex-basis: 100%;
+  max-width: 420px;
+}
+
+.change-form-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
 .booking-form {
   margin-top: 1.5rem;
   max-width: 420px;
@@ -184,4 +197,19 @@ button {
   padding-left: 1.25rem;
   color: #d1453b;
   font-size: 0.85rem;
+}
+
+.notice-dialog {
+  max-width: 420px;
+  border: 1px solid #8884;
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+}
+
+.notice-dialog::backdrop {
+  background: #0007;
+}
+
+.notice-dialog button {
+  margin-top: 1rem;
 }

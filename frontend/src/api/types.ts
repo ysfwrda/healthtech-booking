@@ -125,6 +125,12 @@ export interface AppointmentRequest {
   notes?: string;
 }
 
+export interface AppointmentUpdateRequest {
+  type?: AppointmentType;
+  dateTime?: string;
+  notes?: string;
+}
+
 export interface AppointmentResponse {
   id: string;
   patientId: string;

@@ -1,6 +1,7 @@
 package com.healthtech.appointment.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.healthtech.appointment.config.ChangePolicyProperties;
 import com.healthtech.appointment.domain.Appointment;
 import com.healthtech.appointment.domain.AppointmentStatus;
 import com.healthtech.appointment.dto.AppointmentRequest;
@@ -89,7 +90,8 @@ class AppointmentServiceTest {
                 validDoctorRepository,
                 bookingRules(),
                 new OutboxEventWriter(outboxRepository, objectMapper),
-                BOOKING_CLOCK
+                BOOKING_CLOCK,
+                new ChangePolicyProperties(48)
         );
     }
 
@@ -484,7 +486,8 @@ class AppointmentServiceTest {
                 validDoctorRepository,
                 bookingRules(),
                 new OutboxEventWriter(outboxRepository, objectMapper),
-                Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC)
+                Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC),
+                new ChangePolicyProperties(48)
         );
         UUID patientId = UUID.randomUUID();
         Appointment appointment = Appointment.builder()

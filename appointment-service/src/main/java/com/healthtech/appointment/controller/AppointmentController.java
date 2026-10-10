@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.healthtech.appointment.dto.AppointmentRequest;
 import com.healthtech.appointment.dto.AppointmentResponse;
+import com.healthtech.appointment.dto.AppointmentUpdateRequest;
 import com.healthtech.appointment.service.AppointmentService;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
@@ -47,6 +48,25 @@ public class AppointmentController {
     public ResponseEntity<List<AppointmentResponse>> getMyAppointments(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         UUID patientId = UUID.fromString(jwt.getSubject());
         return ResponseEntity.ok(appointmentService.getAppointmentsForPatient(patientId));
+    }
+
+    @Operation(summary = "Change the purpose and/or time of one of the authenticated patient's appointments",
+            description = "Partial update: send only the fields to change (at least one). The new time must be a free slot "
+                    + "inside the same doctor's opening hours. Allowed up to appointment.change.min-notice-hours (default 48) "
+                    + "before the current start time; the new time itself only has to be in the future.")
+    @ApiResponse(responseCode = "200", description = "Appointment changed (or already as requested)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = AppointmentResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Validation failed (no field given, notes too long), slot not aligned to the slot grid, outside the doctor's opening hours, or slot in the past")
+    @ApiResponse(responseCode = "403", description = "The token is not a patient token, or the resource belongs to another patient")
+    @ApiResponse(responseCode = "404", description = "Appointment not found, or the doctor is not known to the appointment service")
+    @ApiResponse(responseCode = "409", description = "Slot already booked, the appointment is cancelled, or it starts in less than the minimum notice period")
+    @ApiResponse(responseCode = "503", description = "The appointment is locked by another request and could not be changed within 3 seconds; retry shortly (Retry-After: 1)")
+    @PatchMapping("/{id}")
+    public ResponseEntity<AppointmentResponse> updateAppointment(@PathVariable UUID id,
+                                                                 @Valid @RequestBody AppointmentUpdateRequest request,
+                                                                 @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+        UUID patientId = UUID.fromString(jwt.getSubject());
+        return ResponseEntity.ok(appointmentService.updateAppointment(id, request, patientId));
     }
 
     @Operation(summary = "Cancel one of the authenticated patient's appointments")

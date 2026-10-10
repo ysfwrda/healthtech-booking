@@ -9,6 +9,8 @@
 #   - a protected path with a valid token succeeds (200)
 #   - a protected path with a wrong-role (DOCTOR) token is rejected (403) end to end
 #   - an OPTIONS preflight on a public POST route is not blocked (401/403)
+#   - PATCH /api/appointments/{id} (change): no token is 401, a DOCTOR token is 403,
+#     and the CORS preflight for PATCH is allowed
 #
 # Requires: curl, jq. Services and infra (Kafka, Postgres) must be running
 # (docker compose up -d), same precondition as scripts/test-flow.sh.
@@ -85,6 +87,24 @@ section "GET /api/appointments with a DOCTOR token: 403 (role enforcement throug
 CODE="$(curl -s -o /dev/null -w '%{http_code}' "$GATEWAY/api/appointments" \
   -H "Authorization: Bearer $DOCTOR_TOKEN")"
 assert_status "GET /api/appointments with DOCTOR token" 403 "$CODE"
+
+section "PATCH /api/appointments/{id} with no token: 401"
+SOME_ID="00000000-0000-0000-0000-000000000000"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' -X PATCH "$GATEWAY/api/appointments/$SOME_ID" \
+  -H "Content-Type: application/json" -d '{ "type": "FOLLOW_UP" }')"
+assert_status "PATCH /api/appointments/{id} with no token" 401 "$CODE"
+
+section "PATCH /api/appointments/{id} with a DOCTOR token: 403"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' -X PATCH "$GATEWAY/api/appointments/$SOME_ID" \
+  -H "Authorization: Bearer $DOCTOR_TOKEN" -H "Content-Type: application/json" -d '{ "type": "FOLLOW_UP" }')"
+assert_status "PATCH /api/appointments/{id} with DOCTOR token" 403 "$CODE"
+
+section "OPTIONS preflight for PATCH on an appointment: allowed"
+PREFLIGHT_HEADERS="$(curl -s -D - -o /dev/null -X OPTIONS "$GATEWAY/api/appointments/$SOME_ID" \
+  -H "Origin: http://localhost:5173" -H "Access-Control-Request-Method: PATCH" \
+  -H "Access-Control-Request-Headers: authorization,content-type")"
+echo "$PREFLIGHT_HEADERS" | grep -iq "^access-control-allow-methods:.*PATCH" \
+  && ok "preflight allows PATCH" || fail "preflight for PATCH does not list PATCH in Access-Control-Allow-Methods"
 
 section "OPTIONS preflight on public POST routes: not blocked"
 CODE="$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS "$GATEWAY/api/auth/register" \

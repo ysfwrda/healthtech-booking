@@ -89,6 +89,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problemDetail;
     }
 
+    @ExceptionHandler(AppointmentNotChangeableException.class)
+    public ProblemDetail handleAppointmentNotChangeableException(AppointmentNotChangeableException ex) {
+        log.warn("{}, status 409", ex.getMessage());
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problemDetail.setTitle("Appointment Not Changeable");
+        return problemDetail;
+    }
+
+    @ExceptionHandler(ChangeWindowClosedException.class)
+    public ProblemDetail handleChangeWindowClosedException(ChangeWindowClosedException ex) {
+        log.warn("{}, status 409", ex.getMessage());
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problemDetail.setTitle("Change Window Closed");
+        return problemDetail;
+    }
+
     // The appointment row lock was not granted within the repository's query timeout.
     @ExceptionHandler({QueryTimeoutException.class, PessimisticLockingFailureException.class})
     public ResponseEntity<ProblemDetail> handleLockNotAcquired(RuntimeException ex) {

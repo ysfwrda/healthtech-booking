@@ -34,3 +34,8 @@ export const APPOINTMENT_TYPES: { value: AppointmentType; label: string }[] = [
   { value: "FOLLOW_UP", label: "Follow up" },
   { value: "VACCINATION", label: "Vaccination" },
 ];
+
+// Keep in sync with appointment.change.min-notice-hours in appointment-service. The server decides: it answers 409
+// "Change Window Closed" when this check lets a change through that it refuses, but a change this check blocks is
+// never sent, so a smaller server value or a different time zone is not noticed on the blocking side.
+export const CHANGE_MIN_NOTICE_HOURS = 48;

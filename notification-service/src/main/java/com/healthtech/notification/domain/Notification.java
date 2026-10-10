@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
+@Table(name = "notification")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -21,6 +22,9 @@ public class Notification {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    @Column(name = "event_id")
+    private UUID eventId;
 
     private UUID appointmentId;
     private UUID patientId;
