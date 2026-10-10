@@ -2,7 +2,7 @@
 
 # ---------- Build stage ----------
 # Vite 8 needs Node >= 20.19 / 22.12.
-FROM node:22-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /app
 
 # Copy the manifests first so `npm ci` stays cached until dependencies change.
