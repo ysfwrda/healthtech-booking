@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.patient.domain.InsuranceType;
 import com.healthtech.patient.dto.AuthResponse;
+import com.healthtech.patient.dto.LoginRequest;
 import com.healthtech.patient.dto.RegisterRequest;
 import com.healthtech.patient.outbox.OutboxRepository;
 import com.healthtech.patient.repository.PatientRepository;
@@ -16,8 +17,11 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
@@ -29,8 +33,11 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.ConfluentKafkaContainer;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +50,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers
 @DirtiesContext
 public class AuthIntegrationTest {
+
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 2, 9, 30);
 
     @Container
     @ServiceConnection
@@ -60,6 +69,15 @@ public class AuthIntegrationTest {
     @DynamicPropertySource
     static void kafkaProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.bootstrap-servers", kafkaContainer::getBootstrapServers);
+    }
+
+    @TestConfiguration
+    static class FixedClockConfig {
+        @Bean
+        @Primary
+        Clock fixedClock() {
+            return Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+        }
     }
 
     @Autowired
@@ -171,5 +189,50 @@ public class AuthIntegrationTest {
         } catch (Exception ex) {
             throw new RuntimeException(ex);
         }
+    }
+
+    @Test
+    void register_leavesLastLoginNull() {
+        // Arrange
+        RegisterRequest request = validRequestBuilder("freshuser", "fresh.user@example.com").build();
+
+        // Act
+        ResponseEntity<AuthResponse> response = restTemplate.postForEntity("/api/auth/register", request, AuthResponse.class);
+
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(patientRepository.findByUsername("freshuser").orElseThrow().getLastLogin()).isNull();
+    }
+
+    @Test
+    void login_validCredentials_storesLastLogin() {
+        // Arrange
+        RegisterRequest registration = validRequestBuilder("loginuser", "login.user@example.com").build();
+        assertThat(restTemplate.postForEntity("/api/auth/register", registration, AuthResponse.class).getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+
+        // Act
+        ResponseEntity<AuthResponse> response = restTemplate.postForEntity(
+                "/api/auth/login", new LoginRequest("loginuser", "Sup3rSecret!"), AuthResponse.class);
+
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(patientRepository.findByUsername("loginuser").orElseThrow().getLastLogin()).isEqualTo(NOW);
+    }
+
+    @Test
+    void login_wrongPassword_leavesLastLoginNull() {
+        // Arrange
+        RegisterRequest registration = validRequestBuilder("wrongpwuser", "wrongpw.user@example.com").build();
+        assertThat(restTemplate.postForEntity("/api/auth/register", registration, AuthResponse.class).getStatusCode())
+                .isEqualTo(HttpStatus.CREATED);
+
+        // Act
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                "/api/auth/login", new LoginRequest("wrongpwuser", "not-the-password"), String.class);
+
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(patientRepository.findByUsername("wrongpwuser").orElseThrow().getLastLogin()).isNull();
     }
 }
