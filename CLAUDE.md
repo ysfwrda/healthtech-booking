@@ -79,6 +79,7 @@ call.
 - When behavior changes, update the README section and any ADR that
   describes it in the same PR. ADRs must not reference ADRs or specs that
   don't exist in the repo; specs live in `docs/specs/`.
+- When behavior changes, also update `docs/domain.md` (glossary, lifecycle, `BR-` rules, use cases) in the same PR. Pre-approved: no need to ask first.
 - PR titles: `type(scope): subject`, with type one of feat, fix, docs, test, refactor, infra, ci, chore.
   Branch commits may use the same prefix or a plain imperative subject
   ("Reject slots in the past"); recent PRs use the plain form.
