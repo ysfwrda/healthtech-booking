@@ -5,7 +5,7 @@
 #   - Zookeeper          (required by Kafka)
 #   - Kafka              (event broker)
 #   - PostgreSQL x4      (one DB per service — DB per Service pattern)
-#   - Kafka UI           (optional: browse topics at localhost:8090)
+#   - Kafka UI           (optional, profile "tools": browse topics at localhost:8090)
 #   - The five application services (appointment, patient, doctor,
 #     notification, api-gateway)
 #
@@ -16,10 +16,18 @@
 #
 # Startup order: every service waits for its dependencies to be HEALTHY (not just
 # started). Infrastructure (Zookeeper, Kafka, Postgres) restarts itself after a
-# crash; the application services do not, so a failing service stays visibly down.
+# crash. The application services restart at most 3 times after a non-zero exit
+# (restart: on-failure:3), so a service that keeps failing stays visibly down.
+#
+# Memory: every container has a mem_limit (about 1.5x its measured steady state,
+# see README, Local Setup). The JVM services size their heap from that limit
+# (-XX:MaxRAMPercentage=65 in their Dockerfiles); Kafka and Zookeeper set
+# KAFKA_HEAP_OPTS explicitly.
 #
 # Usage:
 #   docker compose up -d --build      → build the services from source and start everything
+#   docker compose --profile tools up -d
+#                                     → same, plus Kafka UI at localhost:8090
 #   docker compose -f docker-compose.yml -f docker-compose.images.yml pull
 #   docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
 #                                     → run the prebuilt ghcr images, no build
@@ -41,6 +49,8 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx256m"
+    mem_limit: 384m
     ports:
       - "2181:2181"
     restart: unless-stopped
@@ -72,6 +82,8 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    mem_limit: 1g
     restart: unless-stopped
     healthcheck:
       # Port check on the internal listener the services use; much lighter than a Kafka CLI call.
@@ -87,9 +99,11 @@ services:
   # Optional but highly recommended for learning.
   # Browse topics, view messages, monitor consumer groups
   # at http://localhost:8090
+  # Only started with the "tools" profile: docker compose --profile tools up -d
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui:v0.7.2
     container_name: kafka-ui
+    profiles: ["tools"]
     depends_on:
       kafka:
         condition: service_healthy
@@ -98,6 +112,7 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    mem_limit: 512m
     networks:
       - healthtech-net
 
@@ -116,6 +131,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres-appointment-data:/var/lib/postgresql/data
+    mem_limit: 192m
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -137,6 +153,7 @@ services:
       - "5433:5432"
     volumes:
       - postgres-notification-data:/var/lib/postgresql/data
+    mem_limit: 192m
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -159,6 +176,7 @@ services:
       - "5434:5432"
     volumes:
       - postgres-patient-data:/var/lib/postgresql/data
+    mem_limit: 192m
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -180,6 +198,7 @@ services:
       - "5435:5432"
     volumes:
       - postgres-doctor-data:/var/lib/postgresql/data
+    mem_limit: 192m
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -192,6 +211,8 @@ services:
   # ── Appointment Service ──────────────────────
   appointment-service:
     build: ./appointment-service
+    mem_limit: 768m
+    restart: on-failure:3
     ports:
       - "8081:8081"
     environment:
@@ -219,6 +240,8 @@ services:
   # ── Patient Service ──────────────────────────
   patient-service:
     build: ./patient-service
+    mem_limit: 768m
+    restart: on-failure:3
     ports:
       - "8083:8083"
     environment:
@@ -247,6 +270,8 @@ services:
   # ── Doctor Service ───────────────────────────
   doctor-service:
     build: ./doctor-service
+    mem_limit: 768m
+    restart: on-failure:3
     ports:
       - "8084:8084"
     environment:
@@ -275,6 +300,8 @@ services:
   # ── Notification Service ─────────────────────
   notification-service:
     build: ./notification-service
+    mem_limit: 640m
+    restart: on-failure:3
     ports:
       - "8082:8082"
     environment:
@@ -299,6 +326,8 @@ services:
   # ── API Gateway ───────────────────────────────
   api-gateway:
     build: ./api-gateway
+    mem_limit: 512m
+    restart: on-failure:3
     ports:
       - "8080:8080"
     environment:
@@ -334,6 +363,7 @@ services:
       context: ./frontend
       args:
         VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8080}
+    mem_limit: 32m
     ports:
       - "5173:80"
     depends_on:
