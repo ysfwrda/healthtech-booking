@@ -10,6 +10,8 @@ import com.healthtech.appointment.event.AppointmentBooked;
 import com.healthtech.appointment.event.AppointmentCancelled;
 import com.healthtech.appointment.exception.AppointmentAccessDeniedException;
 import com.healthtech.appointment.exception.AppointmentNotFoundException;
+import com.healthtech.appointment.exception.DoctorNotFoundException;
+import com.healthtech.appointment.exception.PatientNotFoundException;
 import com.healthtech.appointment.exception.SlotAlreadyBookedException;
 import com.healthtech.appointment.exception.SlotInPastException;
 import com.healthtech.appointment.mapper.AppointmentMapper;
@@ -320,6 +322,56 @@ class AppointmentServiceTest {
         // Act & Assert
         assertThatThrownBy(() -> appointmentService.bookAppointment(request, patientId))
                 .isInstanceOf(SlotInPastException.class);
+
+        verify(appointmentRepository, never()).saveAndFlush(any());
+        verify(outboxRepository, never()).save(any());
+    }
+
+    @Test
+    void bookAppointment_patientNotInReadModel_shouldThrowPatientNotFoundAndNotSaveOrPublish() {
+        // Arrange
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        LocalDateTime dateTime = LocalDateTime.of(2026, 8, 10, 10, 0);
+        AppointmentRequest request = AppointmentRequest.builder()
+                .doctorId(doctorId)
+                .dateTime(dateTime)
+                .type(INITIAL_CONSULTATION)
+                .build();
+        when(appointmentMapper.toEntity(request)).thenReturn(Appointment.builder()
+                .doctorId(doctorId).dateTime(dateTime).type(INITIAL_CONSULTATION).build());
+        when(validPatientRepository.findById(patientId)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThatThrownBy(() -> appointmentService.bookAppointment(request, patientId))
+                .isInstanceOf(PatientNotFoundException.class)
+                .hasMessageContaining(patientId.toString());
+
+        verify(appointmentRepository, never()).saveAndFlush(any());
+        verify(outboxRepository, never()).save(any());
+    }
+
+    @Test
+    void bookAppointment_doctorNotInReadModel_shouldThrowDoctorNotFoundAndNotSaveOrPublish() {
+        // Arrange
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        LocalDateTime dateTime = LocalDateTime.of(2026, 8, 10, 10, 0);
+        AppointmentRequest request = AppointmentRequest.builder()
+                .doctorId(doctorId)
+                .dateTime(dateTime)
+                .type(INITIAL_CONSULTATION)
+                .build();
+        when(appointmentMapper.toEntity(request)).thenReturn(Appointment.builder()
+                .doctorId(doctorId).dateTime(dateTime).type(INITIAL_CONSULTATION).build());
+        when(validPatientRepository.findById(patientId)).thenReturn(Optional.of(
+                ValidPatient.builder().patientId(patientId).firstName("Jane").lastName("Doe").email("jane@example.com").build()));
+        when(validDoctorRepository.findById(doctorId)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThatThrownBy(() -> appointmentService.bookAppointment(request, patientId))
+                .isInstanceOf(DoctorNotFoundException.class)
+                .hasMessageContaining(doctorId.toString());
 
         verify(appointmentRepository, never()).saveAndFlush(any());
         verify(outboxRepository, never()).save(any());
