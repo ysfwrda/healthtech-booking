@@ -3,12 +3,12 @@ package com.healthtech.doctor.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.healthtech.doctor.domain.Language;
 import com.healthtech.doctor.validation.ValidOpeningHours;
+import com.healthtech.doctor.validation.ValidPassword;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.util.Set;
@@ -34,8 +34,8 @@ public class DoctorRegistrationRequest {
     private String email;
 
     @NotBlank
-    @Size(min = 8)
-    @Schema(example = "ChangeMe123!", description = "At least 8 characters")
+    @ValidPassword
+    @Schema(example = "ChangeMe123!", description = "At least 8 characters and at most 72 bytes in UTF-8")
     private String password;
 
     @NotBlank

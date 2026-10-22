@@ -330,6 +330,36 @@ public class DoctorIntegrationTest {
     }
 
     @Test
+    void login_passwordOver72BytesWithRegisteredPrefix_returns401() {
+        // Arrange: registered with 72 bytes; the real BCrypt encoder ignores everything after byte 72
+        DoctorRegistrationRequest registration = validRequestBuilder("prefix.doctor@example.com")
+                .password("a".repeat(72)).build();
+        restTemplate.postForEntity("/api/doctors/register", registration, DoctorAuthResponse.class);
+
+        // Act
+        ResponseEntity<String> response = restTemplate.postForEntity("/api/doctors/login",
+                new DoctorLoginRequest("prefix.doctor@example.com", "a".repeat(73)), String.class);
+
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void login_passwordOfExactly72Bytes_returns200() {
+        // Arrange
+        DoctorRegistrationRequest registration = validRequestBuilder("exact.doctor@example.com")
+                .password("a".repeat(72)).build();
+        restTemplate.postForEntity("/api/doctors/register", registration, DoctorAuthResponse.class);
+
+        // Act
+        ResponseEntity<DoctorAuthResponse> response = restTemplate.postForEntity("/api/doctors/login",
+                new DoctorLoginRequest("exact.doctor@example.com", "a".repeat(72)), DoctorAuthResponse.class);
+
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
     void login_unknownEmail_returns401() {
         DoctorLoginRequest loginRequest = new DoctorLoginRequest("nobody@example.com", "whatever123");
         ResponseEntity<String> response = restTemplate.postForEntity("/api/doctors/login", loginRequest, String.class);

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.healthtech.patient.domain.InsuranceType;
 import com.healthtech.patient.dto.AuthResponse;
+import com.healthtech.patient.dto.LoginRequest;
 import com.healthtech.patient.dto.RegisterRequest;
 import com.healthtech.patient.outbox.OutboxRepository;
 import com.healthtech.patient.repository.PatientRepository;
@@ -110,6 +111,36 @@ public class AuthIntegrationTest {
         assertThat(problem.get("title").asText()).isEqualTo("Username Already Taken");
         assertThat(problem.get("detail").asText()).isEqualTo("janedoe");
         assertThat(patientRepository.findAll().stream().filter(p -> p.getUsername().equals("janedoe")).count()).isEqualTo(1);
+    }
+
+    @Test
+    void login_passwordOver72BytesWithRegisteredPrefix_returns401() {
+        // Arrange: registered with 72 bytes; the real BCrypt encoder ignores everything after byte 72
+        RegisterRequest registration = validRequestBuilder("prefix.login", "prefix.login@example.com")
+                .password("a".repeat(72)).build();
+        restTemplate.postForEntity("/api/auth/register", registration, AuthResponse.class);
+
+        // Act
+        ResponseEntity<String> response = restTemplate.postForEntity("/api/auth/login",
+                new LoginRequest("prefix.login", "a".repeat(73)), String.class);
+
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void login_passwordOfExactly72Bytes_returns200() {
+        // Arrange
+        RegisterRequest registration = validRequestBuilder("exact.login", "exact.login@example.com")
+                .password("a".repeat(72)).build();
+        restTemplate.postForEntity("/api/auth/register", registration, AuthResponse.class);
+
+        // Act
+        ResponseEntity<AuthResponse> response = restTemplate.postForEntity("/api/auth/login",
+                new LoginRequest("exact.login", "a".repeat(72)), AuthResponse.class);
+
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test

@@ -202,6 +202,38 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_passwordOver72Bytes_throwsInvalidCredentialsExceptionWithoutComparing() {
+        // Arrange: BCrypt ignores everything after byte 72, so the encoder would report a match
+        String tooLong = "a".repeat(73);
+        LoginRequest loginRequest = new LoginRequest("johndoe", tooLong);
+        when(patientRepository.findByUsername("johndoe")).thenReturn(Optional.of(patient));
+        lenient().when(passwordEncoder.matches(tooLong, "$2a$hashed")).thenReturn(true);
+
+        // Act & Assert
+        assertThatThrownBy(() -> authService.login(loginRequest))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessageContaining("Invalid username or password");
+        verify(passwordEncoder, never()).matches(any(), any());
+        verify(jwtTokenProvider, never()).generateToken(any());
+    }
+
+    @Test
+    void login_passwordOfExactly72Bytes_isComparedWithTheEncoder() {
+        // Arrange
+        String atLimit = "a".repeat(72);
+        LoginRequest loginRequest = new LoginRequest("johndoe", atLimit);
+        when(patientRepository.findByUsername("johndoe")).thenReturn(Optional.of(patient));
+        when(passwordEncoder.matches(atLimit, "$2a$hashed")).thenReturn(true);
+        when(jwtTokenProvider.generateToken(any())).thenReturn("jwt");
+
+        // Act
+        AuthResponse response = authService.login(loginRequest);
+
+        // Assert
+        assertThat(response.getToken()).isEqualTo("jwt");
+    }
+
+    @Test
     void login_wrongPassword_throwsInvalidCredentialsException() {
         // Arrange
         LoginRequest loginRequest = new LoginRequest("johndoe", "wrongpass");

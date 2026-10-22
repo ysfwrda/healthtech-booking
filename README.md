@@ -549,8 +549,10 @@ curl -X POST http://localhost:8080/api/auth/register \
   }'
 ```
 
-The password must be 8 to 72 characters; anything else returns `400` with a `password` field error. Doctor
-registration requires at least 8 characters.
+The password must be at least 8 characters and at most 72 bytes in UTF-8 (the limit of the BCrypt hash, so a
+password of multi-byte characters can be shorter than 72 characters); anything else returns `400` with a `password`
+field error. Doctor registration uses the same rule. Login with a password over 72 bytes is refused with `401`,
+like a wrong password, because BCrypt would otherwise compare only the first 72 bytes.
 
 Register a doctor (public, no token required; issues a DOCTOR JWT immediately, see Current Limitations for what that
 does and doesn't vouch for):

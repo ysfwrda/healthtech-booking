@@ -9,7 +9,7 @@ paths:
 
 Item 1 of `.claude/rules/definition-of-done.md` lists the failure paths
 each behavior's unit tests cover. For a limit, test the values on both
-sides: `@Size(min = 8)` on the doctor password means testing 7 and 8.
+sides: the 8-character minimum of `@ValidPassword` means testing 7 and 8.
 
 For a controller, the `@WebMvcTest` slice test is its unit test. Then add
 tests at every other layer the change reaches:
