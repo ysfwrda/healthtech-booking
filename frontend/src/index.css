@@ -213,3 +213,50 @@ button {
 .notice-dialog button {
   margin-top: 1rem;
 }
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: #1a1a1a;
+  background: #e8e8e8;
+}
+
+.badge-pending {
+  background: #fff3cd;
+}
+
+.badge-confirmed {
+  background: #d4edda;
+}
+
+.badge-cancelled {
+  background: #e8e8e8;
+}
+
+.flag-banner {
+  flex-basis: 100%;
+  margin: 0.25rem 0 0;
+  padding: 0.4rem 0.6rem;
+  border-left: 4px solid #d9822b;
+  color: #1a1a1a;
+  background: #fff3e0;
+}
+
+.appointment-notes {
+  flex-basis: 100%;
+  font-size: 0.9rem;
+}
+
+.vacation-list {
+  list-style: none;
+  padding: 0;
+}
+
+.vacation-list li {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.25rem 0;
+}

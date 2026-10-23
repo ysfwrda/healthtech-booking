@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { useDoctorAuth } from "../auth/DoctorAuthContext";
 import { ApiError } from "../api/client";
 import { StatusMessage } from "../components/StatusMessage";
 
 export function LoginPage() {
   const { login } = useAuth();
+  const { logoutDoctor } = useDoctorAuth();
   const navigate = useNavigate();
 
   const [username, setUsername] = useState("");
@@ -19,6 +21,8 @@ export function LoginPage() {
     setError("");
     try {
       await login({ username, password });
+      // One role at a time: the doctor's session would otherwise keep the doctor's toolbar.
+      logoutDoctor();
       navigate("/doctors");
     } catch (err) {
       setStatus("error");

@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { useDoctorAuth } from "../auth/DoctorAuthContext";
 import { ApiError } from "../api/client";
 import { StatusMessage } from "../components/StatusMessage";
 import type { InsuranceType } from "../api/types";
 
 export function RegisterPage() {
   const { register } = useAuth();
+  const { logoutDoctor } = useDoctorAuth();
   const navigate = useNavigate();
 
   const [firstName, setFirstName] = useState("");
@@ -25,6 +27,7 @@ export function RegisterPage() {
     setError("");
     try {
       await register({ firstName, lastName, username, password, dateOfBirth, email, insuranceType });
+      logoutDoctor();
       navigate("/doctors");
     } catch (err) {
       setStatus("error");

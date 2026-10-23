@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { useDoctorAuth } from "../auth/DoctorAuthContext";
 import { ApiError } from "../api/client";
 import { StatusMessage } from "../components/StatusMessage";
 
 export function DoctorLoginPage() {
   const { loginDoctor } = useDoctorAuth();
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
@@ -19,7 +21,9 @@ export function DoctorLoginPage() {
     setError("");
     try {
       await loginDoctor({ email, password });
-      navigate("/doctors");
+      // One role at a time: the patient's session would otherwise keep the patient's toolbar.
+      logout();
+      navigate("/doctor/appointments");
     } catch (err) {
       setStatus("error");
       setError(err instanceof ApiError ? err.message : "Login failed. Please try again.");

@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import * as doctorAuthApi from "../api/doctorAuth";
-import { clearDoctorSession, getDoctorEmail, setDoctorSession } from "../api/client";
+import { clearDoctorSession, getDoctorEmail, onSessionCleared, setDoctorSession } from "../api/client";
 import type { DoctorLoginRequest, DoctorRegistrationRequest } from "../api/types";
 
 interface DoctorAuthContextValue {
@@ -15,6 +15,8 @@ const DoctorAuthContext = createContext<DoctorAuthContextValue | undefined>(unde
 
 export function DoctorAuthProvider({ children }: { children: ReactNode }) {
   const [doctorEmail, setDoctorEmail] = useState<string | null>(getDoctorEmail());
+
+  useEffect(() => onSessionCleared("doctor", () => setDoctorEmail(null)), []);
 
   async function registerDoctor(data: DoctorRegistrationRequest): Promise<void> {
     const response = await doctorAuthApi.registerDoctor(data);
