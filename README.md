@@ -274,13 +274,10 @@ Documented in [`docs/adr/`](docs/adr/):
   scale. Browsing (`GET`)
   stays public by design.
 * **Refresh tokens** are not implemented; access tokens are valid for one hour.
-* **The 48-hour change rule in the UI assumes one region.** The frontend decides whether to open the change form from
-  a constant (`CHANGE_MIN_NOTICE_HOURS`, to be kept in sync with `appointment.change.min-notice-hours`) and compares the
-  appointment's zone-less local date-time with the browser's clock, so it assumes the browser and appointment-service
-  are in the same time zone; the server's `409 Change Window Closed` stays the authority but never sees a change the UI
-  blocked. Planned fix if the application becomes multi-region: the server returns a `changeableUntil` field on appointment
-  responses, an absolute UTC timestamp computed from its clock and the property, and the UI only compares it with the
-  current time. That removes both the constant and the time-zone assumption (additive API change, so it needs approval).
+* **Unified clinic time zone ([BR-28](docs/domain.md#31-implemented)).** Appointment times and availability are
+  consistently interpreted in the clinic's configured time zone (`appointment.clinic.time-zone`, default `Europe/Berlin`).
+  The appointment-service `Clock` bean is pinned to this zone independent of host/server OS timezone, and the frontend
+  evaluates availability dates and the 48-hour change notice window by parsing slots in the clinic time zone.
 * **Service discovery** is static per [ADR-006](docs/adr/ADR-006-service-discovery.md); Eureka/Consul is Phase 3 work
   that has not started.
 * **Reliability/observability**: correlation-ID propagation and structured logging are implemented across all

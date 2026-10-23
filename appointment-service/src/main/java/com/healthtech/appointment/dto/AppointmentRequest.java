@@ -20,7 +20,7 @@ public class AppointmentRequest {
     private UUID doctorId;
 
     @NotNull
-    @Schema(description = "Start of a free slot, taken from GET /api/availability", example = "2026-10-12T09:00:00")
+    @Schema(description = "Start of a free slot in clinic time (Europe/Berlin), taken from GET /api/availability", example = "2026-10-12T09:00:00")
     private LocalDateTime dateTime;
 
     @NotNull

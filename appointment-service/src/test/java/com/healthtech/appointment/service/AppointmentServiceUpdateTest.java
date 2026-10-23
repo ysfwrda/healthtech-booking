@@ -41,6 +41,7 @@ import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
@@ -309,6 +310,35 @@ class AppointmentServiceUpdateTest {
         // Act & Assert
         assertThatThrownBy(() -> service.updateAppointment(appointment.getId(), type(FOLLOW_UP), patientId))
                 .isInstanceOf(ChangeWindowClosedException.class);
+    }
+
+    @Test
+    void updateAppointment_acrossDaylightSavingSpringForward_evaluatesNoticeWindow() {
+        // Arrange: Saturday March 28, 2026 at 09:00, with DST jump (02:00 -> 03:00) on Sunday March 29
+        LocalDateTime saturdayMorning = LocalDateTime.of(2026, 3, 28, 9, 0);
+        Clock dstClock = Clock.fixed(
+                saturdayMorning.atZone(ZoneId.of("Europe/Berlin")).toInstant(),
+                ZoneId.of("Europe/Berlin"));
+        AppointmentService dstService = new AppointmentService(
+                appointmentRepository,
+                appointmentMapper,
+                validPatientRepository,
+                validDoctorRepository,
+                List.of(new SlotAlignedRule(new SlotPolicy()), new WithinOpeningHoursRule(new SlotPolicy()), new NotInPastRule(dstClock)),
+                new OutboxEventWriter(outboxRepository, objectMapper),
+                dstClock,
+                new ChangePolicyProperties(48));
+
+        // Monday 09:00 is exactly 48 hours away in clinic time
+        Appointment appointment = appointmentAt(LocalDateTime.of(2026, 3, 30, 9, 0));
+        stubLoaded(appointment);
+        stubSaveAndResponse(appointment);
+
+        // Act
+        dstService.updateAppointment(appointment.getId(), type(FOLLOW_UP), patientId);
+
+        // Assert
+        assertThat(appointment.getType()).isEqualTo(FOLLOW_UP);
     }
 
     // --- the new time ---

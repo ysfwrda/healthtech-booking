@@ -41,3 +41,6 @@ export const APPOINTMENT_TYPES: { value: AppointmentType; label: string }[] = [
 // becomes multi-region, replace this with a server-provided `changeableUntil` UTC timestamp (see README, Current
 // Limitations).
 export const CHANGE_MIN_NOTICE_HOURS = 48;
+
+// All appointment slots and notice windows are interpreted in this clinic time zone.
+export const CLINIC_TIME_ZONE = "Europe/Berlin";

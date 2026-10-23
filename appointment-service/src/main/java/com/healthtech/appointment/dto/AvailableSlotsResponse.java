@@ -1,5 +1,6 @@
 package com.healthtech.appointment.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -17,5 +18,7 @@ public class AvailableSlotsResponse {
 
     private LocalDate date;
 
+    @Schema(description = "Available 30-minute slot start times in clinic time (Europe/Berlin)")
     private List<LocalDateTime> availableSlots;
 }
+

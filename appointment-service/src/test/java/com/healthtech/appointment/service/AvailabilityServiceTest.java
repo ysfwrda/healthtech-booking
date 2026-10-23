@@ -16,9 +16,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Clock;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
@@ -49,7 +51,7 @@ class AvailabilityServiceTest {
                 validDoctorRepository,
                 appointmentRepository,
                 new SlotPolicy(),
-                Clock.systemDefaultZone()
+                Clock.system(ZoneId.of("Europe/Berlin"))
         );
     }
 
@@ -335,4 +337,54 @@ class AvailabilityServiceTest {
         // Assert
         assertThat(result.getAvailableSlots()).containsExactly(FUTURE_DATE.atTime(9, 0), FUTURE_DATE.atTime(9, 30));
     }
+
+    @Test
+    void getAvailableSlots_acrossTimezoneMidnightBoundary_evaluatesTodayInConfiguredZone() {
+        // Arrange: 23:30 UTC on 2026-03-18 is 00:30 on 2026-03-19 in Europe/Berlin (UTC+1)
+        Clock berlinClock = Clock.fixed(Instant.parse("2026-03-18T23:30:00Z"), ZoneId.of("Europe/Berlin"));
+        AvailabilityService service = new AvailabilityService(
+                validDoctorRepository, appointmentRepository, new SlotPolicy(), berlinClock);
+        UUID doctorId = UUID.randomUUID();
+        LocalDate yesterdayInBerlin = LocalDate.of(2026, 3, 18);
+        stubDoctorOpeningHours(doctorId, Set.of(OpeningHours.builder()
+                .dayOfWeek(yesterdayInBerlin.getDayOfWeek())
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(17, 0))
+                .build()));
+
+        // Act: request availability for March 18 (past date in Berlin, even though still March 18 in UTC)
+        AvailableSlotsResponse result = service.getAvailableSlots(doctorId, yesterdayInBerlin);
+
+        // Assert
+        assertThat(result.getAvailableSlots()).isEmpty();
+    }
+
+    @Test
+    void getAvailableSlots_onDaylightSavingSpringForwardDay_returnsAlignedSlots() {
+        // Arrange: Sunday, March 29, 2026 is DST transition in Europe/Berlin (clocks jump 02:00 -> 03:00)
+        LocalDate dstDate = LocalDate.of(2026, 3, 29);
+        Clock berlinClock = Clock.fixed(
+                LocalDateTime.of(2026, 3, 29, 8, 0).atZone(ZoneId.of("Europe/Berlin")).toInstant(),
+                ZoneId.of("Europe/Berlin"));
+        AvailabilityService service = new AvailabilityService(
+                validDoctorRepository, appointmentRepository, new SlotPolicy(), berlinClock);
+        UUID doctorId = UUID.randomUUID();
+        stubDoctorOpeningHours(doctorId, Set.of(OpeningHours.builder()
+                .dayOfWeek(DayOfWeek.SUNDAY)
+                .startTime(LocalTime.of(9, 0))
+                .endTime(LocalTime.of(11, 0))
+                .build()));
+        stubTakenAppointments(doctorId, dstDate, List.of());
+
+        // Act
+        AvailableSlotsResponse result = service.getAvailableSlots(doctorId, dstDate);
+
+        // Assert
+        assertThat(result.getAvailableSlots()).containsExactly(
+                dstDate.atTime(9, 0),
+                dstDate.atTime(9, 30),
+                dstDate.atTime(10, 0),
+                dstDate.atTime(10, 30));
+    }
 }
+

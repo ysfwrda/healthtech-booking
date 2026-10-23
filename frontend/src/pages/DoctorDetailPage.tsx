@@ -7,7 +7,7 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { StatusMessage } from "../components/StatusMessage";
 import { todayIsoDate } from "../dates";
-import { APPOINTMENT_TYPES, DAYS_OF_WEEK } from "../api/constants";
+import { APPOINTMENT_TYPES, CLINIC_TIME_ZONE, DAYS_OF_WEEK } from "../api/constants";
 import type { AppointmentType, DoctorResponse, OpeningHoursDto } from "../api/types";
 
 function formatTime(time: string): string {
@@ -132,6 +132,7 @@ export function DoctorDetailPage() {
       <p>Languages: {doctor.languages.join(", ")}</p>
 
       <h2>Availability</h2>
+      <p className="status status-info">All appointment times are in clinic time ({CLINIC_TIME_ZONE}).</p>
       <label>
         Date
         <input type="date" value={date} min={todayIsoDate()} onChange={(e) => setDate(e.target.value)} />
