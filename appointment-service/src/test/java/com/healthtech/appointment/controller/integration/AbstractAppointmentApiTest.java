@@ -88,12 +88,18 @@ public abstract class AbstractAppointmentApiTest {
     @Autowired
     protected PlatformTransactionManager transactionManager;
 
-    // A doctor open 09:00-17:00 on the weekday of the given date.
+    // A doctor open 09:00-17:00 on the weekday of the given date; bookings start PENDING.
     protected ValidDoctor seedDoctor(LocalDate openOn) {
+        return seedDoctor(openOn, false);
+    }
+
+    // Same, with a choice between PENDING and automatically confirmed bookings.
+    protected ValidDoctor seedDoctor(LocalDate openOn, boolean autoConfirmBookings) {
         return validDoctorRepository.save(ValidDoctor.builder()
                 .doctorId(UUID.randomUUID())
                 .firstName("Valid")
                 .lastName("Doctor")
+                .autoConfirmBookings(autoConfirmBookings)
                 .openingHours(Set.of(OpeningHours.builder()
                         .dayOfWeek(openOn.getDayOfWeek())
                         .startTime(LocalTime.of(9, 0))
@@ -114,6 +120,11 @@ public abstract class AbstractAppointmentApiTest {
     // JSON request headers carrying a PATIENT token signed with the trusted key pair.
     protected static HttpHeaders patientHeaders(UUID patientId) {
         return bearerHeaders(TestJwtFactory.patientToken(patientId, (RSAPrivateKey) KEY_PAIR.getPrivate()));
+    }
+
+    // JSON request headers carrying a DOCTOR token signed with the trusted key pair.
+    protected static HttpHeaders doctorHeaders(UUID doctorId) {
+        return bearerHeaders(TestJwtFactory.doctorToken(doctorId, (RSAPrivateKey) KEY_PAIR.getPrivate()));
     }
 
     protected static HttpHeaders bearerHeaders(String token) {

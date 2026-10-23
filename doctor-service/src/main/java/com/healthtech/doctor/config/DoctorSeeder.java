@@ -20,6 +20,7 @@ import org.springframework.transaction.support.TransactionOperations;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -29,7 +30,8 @@ import java.util.stream.Collectors;
 // booking/availability paths hard-require a ValidDoctor read-model row (see AppointmentService),
 // so a seeded doctor that skipped the event would 404 on every booking attempt. Each doctor is
 // saved in its own transaction together with its outbox row (ADR-008), so the event is relayed
-// once Kafka is reachable even if it is down while the seeder runs.
+// once Kafka is reachable even if it is down while the seeder runs. A doctor that already exists
+// is published again on every start (see seedIfAbsent).
 @Component
 @Order(2)
 @RequiredArgsConstructor
@@ -81,7 +83,11 @@ public class DoctorSeeder implements CommandLineRunner {
     }
 
     private void seedIfAbsent(DemoDoctor demo) {
-        if (doctorRepository.findByEmail(demo.email()).isPresent()) {
+        Optional<Doctor> existing = doctorRepository.findByEmail(demo.email());
+        if (existing.isPresent()) {
+            // Re-published on every start so that read-model rows created before autoConfirmBookings
+            // existed get the flag; appointment-service ignores hours for a doctor it already knows.
+            publishRegistered(existing.get());
             return;
         }
 
@@ -117,8 +123,10 @@ public class DoctorSeeder implements CommandLineRunner {
                 .languages(demo.languages())
                 .build();
 
-        Doctor saved = doctorRepository.saveAndFlush(doctor);
+        publishRegistered(doctorRepository.saveAndFlush(doctor));
+    }
 
+    private void publishRegistered(Doctor saved) {
         DoctorRegistered event = DoctorRegistered.builder()
                 .eventId(UUID.randomUUID())
                 .doctorId(saved.getId())
@@ -126,6 +134,7 @@ public class DoctorSeeder implements CommandLineRunner {
                 .lastName(saved.getLastName())
                 .openingHours(OpeningHoursData.fromAll(saved.getOpeningHours()))
                 .registeredAt(saved.getRegisteredAt())
+                .autoConfirmBookings(true)
                 .build();
         eventPublisher.publish("doctor.registered", saved.getId(), event.getEventId(), event);
     }

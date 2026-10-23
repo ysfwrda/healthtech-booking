@@ -23,7 +23,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Doctor Service API")
-                        .description("Doctor registration, login, search and specialties.\n\n**Authentication:** all endpoints are currently public. POST /api/doctors/login (or /api/doctors/register) issues a doctor JWT, but no operation here requires one yet.")
+                        .description("Doctor registration, login, search, specialties, and the doctor's own availability (weekly opening hours and vacations).\n\n**Authentication:** registration, login, search and specialties are public. The endpoints under /api/doctors/me require a doctor JWT, issued by POST /api/doctors/login or /api/doctors/register.")
                         .version("v1"))
                 .addServersItem(new Server().url(serverUrl))
                 .components(new Components()

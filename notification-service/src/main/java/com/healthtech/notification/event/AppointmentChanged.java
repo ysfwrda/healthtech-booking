@@ -26,6 +26,13 @@ public class AppointmentChanged implements AppointmentNotificationEvent {
     private String previousType;
     private LocalDateTime previousDateTime;
     private LocalDateTime changedAt;
+    // PATIENT or DOCTOR; absent in events from before the doctor could change, which means the patient.
+    private String changedBy;
+
+    @Override
+    public boolean initiatedByDoctor() {
+        return "DOCTOR".equals(changedBy);
+    }
 
     @Override
     public NotificationType notificationType() {

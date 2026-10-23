@@ -3,6 +3,8 @@ package com.healthtech.notification.consumer;
 import com.healthtech.notification.event.AppointmentBooked;
 import com.healthtech.notification.event.AppointmentCancelled;
 import com.healthtech.notification.event.AppointmentChanged;
+import com.healthtech.notification.event.AppointmentConfirmed;
+import com.healthtech.notification.event.AppointmentRescheduleRequired;
 import com.healthtech.notification.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -144,5 +146,70 @@ class AppointmentEventConsumerTest {
 
         // Act & Assert
         assertThatThrownBy(() -> consumer.consumeChangedEvent(event, null)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void consumeConfirmedEvent_shouldDelegateToNotificationService() {
+        // Arrange
+        AppointmentConfirmed event = AppointmentConfirmed.builder()
+                .eventId(UUID.randomUUID())
+                .appointmentId(UUID.randomUUID())
+                .patientId(UUID.randomUUID())
+                .doctorId(UUID.randomUUID())
+                .dateTime(LocalDateTime.now().plusDays(1))
+                .confirmedAt(LocalDateTime.now())
+                .build();
+
+        // Act
+        consumer.consumeConfirmedEvent(event, null);
+
+        // Assert
+        verify(notificationService).record(event);
+        verifyNoMoreInteractions(notificationService);
+    }
+
+    @Test
+    void consumeConfirmedEvent_recordFails_rethrowsSoTheRecordIsNotLost() {
+        // Arrange
+        AppointmentConfirmed event = AppointmentConfirmed.builder().eventId(UUID.randomUUID())
+                .appointmentId(UUID.randomUUID()).build();
+        doThrow(new IllegalStateException("db down")).when(notificationService).record(event);
+
+        // Act & Assert
+        assertThatThrownBy(() -> consumer.consumeConfirmedEvent(event, null))
+                .isInstanceOf(IllegalStateException.class).hasMessage("db down");
+    }
+
+    @Test
+    void consumeRescheduleRequiredEvent_shouldDelegateToNotificationService() {
+        // Arrange
+        AppointmentRescheduleRequired event = AppointmentRescheduleRequired.builder()
+                .eventId(UUID.randomUUID())
+                .appointmentId(UUID.randomUUID())
+                .patientId(UUID.randomUUID())
+                .doctorId(UUID.randomUUID())
+                .dateTime(LocalDateTime.now().plusDays(1))
+                .reason("DOCTOR_VACATION")
+                .detectedAt(LocalDateTime.now())
+                .build();
+
+        // Act
+        consumer.consumeRescheduleRequiredEvent(event, null);
+
+        // Assert
+        verify(notificationService).record(event);
+        verifyNoMoreInteractions(notificationService);
+    }
+
+    @Test
+    void consumeRescheduleRequiredEvent_recordFails_rethrowsSoTheRecordIsNotLost() {
+        // Arrange
+        AppointmentRescheduleRequired event = AppointmentRescheduleRequired.builder().eventId(UUID.randomUUID())
+                .appointmentId(UUID.randomUUID()).build();
+        doThrow(new IllegalStateException("db down")).when(notificationService).record(event);
+
+        // Act & Assert
+        assertThatThrownBy(() -> consumer.consumeRescheduleRequiredEvent(event, null))
+                .isInstanceOf(IllegalStateException.class).hasMessage("db down");
     }
 }

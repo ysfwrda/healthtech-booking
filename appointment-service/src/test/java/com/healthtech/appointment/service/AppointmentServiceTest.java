@@ -12,10 +12,12 @@ import com.healthtech.appointment.exception.AppointmentAccessDeniedException;
 import com.healthtech.appointment.exception.AppointmentNotFoundException;
 import com.healthtech.appointment.exception.SlotAlreadyBookedException;
 import com.healthtech.appointment.exception.SlotInPastException;
+import com.healthtech.appointment.exception.SlotOnVacationException;
 import com.healthtech.appointment.mapper.AppointmentMapper;
 import com.healthtech.appointment.outbox.OutboxEventWriter;
 import com.healthtech.appointment.outbox.OutboxRepository;
 import com.healthtech.appointment.readmodel.OpeningHours;
+import com.healthtech.appointment.readmodel.VacationPeriod;
 import com.healthtech.appointment.readmodel.ValidDoctor;
 import com.healthtech.appointment.readmodel.ValidDoctorRepository;
 import com.healthtech.appointment.readmodel.ValidPatient;
@@ -23,6 +25,7 @@ import com.healthtech.appointment.readmodel.ValidPatientRepository;
 import com.healthtech.appointment.repository.AppointmentRepository;
 import com.healthtech.appointment.service.booking.BookingRule;
 import com.healthtech.appointment.service.booking.NotInPastRule;
+import com.healthtech.appointment.service.booking.NotOnVacationRule;
 import com.healthtech.appointment.service.booking.SlotAlignedRule;
 import com.healthtech.appointment.service.booking.WithinOpeningHoursRule;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,11 +77,11 @@ class AppointmentServiceTest {
     private static final Clock BOOKING_CLOCK =
             Clock.fixed(LocalDateTime.of(2026, 8, 1, 12, 0).toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
 
-    // The production rules, in their @Order: alignment, opening hours, not in the past.
+    // The production rules, in their @Order: alignment, opening hours, not in the past, not on vacation.
     private static List<BookingRule> bookingRules() {
         SlotPolicy slotPolicy = new SlotPolicy();
         return List.of(new SlotAlignedRule(slotPolicy), new WithinOpeningHoursRule(slotPolicy),
-                new NotInPastRule(BOOKING_CLOCK));
+                new NotInPastRule(BOOKING_CLOCK), new NotOnVacationRule());
     }
 
     @BeforeEach
@@ -96,9 +99,14 @@ class AppointmentServiceTest {
     }
 
     private void stubValidReadModel(UUID patientId, UUID doctorId, LocalDateTime dateTime) {
+        stubValidReadModel(patientId, doctorId, dateTime, false, Set.of());
+    }
+
+    private void stubValidReadModel(UUID patientId, UUID doctorId, LocalDateTime dateTime, boolean autoConfirm,
+                                    Set<VacationPeriod> vacations) {
         when(validPatientRepository.findById(patientId)).thenReturn(Optional.of(
                 ValidPatient.builder().patientId(patientId).firstName("Jane").lastName("Doe").email("jane@example.com").build()));
-        when(validDoctorRepository.findById(doctorId)).thenReturn(Optional.of(
+        when(validDoctorRepository.findByIdForShare(doctorId)).thenReturn(Optional.of(
                 ValidDoctor.builder()
                         .doctorId(doctorId)
                         .firstName("John")
@@ -108,11 +116,13 @@ class AppointmentServiceTest {
                                 .startTime(LocalTime.of(8, 0))
                                 .endTime(LocalTime.of(18, 0))
                                 .build()))
+                        .vacations(vacations)
+                        .autoConfirmBookings(autoConfirm)
                         .build()));
     }
 
     @Test
-    void bookAppointment_shouldSaveWithConfirmedStatusAndPublishEvent() {
+    void bookAppointment_autoConfirmDoctor_savesConfirmedAndPublishesBookedEvent() {
         // Arrange
         UUID patientId = UUID.randomUUID();
         UUID doctorId = UUID.randomUUID();
@@ -136,7 +146,7 @@ class AppointmentServiceTest {
                 .status(AppointmentStatus.CONFIRMED)
                 .build();
 
-        stubValidReadModel(patientId, doctorId, dateTime);
+        stubValidReadModel(patientId, doctorId, dateTime, true, Set.of());
         when(appointmentMapper.toEntity(request)).thenReturn(appointment);
         when(appointmentRepository.saveAndFlush(any(Appointment.class))).thenReturn(appointment);
         when(appointmentMapper.toResponse(appointment)).thenReturn(response);
@@ -152,6 +162,99 @@ class AppointmentServiceTest {
                 row.getTopic().equals("appointment.booked")
                         && row.getAggregateId().equals(appointmentId.toString())
                         && row.getPayload() != null));
+    }
+
+    @Test
+    void bookAppointment_regularDoctor_savesPendingAndStillPublishesBookedEvent() {
+        // Arrange
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        LocalDateTime dateTime = LocalDateTime.of(2026, 8, 10, 10, 0);
+        UUID appointmentId = UUID.randomUUID();
+        Appointment appointment = Appointment.builder().id(appointmentId).patientId(patientId).doctorId(doctorId)
+                .dateTime(dateTime).type(INITIAL_CONSULTATION).build();
+        AppointmentRequest request = AppointmentRequest.builder().doctorId(doctorId).dateTime(dateTime)
+                .type(INITIAL_CONSULTATION).build();
+        stubValidReadModel(patientId, doctorId, dateTime, false, Set.of());
+        when(appointmentMapper.toEntity(request)).thenReturn(appointment);
+        when(appointmentRepository.saveAndFlush(any(Appointment.class))).thenReturn(appointment);
+        when(appointmentMapper.toResponse(appointment)).thenReturn(AppointmentResponse.builder().build());
+
+        // Act
+        appointmentService.bookAppointment(request, patientId);
+
+        // Assert
+        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.PENDING);
+        verify(outboxRepository).save(argThat(row -> row.getTopic().equals("appointment.booked")
+                && row.getAggregateId().equals(appointmentId.toString())));
+    }
+
+    @Test
+    void bookAppointment_firstDayOfVacation_throwsSlotOnVacationAndSavesNothing() {
+        // Act & Assert
+        assertBookingOnVacationDayRejected(LocalDateTime.of(2026, 8, 10, 10, 0));
+    }
+
+    @Test
+    void bookAppointment_lastDayOfVacation_throwsSlotOnVacationAndSavesNothing() {
+        // Act & Assert
+        assertBookingOnVacationDayRejected(LocalDateTime.of(2026, 8, 12, 10, 0));
+    }
+
+    @Test
+    void bookAppointment_dayBeforeVacation_isAccepted() {
+        // Act & Assert
+        assertBookingAccepted(LocalDateTime.of(2026, 8, 9, 10, 0));
+    }
+
+    @Test
+    void bookAppointment_dayAfterVacation_isAccepted() {
+        // Act & Assert
+        assertBookingAccepted(LocalDateTime.of(2026, 8, 13, 10, 0));
+    }
+
+    // A vacation from Monday 2026-08-10 to Wednesday 2026-08-12.
+    private static Set<VacationPeriod> vacationAugust10To12() {
+        return Set.of(VacationPeriod.builder()
+                .startDate(java.time.LocalDate.of(2026, 8, 10)).endDate(java.time.LocalDate.of(2026, 8, 12)).build());
+    }
+
+    private void assertBookingOnVacationDayRejected(LocalDateTime slot) {
+        // Arrange
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        Appointment appointment = Appointment.builder().patientId(patientId).doctorId(doctorId).dateTime(slot)
+                .type(INITIAL_CONSULTATION).build();
+        AppointmentRequest request = AppointmentRequest.builder().doctorId(doctorId).dateTime(slot)
+                .type(INITIAL_CONSULTATION).build();
+        stubValidReadModel(patientId, doctorId, slot, false, vacationAugust10To12());
+        when(appointmentMapper.toEntity(request)).thenReturn(appointment);
+
+        // Act & Assert
+        assertThatThrownBy(() -> appointmentService.bookAppointment(request, patientId))
+                .isInstanceOf(SlotOnVacationException.class);
+        verify(appointmentRepository, never()).saveAndFlush(any());
+        verify(outboxRepository, never()).save(any());
+    }
+
+    private void assertBookingAccepted(LocalDateTime slot) {
+        // Arrange
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        Appointment appointment = Appointment.builder().id(UUID.randomUUID()).patientId(patientId).doctorId(doctorId)
+                .dateTime(slot).type(INITIAL_CONSULTATION).build();
+        AppointmentRequest request = AppointmentRequest.builder().doctorId(doctorId).dateTime(slot)
+                .type(INITIAL_CONSULTATION).build();
+        stubValidReadModel(patientId, doctorId, slot, false, vacationAugust10To12());
+        when(appointmentMapper.toEntity(request)).thenReturn(appointment);
+        when(appointmentRepository.saveAndFlush(any(Appointment.class))).thenReturn(appointment);
+        when(appointmentMapper.toResponse(appointment)).thenReturn(AppointmentResponse.builder().build());
+
+        // Act
+        appointmentService.bookAppointment(request, patientId);
+
+        // Assert
+        verify(appointmentRepository).saveAndFlush(appointment);
     }
 
     @Test
@@ -509,5 +612,30 @@ class AppointmentServiceTest {
         verify(outboxRepository).save(rowCaptor.capture());
         AppointmentCancelled event = objectMapper.readValue(rowCaptor.getValue().getPayload(), AppointmentCancelled.class);
         assertThat(event.getCancelledAt()).isEqualTo(now);
+    }
+
+    @Test
+    void cancelAppointment_byPatient_publishesCancelledByPatient() throws Exception {
+        // Arrange
+        UUID patientId = UUID.randomUUID();
+        Appointment appointment = Appointment.builder()
+                .id(UUID.randomUUID())
+                .patientId(patientId)
+                .type(INITIAL_CONSULTATION)
+                .status(AppointmentStatus.CONFIRMED)
+                .build();
+        when(appointmentRepository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(appointmentRepository.save(appointment)).thenReturn(appointment);
+        when(appointmentMapper.toResponse(appointment)).thenReturn(AppointmentResponse.builder().build());
+
+        // Act
+        appointmentService.cancelAppointment(appointment.getId(), patientId);
+
+        // Assert
+        ArgumentCaptor<com.healthtech.appointment.outbox.OutboxMessage> rowCaptor =
+                ArgumentCaptor.forClass(com.healthtech.appointment.outbox.OutboxMessage.class);
+        verify(outboxRepository).save(rowCaptor.capture());
+        AppointmentCancelled event = objectMapper.readValue(rowCaptor.getValue().getPayload(), AppointmentCancelled.class);
+        assertThat(event.getCancelledBy()).isEqualTo(com.healthtech.appointment.event.Initiator.PATIENT);
     }
 }

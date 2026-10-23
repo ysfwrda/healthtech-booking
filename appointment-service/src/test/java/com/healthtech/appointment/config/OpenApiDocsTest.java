@@ -137,4 +137,63 @@ class OpenApiDocsTest {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(jsonPath("$.paths..parameters[?(@.name == 'jwt')]").isEmpty());
     }
+
+    @Test
+    void apiDocs_doctorOperationsAreSecuredAndDocumentTheirErrorsWithProblemBodies() throws Exception {
+        String list = "$.paths['/api/appointments/doctor'].get";
+        String confirm = "$.paths['/api/appointments/doctor/{id}/confirm'].put";
+        String cancel = "$.paths['/api/appointments/doctor/{id}/cancel'].put";
+        String change = "$.paths['/api/appointments/doctor/{id}'].patch";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(jsonPath(list + ".security").doesNotExist())
+                .andExpect(jsonPath(list + ".responses['200'].content['application/json']").exists())
+                .andExpect(jsonPath(list + ".responses['400'].content['application/problem+json']"
+                        + ".schema['$ref']").value(PROBLEM_REF))
+                .andExpect(jsonPath(list + ".responses['401']").exists())
+                .andExpect(jsonPath(list + ".responses['403']").exists())
+                .andExpect(jsonPath(confirm + ".responses['409'].content['application/problem+json']"
+                        + ".schema['$ref']").value(PROBLEM_REF))
+                .andExpect(jsonPath(confirm + ".responses['403'].content['application/problem+json']"
+                        + ".schema['$ref']").value(PROBLEM_REF))
+                .andExpect(jsonPath(confirm + ".responses['404'].content['application/problem+json']"
+                        + ".schema['$ref']").value(PROBLEM_REF))
+                .andExpect(jsonPath(confirm + ".responses['503'].content['application/problem+json']"
+                        + ".schema['$ref']").value(PROBLEM_REF))
+                .andExpect(jsonPath(cancel + ".responses['403'].content['application/problem+json']"
+                        + ".schema['$ref']").value(PROBLEM_REF))
+                .andExpect(jsonPath(cancel + ".responses['503'].content['application/problem+json']"
+                        + ".schema['$ref']").value(PROBLEM_REF))
+                .andExpect(jsonPath(change + ".responses['400'].content['application/problem+json']"
+                        + ".schema['$ref']").value(PROBLEM_REF))
+                .andExpect(jsonPath(change + ".responses['409'].content['application/problem+json']"
+                        + ".schema['$ref']").value(PROBLEM_REF))
+                .andExpect(jsonPath(change + ".responses['503'].content['application/problem+json']"
+                        + ".schema['$ref']").value(PROBLEM_REF));
+    }
+
+    @Test
+    void apiDocs_doctorChangeRequestHasNoNotesField() throws Exception {
+        String body = "$.components.schemas.DoctorAppointmentUpdateRequest.properties";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(jsonPath(body + ".type").exists())
+                .andExpect(jsonPath(body + ".dateTime").exists())
+                .andExpect(jsonPath(body + ".notes").doesNotExist())
+                .andExpect(jsonPath(body + ".anyFieldPresent").doesNotExist());
+    }
+
+    @Test
+    void apiDocs_bookingDocumentsTheDoctorLockTimeout503() throws Exception {
+        String book = "$.paths['/api/appointments'].post";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(jsonPath(book + ".responses['503'].content['application/problem+json']"
+                        + ".schema['$ref']").value(PROBLEM_REF));
+    }
+
+    @Test
+    void apiDocs_appointmentResponsesDocumentTheConflictReason() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(jsonPath("$.components.schemas.AppointmentResponse.properties.conflictReason").exists())
+                .andExpect(jsonPath("$.components.schemas.DoctorAppointmentResponse.properties.conflictReason").exists())
+                .andExpect(jsonPath("$.components.schemas.DoctorAppointmentResponse.properties.patientName").exists());
+    }
 }

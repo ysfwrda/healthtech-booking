@@ -47,6 +47,18 @@ class OpeningHoursValidatorTest {
     }
 
     @Test
+    void blocksOverlappingByOneSlotSameDay_areInvalid() {
+        // Arrange: 09:00-12:00 and 11:30-15:00 share the 11:30 slot
+        Set<OpeningHoursDto> blocks = new LinkedHashSet<>(Set.of(
+                block(DayOfWeek.MONDAY, 9, 0, 12, 0),
+                block(DayOfWeek.MONDAY, 11, 30, 15, 0)
+        ));
+
+        // Act and Assert
+        assertThat(validator.isValid(blocks, context)).isFalse();
+    }
+
+    @Test
     void overlappingBlocksSameDay_areInvalid() {
         // Arrange
         Set<OpeningHoursDto> blocks = new LinkedHashSet<>(Set.of(

@@ -63,10 +63,10 @@ More diagrams (event flow and outbox, booking sequence, key distribution, gatewa
 | Service                | Port | Responsibility                                                                                                                                                              |
 |------------------------|------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `api-gateway`          | 8080 | Single entry point for all client traffic; routes each path prefix to the owning service                                                                                    |
-| `appointment-service`  | 8081 | Booking, changing, cancellation, availability/slot computation, read-model of valid patients/doctors, JWT validation, publishes domain events                                         |
+| `appointment-service`  | 8081 | Booking, changing, cancellation, the doctor's confirm/cancel/change, availability/slot computation, read-model of valid patients/doctors (hours, vacations), JWT validation, publishes domain events |
 | `notification-service` | 8082 | Consumes appointment events from Kafka and persists notification records independently                                                                                      |
 | `patient-service`      | 8083 | Patient registration, login, JWT issuance (RS256), profile management                                                                                                       |
-| `doctor-service`       | 8084 | Doctor self-registration, login, JWT issuance (RS256), specialty and language filtering, opening hours, registration event publishing                                       |
+| `doctor-service`       | 8084 | Doctor self-registration, login, JWT issuance (RS256), specialty and language filtering, the doctor's own opening hours and vacations, event publishing                       |
 | `frontend`             | 5173 | React (Vite, TypeScript) client. Talks to every service exclusively through the API Gateway. Containerized (nginx) in `docker-compose.yml` on `localhost:5173`; see Step 6 |
 
 ---
@@ -77,9 +77,12 @@ More diagrams (event flow and outbox, booking sequence, key distribution, gatewa
 |-------------------------|---------------------|----------------------------------|
 | `patient.registered`    | patient-service     | appointment-service (read-model) |
 | `doctor.registered`     | doctor-service      | appointment-service (read-model) |
+| `doctor.availability-updated` | doctor-service | appointment-service (read-model, flags appointments that no longer fit) |
 | `appointment.booked`    | appointment-service | notification-service             |
 | `appointment.cancelled` | appointment-service | notification-service             |
 | `appointment.changed`   | appointment-service | notification-service             |
+| `appointment.confirmed` | appointment-service | notification-service             |
+| `appointment.reschedule-required` | appointment-service | notification-service |
 
 Kafka was chosen over synchronous REST for temporal decoupling: a consumer does not need to be available when an event
 is produced. Events are retained in the log and consumed when the service is ready.
@@ -107,7 +110,10 @@ appointment. Requests with
 the wrong token type or attempts to act on another user's resource are rejected with `403`.
 
 Public (no token required): patient and doctor registration/login, doctor browsing, specialty listing, and
-availability. Booking, changing and cancellation require a valid patient token. The Swagger UI and OpenAPI spec endpoints
+availability. Booking, changing and cancellation require a valid patient token. The doctor's own endpoints
+(`/api/appointments/doctor/**` in appointment-service and `/api/doctors/me/**` in doctor-service) require a DOCTOR token,
+and a doctor can only act on appointments that belong to them (`403` otherwise). A patient token on a doctor endpoint,
+or a doctor token on a patient endpoint, is rejected with `403`. The Swagger UI and OpenAPI spec endpoints
 (`/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**`, and the gateway's `/docs/*/v3/api-docs`) are also public.
 
 ---
@@ -147,6 +153,55 @@ lists the confirmed rules that are not implemented yet.
 
 ---
 
+## Doctor Appointments, Availability and Vacations
+
+**Booking status.** A new appointment is `PENDING` until the doctor confirms it. A doctor flagged `autoConfirmBookings`
+(the six seeded demo doctors) gets `CONFIRMED` bookings straight away; a self-registered doctor does not. A pending
+appointment holds its slot. The lifecycle is `PENDING -> CONFIRMED` and `PENDING | CONFIRMED -> CANCELLED`; nothing else.
+Pending appointments never expire, and a patient's change never alters the status. `appointment.booked` is published
+for both kinds of booking.
+
+**What a doctor does** (appointment-service, DOCTOR token, `/api/appointments/doctor`):
+
+| Action | Endpoint | Rules |
+|--------|----------|-------|
+| List | `GET ?from&to&status` | Own appointments only, earliest first, with the patient's name and email. `from` and `to` are whole days, both inclusive; `status` may be repeated. `400` when `from` is after `to`. |
+| Confirm | `PUT /{id}/confirm` | `PENDING` becomes `CONFIRMED` and the patient is notified. Confirming a confirmed appointment is a no-op. `409` (`Appointment Not Confirmable`) when it is cancelled or flagged (see below). |
+| Cancel | `PUT /{id}/cancel` | Any non-cancelled appointment, at any time: the 48-hour notice does not apply to a doctor. Idempotent. The patient is notified. |
+| Change | `PATCH /{id}` | `type` and/or `dateTime` (not `notes`, which belong to the patient). No notice period. The new time must pass the same rules as a booking, including vacations. The status stays as it is. The patient is notified. |
+
+Like the patient's endpoints they take the appointment row lock, return `503` (`Appointment Busy`) when it cannot be
+had within 3 seconds, and publish through the outbox. `appointment.cancelled` and `appointment.changed` carry
+`cancelledBy` / `changedBy` (`PATIENT` or `DOCTOR`; absent means the patient), and the patient's notification then ends
+with "by your doctor".
+
+**Availability and vacations** (doctor-service, DOCTOR token, `/api/doctors/me/availability`): `GET` returns the weekly
+opening hours and the vacations that have not ended; `PUT /opening-hours` replaces the weekly blocks (same rules as
+registration: half-hour grid, end after start, no overlap; an empty set is allowed and means no slots);
+`POST /vacations` adds whole days (`startDate` to `endDate`, both inclusive, `endDate` not in the past) and
+`DELETE /vacations/{id}` removes one. Doctor-service owns this data. A change is **always saved**; it is never refused
+because of appointments already booked. Every write publishes `doctor.availability-updated`, a full snapshot of the
+hours and vacations with a per-doctor `version` that increases by one.
+
+**When the availability changes** appointment-service applies the snapshot to its read-model (ignoring a version it has
+already applied) and then re-checks the doctor's future, non-cancelled appointments. One that no longer fits gets a
+`conflictReason` (`OUTSIDE_OPENING_HOURS` or `DOCTOR_VACATION`; a vacation wins when both apply) and the patient is
+notified once ("your doctor is no longer available ... please reschedule or cancel", `appointment.reschedule-required`).
+The appointment keeps its status and its slot until someone acts. The patient resolves it by changing the time or cancelling;
+while it is flagged the 48-hour notice does not apply, because the doctor caused the conflict. A doctor can change or
+cancel it too, and cannot confirm it. A flag clears when the appointment fits again (a new time, or the doctor reverts the
+change), without a notification. Booking and changing a time take a shared lock on the doctor's row and the re-check takes
+an exclusive one, so a booking either commits before the re-check and is checked by it, or sees the new hours. A booking
+on a vacation day is rejected with `400` (`Slot On Vacation`) and `GET /api/availability` offers no slots on it.
+
+**Rollback.** Roll doctor-service and appointment-service back together: an older appointment-service rejects the new
+`autoConfirmBookings` field of `doctor.registered`, which doctor-service re-publishes for the seeded doctors on every
+start. After a rollback, pending appointments stay pending and nobody can confirm them; confirm them with
+`UPDATE appointments SET status = 'CONFIRMED' WHERE status = 'PENDING';` in the appointment database. Notifications
+already sent, appointments already cancelled by a doctor and events already published cannot be undone.
+
+---
+
 ## Cross-Service Validation (Read-Model)
 
 Per [ADR-005](docs/adr/ADR-005-cross-service-validation.md), Appointment Service validates that a patient and doctor
@@ -156,7 +211,10 @@ validates bookings against that projection. This preserves the async decoupling 
 existence.
 
 The consumer is idempotent (keyed on the domain id) and hydrates from the beginning of the topic on first run, so it
-reconstructs state that predates it.
+reconstructs state that predates it. `doctor.registered` creates the row for an unknown doctor; for a known doctor it only
+refreshes the names and `autoConfirmBookings`, never the hours, which follow `doctor.availability-updated` (applied only
+when its `version` is newer, under a lock on the doctor's row). appointment-service's JSON mapper ignores unknown
+properties, so a producer can add a field before the consumer is upgraded.
 
 ---
 
@@ -213,8 +271,9 @@ the row is marked, the event is sent again. The demo `DoctorSeeder` publishes th
 [ADR-009](docs/adr/ADR-009-consumer-idempotency-and-failure-handling.md) is `Accepted`. Its deduplication part
 exists: `notification-service` stores the event id under a unique index (`ux_notification_event_id`) and
 `NotificationService.record` ignores a violation of that index, so a redelivered `appointment.booked`,
-`appointment.cancelled` or `appointment.changed` is stored once. The `appointment-service` read-model consumers are
-idempotent because they upsert by id, which redelivery tests pin. The rest of ADR-009 does not exist in the code yet:
+`appointment.cancelled`, `appointment.changed`, `appointment.confirmed` or `appointment.reschedule-required` is stored
+once. The `appointment-service` read-model consumers are idempotent: the patient and doctor projections are keyed by id
+and `doctor.availability-updated` is applied only when its `version` is newer, which redelivery tests pin. The rest of ADR-009 does not exist in the code yet:
 `ErrorHandlingDeserializer`, retry classification and a dead-letter topic. No consumer has a retry policy or
 dead-letter topic configured.
 
@@ -259,6 +318,13 @@ Documented in [`docs/adr/`](docs/adr/):
 | Changing another patient's appointment             | Rejected with `403`; no state change                                                    |
 | Change while the appointment row is locked > 3s    | `503` problem+json (`Appointment Busy`) with `Retry-After: 1`; safe to retry            |
 | Duplicate username/email                           | `409` problem+json                                                                      |
+| Doctor confirms a cancelled or flagged appointment | `409` (`Appointment Not Confirmable`); no state change                                  |
+| Doctor acts on another doctor's appointment        | Rejected with `403`; no state change                                                    |
+| Doctor cancels or changes inside 48h               | Allowed: the notice period applies to patients only                                     |
+| Doctor shortens hours or adds a vacation over booked appointments | Saved; the affected appointments are flagged and their patients notified |
+| Booking or changing onto a vacation day            | `400` (`Slot On Vacation`)                                                              |
+| Booking while the doctor's row is locked > 3s      | `503` problem+json (`Appointment Busy`) with `Retry-After: 1`; nothing was booked       |
+| Availability event delivered twice or out of order | The older or equal `version` is ignored; the re-check is idempotent and notifies once   |
 | Kafka downtime                                     | Booking, changing, cancellation and registration still succeed; the event waits in the outbox and the relay publishes it when Kafka returns (see Reliability). Until then, a newly registered patient or doctor is unknown to appointment-service (booking returns `404`) and no notification is recorded |
 | Duplicate event delivery                           | Read-model consumers upsert; notification-service stores each event id once (unique index); event versioning is Phase 3 |
 
@@ -281,6 +347,13 @@ Documented in [`docs/adr/`](docs/adr/):
   blocked. Planned fix if the application becomes multi-region: the server returns a `changeableUntil` field on appointment
   responses, an absolute UTC timestamp computed from its clock and the property, and the UI only compares it with the
   current time. That removes both the constant and the time-zone assumption (additive API change, so it needs approval).
+* **Pending appointments never expire.** A doctor who never confirms leaves the appointment pending and the slot held.
+* **Availability re-check is best effort beyond the default retries.** If re-checking an appointment keeps failing, the
+  listener retries as far as Spring Kafka's default error handling goes and then skips the record; the appointments it
+  could not reach stay unflagged until the doctor's next availability change. Retries and a dead-letter topic are the
+  ADR-009 work that has not started.
+* **Doctors are not notified** about new bookings or about changes the patient makes; they find pending appointments in
+  their list. The events already carry the doctor id, so it can be added in notification-service.
 * **Service discovery** is static per [ADR-006](docs/adr/ADR-006-service-discovery.md); Eureka/Consul is Phase 3 work
   that has not started.
 * **Reliability/observability**: correlation-ID propagation and structured logging are implemented across all
@@ -338,7 +411,9 @@ full Spring context can catch.
 ### Unit tests
 
 Plain Mockito tests against a single class, no Spring context, no I/O. These cover business logic and edge cases in
-isolation: `AppointmentServiceTest`, `AvailabilityServiceTest`, `SlotPolicyTest`, `BookingRulesTest`, `ValidDoctorTest`,
+isolation: `AppointmentServiceTest`, `AppointmentServiceUpdateTest`, `DoctorAppointmentServiceTest` (the doctor's confirm, cancel,
+change and list), `AvailabilityChangeServiceTest` (flagging after an availability change), `AvailabilityServiceTest`
+(appointment-service and doctor-service), `SlotPolicyTest`, `BookingRulesTest`, `ValidDoctorTest`,
 `DoctorServiceTest`, `SpecialtyServiceTest`, `DoctorSpecificationsTest`, `SpecialtySeederTest`, `AuthServiceTest`,
 `PatientServiceTest`, `JwtTokenProviderTest`, `NotificationServiceTest`, `OutboxEventWriterTest` (one per publishing
 service), `ConsumerCorrelationTest` (appointment and notification services), and `AppointmentEventConsumerTest` (the
@@ -346,7 +421,8 @@ Kafka listener method tested with a mocked service dependency).
 
 ### Slice tests
 
-`@WebMvcTest` tests (`AppointmentControllerTest`, `AvailabilityControllerTest`, `DoctorControllerTest`,
+`@WebMvcTest` tests (`AppointmentControllerTest`, `DoctorAppointmentEndpointTest`, `DoctorAvailabilityControllerTest`,
+`AvailabilityControllerTest`, `DoctorControllerTest`,
 `SpecialtyControllerTest`, `PatientControllerTest`) load only the web layer: the controller, validation, and the
 real Spring Security authorization rules, with the service layer mocked. Each service's `SecurityConfig` holds only
 those authorization rules; the `JwtDecoder` bean (the thing that actually needs a real key) lives in a separate
@@ -365,18 +441,25 @@ real persistence, real RS256 signature validation, and in some cases a real Kafk
   the key, payload and `X-Correlation-Id` header, so it covers the outbox relay end to end.
 * `doctor-service` (`DoctorIntegrationTest`): the same pattern for `doctor.registered`, plus opening-hours validation
   and login, against real Postgres and Kafka containers. It calls only public endpoints (register, login,
-  browsing), so it sends no token.
+  browsing), so it sends no token. `DoctorAvailabilityIntegrationTest` covers the doctor's own availability endpoints
+  with tokens: the snapshot rows in the outbox, consecutive versions under concurrent edits, and a rejected request
+  writing nothing.
 * `appointment-service` (`AppointmentIntegrationTest`, `AppointmentChangeIntegrationTest`,
-  `AvailabilityIntegrationTest`): booking, cancellation, changing (including a change racing a cancel and concurrent
-  moves to one slot), ownership checks, and availability against a real Postgres container. All three extend
+  `DoctorAppointmentIntegrationTest`, `AvailabilityChangeIntegrationTest`, `AvailabilityIntegrationTest`): booking,
+  cancellation, changing (including a change racing a cancel and concurrent moves to one slot), the doctor's list,
+  confirm, cancel and change, the flagging after an availability change and the row locks that keep it correct (a
+  cancel is not overwritten, a booking waits for an availability change, `doctor.registered` cannot regress the
+  version), ownership checks, and availability against a real Postgres container. They extend
   `AbstractAppointmentApiTest`, which mints JWTs with a throwaway RSA key pair generated inside the test, so they never
   read `keys/private.pem`. There is no Kafka in these tests: the relay's poll delay is pushed out to an hour.
-  `ReadModelProjectionIntegrationTest` instead runs a real `ConfluentKafkaContainer`
-  alongside Postgres, publishes real `patient.registered`/`doctor.registered` events, and asserts the read-model
-  consumer projects them correctly, exercising the actual Kafka listener rather than a mock.
+  `ReadModelProjectionIntegrationTest` and `DoctorAvailabilityKafkaIntegrationTest` instead run a real
+  `ConfluentKafkaContainer` alongside Postgres, publish real `patient.registered`/`doctor.registered`/
+  `doctor.availability-updated` events (the latter with a field the service does not know), and assert the read-model
+  consumers project them and flag the appointments, exercising the actual Kafka listeners rather than a mock.
 * Outbox tests (`outbox/` in patient-, doctor- and appointment-service, one adapted copy each):
   `OutboxAtomicityIntegrationTest` (real Postgres: a successful write adds exactly one unpublished outbox row, a
-  rolled-back write adds none, for booking, cancelling and changing in appointment-service), `OutboxRelayIntegrationTest` (real Postgres and Kafka: the correlation id is
+  a rolled-back write adds none, for booking, cancelling and changing in appointment-service, including the doctor's
+  confirm, cancel and change), `OutboxRelayIntegrationTest` (real Postgres and Kafka: the correlation id is
   re-attached from the stored column, concurrent relays publish each row exactly once, and `claimBatch` does not
   block on rows another transaction has locked), `OutboxRelayKafkaOutageIntegrationTest` (pauses the Kafka container:
   the request still returns `201` and leaves an unpublished row, and the row is published once Kafka is back), and
@@ -659,7 +742,9 @@ doctors, idempotently (skipped on restart if the email already exists). Each cov
 languages, with opening hours across several weekdays, so filtering and availability have realistic overlap to
 explore. Each publishes `doctor.registered` through the transactional outbox on creation, same as a real
 self-registration, so they're bookable through the normal flow as soon as the relay has published the event. If Kafka
-isn't reachable yet when the seeder runs, the events wait in the outbox and are published once it is.
+isn't reachable yet when the seeder runs, the events wait in the outbox and are published once it is. On every start
+it also publishes `doctor.registered` again for the doctors that already exist (nothing is created twice), so read-model rows
+that predate `autoConfirmBookings` get the flag; bookings with a seeded doctor are confirmed immediately.
 
 All seeded doctors share one password: **`demo12345`**. Log in as any of them via `POST /api/doctors/login`:
 

@@ -20,4 +20,10 @@ public interface AppointmentNotificationEvent {
     LocalDateTime getDateTime();
 
     NotificationType notificationType();
+
+    // True when the doctor caused the event (a cancel or change); the message then says so.
+    // No "get"/"is" prefix, so it is not a JSON property.
+    default boolean initiatedByDoctor() {
+        return false;
+    }
 }

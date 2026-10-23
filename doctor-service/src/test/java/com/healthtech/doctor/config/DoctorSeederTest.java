@@ -121,17 +121,51 @@ class DoctorSeederTest {
     }
 
     @Test
-    void run_allDoctorsAlreadyExist_savesNothingAndPublishesNothing() {
+    void run_allDoctorsAlreadyExist_savesNothingButRepublishesRegistered() {
         // Arrange
         when(doctorRepository.findByEmail(anyString()))
-                .thenReturn(Optional.of(Doctor.builder().build()));
+                .thenReturn(Optional.of(Doctor.builder().id(UUID.randomUUID()).build()));
 
         // Act
         doctorSeeder.run();
 
-        // Assert: idempotent
+        // Assert: nothing is created again, but each existing doctor is announced again
         verify(doctorRepository, never()).saveAndFlush(any());
-        verify(eventPublisher, never()).publish(anyString(), any(), any(), any());
+        verify(eventPublisher, times(6)).publish(
+                eq("doctor.registered"), any(), any(), any(DoctorRegistered.class));
+    }
+
+    @Test
+    void run_doctorSaved_publishesAutoConfirmBookingsTrue() {
+        // Arrange
+        stubAllDoctorsMissing();
+        when(doctorRepository.saveAndFlush(any(Doctor.class)))
+                .thenAnswer(inv -> withId(inv.getArgument(0)));
+
+        // Act
+        doctorSeeder.run();
+
+        // Assert
+        ArgumentCaptor<DoctorRegistered> events = ArgumentCaptor.forClass(DoctorRegistered.class);
+        verify(eventPublisher, times(6)).publish(eq("doctor.registered"), any(), any(), events.capture());
+        assertThat(events.getAllValues()).allMatch(DoctorRegistered::isAutoConfirmBookings);
+    }
+
+    @Test
+    void run_doctorAlreadyExists_republishedEventKeepsAutoConfirmBookingsTrue() {
+        // Arrange
+        UUID existingId = UUID.randomUUID();
+        when(doctorRepository.findByEmail(anyString()))
+                .thenReturn(Optional.of(Doctor.builder().id(existingId).firstName("Anna").build()));
+
+        // Act
+        doctorSeeder.run();
+
+        // Assert
+        ArgumentCaptor<DoctorRegistered> events = ArgumentCaptor.forClass(DoctorRegistered.class);
+        verify(eventPublisher, times(6)).publish(eq("doctor.registered"), eq(existingId), any(), events.capture());
+        assertThat(events.getAllValues()).allMatch(DoctorRegistered::isAutoConfirmBookings);
+        assertThat(events.getAllValues().get(0).getDoctorId()).isEqualTo(existingId);
     }
 
     @Test

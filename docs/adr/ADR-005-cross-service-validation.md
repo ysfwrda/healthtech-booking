@@ -79,6 +79,14 @@ consistent with the consistency analysis above.
 - The read-model duplicates identifier data already owned by the Patient and
   Doctor Services, a deliberate tradeoff inherent to the pattern
 
+> **Note (doctor availability):** The doctor read-model also carries the doctor's opening hours and, since doctors
+> manage their own availability, their vacations and `autoConfirmBookings`. Doctor-service stays the owner of that data and
+> publishes a full snapshot, `doctor.availability-updated`, with a per-doctor `version`. Appointment-service applies a
+> snapshot only when its version is newer, under a lock on the doctor's row, and then flags the booked appointments that no
+> longer fit. `doctor.registered` creates the row for an unknown doctor; for a known doctor it refreshes only the names and
+> `autoConfirmBookings`, never the hours or vacations. Nothing is validated synchronously: a change that conflicts with
+> booked appointments is saved and the appointments are flagged, not rejected.
+
 > **Note:** Resilience concerns for the event consumers themselves (retry on
 > transient processing failure, dead-letter handling, idempotency) are out of
 > scope here and are addressed as part of the Phase 3 reliability work, specified

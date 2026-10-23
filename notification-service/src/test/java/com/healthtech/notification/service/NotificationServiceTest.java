@@ -5,6 +5,8 @@ import com.healthtech.notification.domain.NotificationType;
 import com.healthtech.notification.event.AppointmentBooked;
 import com.healthtech.notification.event.AppointmentCancelled;
 import com.healthtech.notification.event.AppointmentChanged;
+import com.healthtech.notification.event.AppointmentConfirmed;
+import com.healthtech.notification.event.AppointmentRescheduleRequired;
 import com.healthtech.notification.repository.NotificationRepository;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
@@ -240,5 +242,132 @@ class NotificationServiceTest {
                 .doctorId(UUID.randomUUID())
                 .dateTime(LocalDateTime.now().plusDays(3))
                 .build();
+    }
+
+    private static final LocalDateTime SLOT = LocalDateTime.of(2026, 8, 15, 10, 30);
+
+    private Notification recordAndCapture(com.healthtech.notification.event.AppointmentNotificationEvent event) {
+        notificationService.record(event);
+        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository).saveAndFlush(captor.capture());
+        return captor.getValue();
+    }
+
+    private AppointmentCancelled cancelled(String cancelledBy) {
+        return AppointmentCancelled.builder().eventId(UUID.randomUUID()).appointmentId(UUID.randomUUID())
+                .patientId(UUID.randomUUID()).doctorId(UUID.randomUUID()).dateTime(SLOT).cancelledBy(cancelledBy).build();
+    }
+
+    private AppointmentChanged changed(String changedBy) {
+        return AppointmentChanged.builder().eventId(UUID.randomUUID()).appointmentId(UUID.randomUUID())
+                .patientId(UUID.randomUUID()).doctorId(UUID.randomUUID()).dateTime(SLOT).changedBy(changedBy).build();
+    }
+
+    @Test
+    void record_confirmedEvent_savesConfirmedNotificationForThePatient() {
+        // Arrange
+        AppointmentConfirmed event = AppointmentConfirmed.builder().eventId(UUID.randomUUID())
+                .appointmentId(UUID.randomUUID()).patientId(UUID.randomUUID()).doctorId(UUID.randomUUID())
+                .dateTime(SLOT).confirmedAt(LocalDateTime.now()).build();
+
+        // Act
+        Notification saved = recordAndCapture(event);
+
+        // Assert
+        assertThat(saved.getType()).isEqualTo(NotificationType.APPOINTMENT_CONFIRMED);
+        assertThat(saved.getMessage()).isEqualTo("Appointment confirmed for 2026-08-15T10:30");
+        assertThat(saved.getPatientId()).isEqualTo(event.getPatientId());
+        assertThat(saved.getEventId()).isEqualTo(event.getEventId());
+    }
+
+    @Test
+    void record_rescheduleRequiredEvent_savesMessageAskingThePatientToRescheduleOrCancel() {
+        // Arrange
+        AppointmentRescheduleRequired event = AppointmentRescheduleRequired.builder().eventId(UUID.randomUUID())
+                .appointmentId(UUID.randomUUID()).patientId(UUID.randomUUID()).doctorId(UUID.randomUUID())
+                .dateTime(SLOT).reason("DOCTOR_VACATION").detectedAt(LocalDateTime.now()).build();
+
+        // Act
+        Notification saved = recordAndCapture(event);
+
+        // Assert
+        assertThat(saved.getType()).isEqualTo(NotificationType.APPOINTMENT_RESCHEDULE_REQUIRED);
+        assertThat(saved.getMessage())
+                .isEqualTo("Your doctor is no longer available on 2026-08-15T10:30, please reschedule or cancel");
+    }
+
+    @Test
+    void record_rescheduleRequiredForOpeningHours_usesTheSameText() {
+        // Arrange
+        AppointmentRescheduleRequired hours = AppointmentRescheduleRequired.builder().eventId(UUID.randomUUID())
+                .patientId(UUID.randomUUID()).dateTime(SLOT).reason("OUTSIDE_OPENING_HOURS").build();
+
+        // Act
+        Notification saved = recordAndCapture(hours);
+
+        // Assert
+        assertThat(saved.getMessage()).endsWith("please reschedule or cancel");
+    }
+
+    @Test
+    void record_cancelledByDoctor_saysSoInTheMessage() {
+        // Act
+        Notification saved = recordAndCapture(cancelled("DOCTOR"));
+
+        // Assert
+        assertThat(saved.getType()).isEqualTo(NotificationType.APPOINTMENT_CANCELLED);
+        assertThat(saved.getMessage()).isEqualTo("Appointment cancelled for 2026-08-15T10:30 by your doctor");
+    }
+
+    @Test
+    void record_cancelledByPatient_hasNoSuffix() {
+        // Act
+        Notification saved = recordAndCapture(cancelled("PATIENT"));
+
+        // Assert
+        assertThat(saved.getMessage()).isEqualTo("Appointment cancelled for 2026-08-15T10:30");
+    }
+
+    @Test
+    void record_cancelledWithoutInitiator_isTreatedAsTheOwnCancelOfThePatient() {
+        // Act
+        Notification saved = recordAndCapture(cancelled(null));
+
+        // Assert
+        assertThat(saved.getMessage()).isEqualTo("Appointment cancelled for 2026-08-15T10:30");
+    }
+
+    @Test
+    void record_changedByDoctor_saysSoInTheMessage() {
+        // Act
+        Notification saved = recordAndCapture(changed("DOCTOR"));
+
+        // Assert
+        assertThat(saved.getType()).isEqualTo(NotificationType.APPOINTMENT_CHANGED);
+        assertThat(saved.getMessage()).isEqualTo("Appointment changed to 2026-08-15T10:30 by your doctor");
+    }
+
+    @Test
+    void record_changedByPatientOrWithoutInitiatorOrUnknownInitiator_hasNoSuffix() {
+        // Act & Assert
+        for (String initiator : new String[]{"PATIENT", null, "SOMEONE_NEW"}) {
+            org.mockito.Mockito.clearInvocations(notificationRepository);
+            assertThat(recordAndCapture(changed(initiator)).getMessage())
+                    .isEqualTo("Appointment changed to 2026-08-15T10:30");
+        }
+    }
+
+    @Test
+    void record_bookedEvent_keepsItsExistingMessageUnchanged() {
+        // Arrange
+        AppointmentBooked event = AppointmentBooked.builder().eventId(UUID.randomUUID())
+                .appointmentId(UUID.randomUUID()).patientId(UUID.randomUUID()).doctorId(UUID.randomUUID())
+                .dateTime(SLOT).build();
+
+        // Act
+        Notification saved = recordAndCapture(event);
+
+        // Assert
+        assertThat(saved.getMessage()).isEqualTo("Appointment booked for 2026-08-15T10:30");
     }
 }

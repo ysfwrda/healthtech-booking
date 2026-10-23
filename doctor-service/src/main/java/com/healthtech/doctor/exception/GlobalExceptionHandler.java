@@ -46,6 +46,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problemDetail;
     }
 
+    @ExceptionHandler(VacationNotFoundException.class)
+    public ProblemDetail handleVacationNotFoundException(VacationNotFoundException ex) {
+        log.warn("{}, status 404", ex.getMessage());
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problemDetail.setTitle("Vacation Not Found");
+        return problemDetail;
+    }
+
+    @ExceptionHandler(InvalidVacationException.class)
+    public ProblemDetail handleInvalidVacationException(InvalidVacationException ex) {
+        log.warn("Vacation rejected: {}, status 400", ex.getMessage());
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problemDetail.setTitle("Invalid Vacation");
+        return problemDetail;
+    }
+
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ProblemDetail handleEmailAlreadyExistsException(EmailAlreadyExistsException ex) {
         log.warn("Doctor registration rejected: email already exists, status 409");

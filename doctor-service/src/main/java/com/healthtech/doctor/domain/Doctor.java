@@ -61,4 +61,8 @@ public class Doctor {
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime registeredAt;
+
+    // Bumped by one on every opening-hours or vacation write; carried by doctor.availability-updated.
+    @Column(columnDefinition = "bigint not null default 0")
+    private long availabilityVersion;
 }

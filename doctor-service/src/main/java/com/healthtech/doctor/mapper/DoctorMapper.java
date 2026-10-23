@@ -15,6 +15,7 @@ public interface DoctorMapper {
     @Mapping(target = "registeredAt", ignore = true)
     @Mapping(target = "specialties", ignore = true)
     @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "availabilityVersion", ignore = true)
     Doctor toEntity(DoctorRegistrationRequest request);
 
     DoctorResponse toDoctorResponse(Doctor doctor);

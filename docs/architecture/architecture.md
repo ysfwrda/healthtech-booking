@@ -52,7 +52,7 @@ flowchart LR
 
     gw -->|"/api/auth, /api/patients"| patient
     gw -->|"/api/doctors, /api/specialties"| doctor
-    gw -->|"/api/appointments, /api/availability"| appt
+    gw -->|"/api/appointments (incl. /doctor), /api/availability"| appt
 
     patient --- dbp
     doctor --- dbd
@@ -60,10 +60,10 @@ flowchart LR
     notif --- dbn
 
     patient -.->|"patient.registered"| kafka
-    doctor -.->|"doctor.registered"| kafka
-    appt -.->|"appointment.booked<br/>appointment.cancelled<br/>appointment.changed"| kafka
+    doctor -.->|"doctor.registered<br/>doctor.availability-updated"| kafka
+    appt -.->|"appointment.booked<br/>appointment.cancelled<br/>appointment.changed<br/>appointment.confirmed<br/>appointment.reschedule-required"| kafka
 
-    kafka -.->|"patient.registered<br/>doctor.registered"| appt
+    kafka -.->|"patient.registered<br/>doctor.registered<br/>doctor.availability-updated"| appt
     kafka -.->|"appointment.*"| notif
 
     kafka --- zk
@@ -105,23 +105,30 @@ flowchart LR
         direction TB
         t1["patient.registered"]
         t2["doctor.registered"]
+        t6["doctor.availability-updated"]
         t3["appointment.booked"]
         t4["appointment.cancelled"]
         t5["appointment.changed"]
+        t7["appointment.confirmed"]
+        t8["appointment.reschedule-required"]
     end
 
     subgraph consumers["Consumers"]
         direction TB
         c1["appointment-service<br/>PatientEventConsumer<br/>upserts ValidPatient"]
-        c2["appointment-service<br/>DoctorEventConsumer<br/>upserts ValidDoctor + opening hours"]
+        c2["appointment-service<br/>DoctorEventConsumer<br/>creates ValidDoctor with hours; for a known doctor refreshes names and autoConfirmBookings only"]
+        c4["appointment-service<br/>DoctorAvailabilityConsumer<br/>applies hours + vacations if the version is newer, then flags appointments that no longer fit"]
         c3["notification-service<br/>AppointmentEventConsumer<br/>stores one notification per event id"]
     end
 
     p1 --> t1 --> c1
     p2 --> t2 --> c2
+    p2 --> t6 --> c4
     p3 --> t3 --> c3
     p3 --> t4 --> c3
     p3 --> t5 --> c3
+    p3 --> t7 --> c3
+    p3 --> t8 --> c3
 ```
 
 ### Inside a producing service
@@ -146,10 +153,13 @@ flowchart LR
 | Event                   | Producer            | Consumer(s)                      | Effect at the consumer                                     |
 |-------------------------|---------------------|----------------------------------|------------------------------------------------------------|
 | `patient.registered`    | patient-service     | appointment-service              | Upsert `ValidPatient` (read-model, ADR-005)                |
-| `doctor.registered`     | doctor-service      | appointment-service              | Upsert `ValidDoctor`, including opening hours (read-model) |
+| `doctor.registered`     | doctor-service      | appointment-service              | Create `ValidDoctor` with its hours; for a known doctor refresh the names and `autoConfirmBookings` only (read-model) |
+| `doctor.availability-updated` | doctor-service | appointment-service          | Replace the hours and vacations when the `version` is newer, then flag the booked appointments that no longer fit |
 | `appointment.booked`    | appointment-service | notification-service             | Store a notification, deduplicated by event id             |
 | `appointment.cancelled` | appointment-service | notification-service             | Same                                                       |
 | `appointment.changed`   | appointment-service | notification-service             | Same                                                       |
+| `appointment.confirmed` | appointment-service | notification-service             | Same                                                       |
+| `appointment.reschedule-required` | appointment-service | notification-service | Same (the patient is asked to reschedule or cancel)    |
 
 ---
 
@@ -171,8 +181,8 @@ sequenceDiagram
     GW->>A: proxy request
     A->>A: validate token again (public key), patient id = token sub
     A->>DB: check ValidPatient / ValidDoctor read-model (404 if unknown)
-    A->>A: slot grid, opening hours, not in the past (400)
-    A->>DB: INSERT appointment + INSERT outbox row (one transaction)
+    A->>A: slot grid, opening hours, not in the past, not on a vacation day (400)
+    A->>DB: INSERT appointment (PENDING, or CONFIRMED for an auto-confirming doctor) + INSERT outbox row (one transaction)
     Note over DB: partial unique index on (doctor_id, date_time)<br/>WHERE status <> 'CANCELLED' rejects a double booking, mapped to 409
     A-->>GW: 201 Created
     GW-->>P: 201 Created
@@ -185,6 +195,10 @@ sequenceDiagram
     K-->>N: deliver appointment.booked
     N->>N: store notification (unique event id: a redelivery is ignored)
 ```
+
+The doctor then confirms, cancels or changes the appointment through `/api/appointments/doctor`, each publishing its own event the
+same way. When the doctor changes the opening hours or a vacation in doctor-service, `doctor.availability-updated` reaches
+appointment-service, which flags the booked appointments that no longer fit and publishes `appointment.reschedule-required`.
 
 If Kafka is down, the booking still succeeds; the event waits in the outbox and the relay sends it when Kafka
 returns. If notification-service is down, Kafka retains the event and the consumer resumes from its last offset.

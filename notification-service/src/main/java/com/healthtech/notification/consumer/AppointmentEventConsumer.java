@@ -3,6 +3,8 @@ package com.healthtech.notification.consumer;
 import com.healthtech.notification.event.AppointmentBooked;
 import com.healthtech.notification.event.AppointmentCancelled;
 import com.healthtech.notification.event.AppointmentChanged;
+import com.healthtech.notification.event.AppointmentConfirmed;
+import com.healthtech.notification.event.AppointmentRescheduleRequired;
 import com.healthtech.notification.event.AppointmentNotificationEvent;
 import com.healthtech.notification.correlation.ConsumerCorrelation;
 import com.healthtech.notification.correlation.CorrelationId;
@@ -51,6 +53,28 @@ public class AppointmentEventConsumer {
     )
     public void consumeChangedEvent(
             AppointmentChanged event,
+            @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
+        handle(event, correlationIdHeader);
+    }
+
+    @KafkaListener(
+            topics = "appointment.confirmed",
+            groupId = "notification-group",
+            containerFactory = "confirmedKafkaListenerContainerFactory"
+    )
+    public void consumeConfirmedEvent(
+            AppointmentConfirmed event,
+            @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
+        handle(event, correlationIdHeader);
+    }
+
+    @KafkaListener(
+            topics = "appointment.reschedule-required",
+            groupId = "notification-group",
+            containerFactory = "rescheduleRequiredKafkaListenerContainerFactory"
+    )
+    public void consumeRescheduleRequiredEvent(
+            AppointmentRescheduleRequired event,
             @Header(value = CorrelationId.HEADER, required = false) byte[] correlationIdHeader) {
         handle(event, correlationIdHeader);
     }

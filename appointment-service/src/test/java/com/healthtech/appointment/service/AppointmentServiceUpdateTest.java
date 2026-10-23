@@ -5,9 +5,11 @@ import com.healthtech.appointment.config.ChangePolicyProperties;
 import com.healthtech.appointment.domain.Appointment;
 import com.healthtech.appointment.domain.AppointmentStatus;
 import com.healthtech.appointment.domain.AppointmentType;
+import com.healthtech.appointment.domain.ConflictReason;
 import com.healthtech.appointment.dto.AppointmentResponse;
 import com.healthtech.appointment.dto.AppointmentUpdateRequest;
 import com.healthtech.appointment.event.AppointmentChanged;
+import com.healthtech.appointment.event.Initiator;
 import com.healthtech.appointment.exception.AppointmentAccessDeniedException;
 import com.healthtech.appointment.exception.AppointmentNotChangeableException;
 import com.healthtech.appointment.exception.AppointmentNotFoundException;
@@ -17,16 +19,19 @@ import com.healthtech.appointment.exception.OutsideOpeningHoursException;
 import com.healthtech.appointment.exception.SlotAlreadyBookedException;
 import com.healthtech.appointment.exception.SlotInPastException;
 import com.healthtech.appointment.exception.SlotNotAlignedException;
+import com.healthtech.appointment.exception.SlotOnVacationException;
 import com.healthtech.appointment.mapper.AppointmentMapper;
 import com.healthtech.appointment.outbox.OutboxEventWriter;
 import com.healthtech.appointment.outbox.OutboxMessage;
 import com.healthtech.appointment.outbox.OutboxRepository;
 import com.healthtech.appointment.readmodel.OpeningHours;
+import com.healthtech.appointment.readmodel.VacationPeriod;
 import com.healthtech.appointment.readmodel.ValidDoctor;
 import com.healthtech.appointment.readmodel.ValidDoctorRepository;
 import com.healthtech.appointment.readmodel.ValidPatientRepository;
 import com.healthtech.appointment.repository.AppointmentRepository;
 import com.healthtech.appointment.service.booking.NotInPastRule;
+import com.healthtech.appointment.service.booking.NotOnVacationRule;
 import com.healthtech.appointment.service.booking.SlotAlignedRule;
 import com.healthtech.appointment.service.booking.WithinOpeningHoursRule;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +44,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Clock;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
@@ -96,7 +102,7 @@ class AppointmentServiceUpdateTest {
                 appointmentMapper,
                 validPatientRepository,
                 validDoctorRepository,
-                List.of(new SlotAlignedRule(slotPolicy), new WithinOpeningHoursRule(slotPolicy), new NotInPastRule(CLOCK)),
+                List.of(new SlotAlignedRule(slotPolicy), new WithinOpeningHoursRule(slotPolicy), new NotInPastRule(CLOCK), new NotOnVacationRule()),
                 new OutboxEventWriter(outboxRepository, objectMapper),
                 CLOCK,
                 new ChangePolicyProperties(48));
@@ -126,7 +132,7 @@ class AppointmentServiceUpdateTest {
 
     // The doctor is open 08:00-18:00 every day.
     private void stubDoctor() {
-        when(validDoctorRepository.findById(doctorId)).thenReturn(Optional.of(ValidDoctor.builder()
+        when(validDoctorRepository.findByIdForShare(doctorId)).thenReturn(Optional.of(ValidDoctor.builder()
                 .doctorId(doctorId)
                 .firstName("John")
                 .lastName("Smith")
@@ -301,6 +307,100 @@ class AppointmentServiceUpdateTest {
     }
 
     @Test
+    void updateAppointment_flaggedAppointmentInsideTheNoticePeriod_isStillChangeable() {
+        // Arrange: the doctor's availability change made it unusable, so the notice period does not apply
+        Appointment appointment = appointmentAt(NOW.plusHours(2));
+        appointment.setConflictReason(ConflictReason.DOCTOR_VACATION);
+        stubLoaded(appointment);
+        stubSaveAndResponse(appointment);
+
+        // Act
+        service.updateAppointment(appointment.getId(), type(FOLLOW_UP), patientId);
+
+        // Assert
+        assertThat(appointment.getType()).isEqualTo(FOLLOW_UP);
+    }
+
+    @Test
+    void updateAppointment_flaggedAppointmentMovedToAValidTime_clearsTheFlag() {
+        // Arrange
+        Appointment appointment = appointmentAt(NOW.plusHours(2));
+        appointment.setConflictReason(ConflictReason.OUTSIDE_OPENING_HOURS);
+        stubLoaded(appointment);
+        stubDoctor();
+        stubSaveAndResponse(appointment);
+
+        // Act
+        service.updateAppointment(appointment.getId(), time(LocalDateTime.of(2026, 8, 12, 9, 0)), patientId);
+
+        // Assert
+        assertThat(appointment.getConflictReason()).isNull();
+    }
+
+    @Test
+    void updateAppointment_flaggedAppointmentMovedOntoAVacationDay_isRejectedAndKeepsTheFlag() {
+        // Arrange
+        Appointment appointment = appointmentAt(NOW.plusHours(2));
+        appointment.setConflictReason(ConflictReason.DOCTOR_VACATION);
+        stubLoaded(appointment);
+        when(validDoctorRepository.findByIdForShare(doctorId)).thenReturn(Optional.of(ValidDoctor.builder()
+                .doctorId(doctorId)
+                .openingHours(Arrays.stream(DayOfWeek.values())
+                        .map(day -> OpeningHours.builder().dayOfWeek(day)
+                                .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(18, 0)).build())
+                        .collect(Collectors.toSet()))
+                .vacations(java.util.Set.of(VacationPeriod.builder()
+                        .startDate(LocalDate.of(2026, 8, 12)).endDate(LocalDate.of(2026, 8, 12)).build()))
+                .build()));
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.updateAppointment(appointment.getId(),
+                time(LocalDateTime.of(2026, 8, 12, 9, 0)), patientId))
+                .isInstanceOf(SlotOnVacationException.class);
+        assertThat(appointment.getConflictReason()).isEqualTo(ConflictReason.DOCTOR_VACATION);
+    }
+
+    @Test
+    void updateAppointment_unflaggedAppointmentInsideTheNoticePeriod_stillThrowsChangeWindowClosed() {
+        // Arrange
+        Appointment appointment = appointmentAt(NOW.plusHours(2));
+        stubLoaded(appointment);
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.updateAppointment(appointment.getId(), type(FOLLOW_UP), patientId))
+                .isInstanceOf(ChangeWindowClosedException.class);
+    }
+
+    @Test
+    void updateAppointment_pendingAppointment_keepsItsStatus() {
+        // Arrange
+        Appointment appointment = appointmentAt(CURRENT_SLOT);
+        appointment.setStatus(AppointmentStatus.PENDING);
+        stubLoaded(appointment);
+        stubSaveAndResponse(appointment);
+
+        // Act
+        service.updateAppointment(appointment.getId(), type(FOLLOW_UP), patientId);
+
+        // Assert
+        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.PENDING);
+    }
+
+    @Test
+    void updateAppointment_byPatient_publishesChangedByPatient() throws Exception {
+        // Arrange
+        Appointment appointment = appointmentAt(CURRENT_SLOT);
+        stubLoaded(appointment);
+        stubSaveAndResponse(appointment);
+
+        // Act
+        service.updateAppointment(appointment.getId(), type(FOLLOW_UP), patientId);
+
+        // Assert
+        assertThat(publishedEvent().getChangedBy()).isEqualTo(Initiator.PATIENT);
+    }
+
+    @Test
     void updateAppointment_alreadyStarted_throwsChangeWindowClosed() {
         // Arrange
         Appointment appointment = appointmentAt(NOW.minusHours(1));
@@ -429,7 +529,7 @@ class AppointmentServiceUpdateTest {
         // Arrange
         Appointment appointment = appointmentAt(CURRENT_SLOT);
         stubLoaded(appointment);
-        when(validDoctorRepository.findById(doctorId)).thenReturn(Optional.empty());
+        when(validDoctorRepository.findByIdForShare(doctorId)).thenReturn(Optional.empty());
 
         // Act & Assert
         assertThatThrownBy(() -> service.updateAppointment(appointment.getId(), time(LocalDateTime.of(2026, 8, 11, 10, 0)), patientId))

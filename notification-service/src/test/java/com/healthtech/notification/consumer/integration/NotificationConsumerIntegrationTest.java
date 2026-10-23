@@ -2,7 +2,9 @@ package com.healthtech.notification.consumer.integration;
 
 import com.healthtech.notification.domain.NotificationType;
 import com.healthtech.notification.event.AppointmentBooked;
+import com.healthtech.notification.event.AppointmentCancelled;
 import com.healthtech.notification.event.AppointmentChanged;
+import com.healthtech.notification.event.AppointmentRescheduleRequired;
 import com.healthtech.notification.repository.NotificationRepository;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -174,5 +176,82 @@ public class NotificationConsumerIntegrationTest {
         assertThat(notificationRepository.findAll().stream()
                 .filter(n -> n.getAppointmentId().equals(appointmentId))
                 .count()).isEqualTo(1);
+    }
+
+    @Test
+    void appointmentConfirmedEvent_consumed_writesConfirmedNotification() throws Exception {
+        UUID appointmentId = UUID.randomUUID();
+        LocalDateTime time = LocalDateTime.now().plusDays(3).withNano(0);
+        Map<String, Object> event = new HashMap<>();
+        event.put("eventId", UUID.randomUUID().toString());
+        event.put("appointmentId", appointmentId.toString());
+        event.put("patientId", UUID.randomUUID().toString());
+        event.put("doctorId", UUID.randomUUID().toString());
+        event.put("dateTime", time.toString());
+        event.put("aFieldFromTheFuture", "ignored");
+
+        testProducer().send("appointment.confirmed", event).get();
+
+        var notification = await(() -> notificationRepository.findAll().stream()
+                .filter(n -> n.getAppointmentId().equals(appointmentId))
+                .findFirst());
+        assertThat(notification.getType()).isEqualTo(NotificationType.APPOINTMENT_CONFIRMED);
+        assertThat(notification.getMessage()).isEqualTo("Appointment confirmed for " + time);
+        assertThat(notification.getEventId()).isEqualTo(UUID.fromString((String) event.get("eventId")));
+    }
+
+    @Test
+    void appointmentRescheduleRequiredEvent_consumed_writesNotificationAndRedeliveryWritesNoSecond() throws Exception {
+        UUID appointmentId = UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+        UUID sentinelId = UUID.randomUUID();
+        LocalDateTime time = LocalDateTime.now().plusDays(3).withNano(0);
+        KafkaTemplate<String, Object> producer = testProducer();
+
+        producer.send("appointment.reschedule-required", appointmentId.toString(), rescheduleEvent(eventId, appointmentId, time)).get();
+        producer.send("appointment.reschedule-required", appointmentId.toString(), rescheduleEvent(eventId, appointmentId, time)).get();
+        producer.send("appointment.reschedule-required", appointmentId.toString(),
+                rescheduleEvent(UUID.randomUUID(), sentinelId, time)).get();
+        await(() -> notificationRepository.findAll().stream()
+                .filter(n -> n.getAppointmentId().equals(sentinelId))
+                .findFirst());
+
+        var rows = notificationRepository.findAll().stream()
+                .filter(n -> n.getAppointmentId().equals(appointmentId)).toList();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).getType()).isEqualTo(NotificationType.APPOINTMENT_RESCHEDULE_REQUIRED);
+        assertThat(rows.get(0).getMessage())
+                .isEqualTo("Your doctor is no longer available on " + time + ", please reschedule or cancel");
+    }
+
+    private AppointmentRescheduleRequired rescheduleEvent(UUID eventId, UUID appointmentId, LocalDateTime time) {
+        return AppointmentRescheduleRequired.builder()
+                .eventId(eventId).appointmentId(appointmentId).patientId(UUID.randomUUID()).doctorId(UUID.randomUUID())
+                .duration(30).dateTime(time).reason("DOCTOR_VACATION").detectedAt(LocalDateTime.now()).build();
+    }
+
+    @Test
+    void appointmentCancelledByDoctor_consumed_namesTheDoctorAndAnEventWithoutInitiatorDoesNot() throws Exception {
+        UUID byDoctor = UUID.randomUUID();
+        UUID oldFormat = UUID.randomUUID();
+        LocalDateTime time = LocalDateTime.now().plusDays(3).withNano(0);
+        KafkaTemplate<String, Object> producer = testProducer();
+        producer.send("appointment.cancelled", byDoctor.toString(), cancelledEvent(byDoctor, "DOCTOR", time)).get();
+        producer.send("appointment.cancelled", oldFormat.toString(), cancelledEvent(oldFormat, null, time)).get();
+
+        var doctorCancel = await(() -> notificationRepository.findAll().stream()
+                .filter(n -> n.getAppointmentId().equals(byDoctor)).findFirst());
+        var patientCancel = await(() -> notificationRepository.findAll().stream()
+                .filter(n -> n.getAppointmentId().equals(oldFormat)).findFirst());
+
+        assertThat(doctorCancel.getMessage()).isEqualTo("Appointment cancelled for " + time + " by your doctor");
+        assertThat(patientCancel.getMessage()).isEqualTo("Appointment cancelled for " + time);
+    }
+
+    private AppointmentCancelled cancelledEvent(UUID appointmentId, String cancelledBy, LocalDateTime time) {
+        return AppointmentCancelled.builder()
+                .eventId(UUID.randomUUID()).appointmentId(appointmentId).patientId(UUID.randomUUID())
+                .doctorId(UUID.randomUUID()).duration(30).dateTime(time).cancelledAt(LocalDateTime.now())
+                .cancelledBy(cancelledBy).build();
     }
 }

@@ -62,6 +62,7 @@ public class DoctorAuthService {
                 .lastName(savedDoctor.getLastName())
                 .openingHours(OpeningHoursData.fromAll(savedDoctor.getOpeningHours()))
                 .registeredAt(savedDoctor.getRegisteredAt())
+                .autoConfirmBookings(false)
                 .build();
         eventPublisher.publish("doctor.registered", savedDoctor.getId(), event.getEventId(), event);
 

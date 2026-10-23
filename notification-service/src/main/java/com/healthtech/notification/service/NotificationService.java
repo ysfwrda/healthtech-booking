@@ -29,7 +29,7 @@ public class NotificationService {
                 .patientId(event.getPatientId())
                 .doctorId(event.getDoctorId())
                 .type(event.notificationType())
-                .message(event.notificationType().messageFor(event.getDateTime()))
+                .message(event.notificationType().messageFor(event.getDateTime(), event.initiatedByDoctor()))
                 .build();
 
         try {

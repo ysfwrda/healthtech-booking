@@ -33,6 +33,28 @@ class GatewaySecurityTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    static Stream<Arguments> doctorOwnPaths() {
+        return Stream.of(
+                Arguments.of(HttpMethod.GET, "/api/doctors/me/availability"),
+                Arguments.of(HttpMethod.PUT, "/api/doctors/me/availability/opening-hours"),
+                Arguments.of(HttpMethod.POST, "/api/doctors/me/availability/vacations"),
+                Arguments.of(HttpMethod.DELETE, "/api/doctors/me/availability/vacations/3fa85f64-5717-4562-b3fc-2c963f66afa6"),
+                Arguments.of(HttpMethod.GET, "/api/appointments/doctor"),
+                Arguments.of(HttpMethod.PUT, "/api/appointments/doctor/3fa85f64-5717-4562-b3fc-2c963f66afa6/confirm"),
+                Arguments.of(HttpMethod.PUT, "/api/appointments/doctor/3fa85f64-5717-4562-b3fc-2c963f66afa6/cancel"),
+                Arguments.of(HttpMethod.PATCH, "/api/appointments/doctor/3fa85f64-5717-4562-b3fc-2c963f66afa6")
+        );
+    }
+
+    // The doctor's own paths sit under /api/doctors, whose GET is public, so the order of the edge rules matters.
+    @ParameterizedTest(name = "{0} {1} needs a token")
+    @MethodSource("doctorOwnPaths")
+    void doctorOwnPath_noAuthorization_returns401(HttpMethod method, String path) {
+        ResponseEntity<String> response = restTemplate.exchange(path, method, null, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
     static Stream<Arguments> publicPaths() {
         return Stream.of(
                 Arguments.of(HttpMethod.POST, "/api/auth/register"),

@@ -32,6 +32,10 @@ public class Appointment {
     @Enumerated(EnumType.STRING)
     private AppointmentStatus status;
 
+    // Set while the appointment no longer fits the doctor's availability; null when it fits.
+    @Enumerated(EnumType.STRING)
+    private ConflictReason conflictReason;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 

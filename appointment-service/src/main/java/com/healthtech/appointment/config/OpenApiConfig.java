@@ -23,7 +23,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Appointment Service API")
-                        .description("Booking, cancellation and availability of appointments.\n\n**Authentication:** most endpoints require a JWT. Obtain one via POST /api/auth/login on the Patient Service (patients book appointments), click **Authorize** and paste the token (without the \"Bearer \" prefix). Endpoints without a lock icon are public.")
+                        .description("Booking, cancellation and availability of appointments, and the doctor's management of them (confirm, cancel, change).\n\n**Authentication:** most endpoints require a JWT. Obtain one via POST /api/auth/login on the Patient Service (patients book appointments) or POST /api/doctors/login on the Doctor Service (doctors manage them under /api/appointments/doctor), click **Authorize** and paste the token (without the \"Bearer \" prefix). Endpoints without a lock icon are public.")
                         .version("v1"))
                 .addServersItem(new Server().url(serverUrl))
                 .components(new Components()

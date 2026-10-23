@@ -5,6 +5,7 @@ import com.healthtech.appointment.domain.AppointmentStatus;
 import com.healthtech.appointment.dto.AvailableSlotsResponse;
 import com.healthtech.appointment.exception.DoctorNotFoundException;
 import com.healthtech.appointment.readmodel.OpeningHours;
+import com.healthtech.appointment.readmodel.VacationPeriod;
 import com.healthtech.appointment.readmodel.ValidDoctor;
 import com.healthtech.appointment.readmodel.ValidDoctorRepository;
 import com.healthtech.appointment.repository.AppointmentRepository;
@@ -334,5 +335,73 @@ class AvailabilityServiceTest {
 
         // Assert
         assertThat(result.getAvailableSlots()).containsExactly(FUTURE_DATE.atTime(9, 0), FUTURE_DATE.atTime(9, 30));
+    }
+
+    private void stubDoctorWithVacation(UUID doctorId, LocalDate vacationStart, LocalDate vacationEnd) {
+        when(validDoctorRepository.findById(doctorId)).thenReturn(Optional.of(
+                ValidDoctor.builder()
+                        .doctorId(doctorId)
+                        .openingHours(Set.of(OpeningHours.builder()
+                                .dayOfWeek(FUTURE_DATE.getDayOfWeek())
+                                .startTime(LocalTime.of(9, 0))
+                                .endTime(LocalTime.of(10, 0))
+                                .build()))
+                        .vacations(Set.of(VacationPeriod.builder().startDate(vacationStart).endDate(vacationEnd).build()))
+                        .build()));
+    }
+
+    @Test
+    void getAvailableSlots_firstDayOfVacation_shouldReturnNoSlots() {
+        // Arrange
+        UUID doctorId = UUID.randomUUID();
+        stubDoctorWithVacation(doctorId, FUTURE_DATE, FUTURE_DATE.plusDays(2));
+
+        // Act
+        AvailableSlotsResponse result = availabilityService.getAvailableSlots(doctorId, FUTURE_DATE);
+
+        // Assert
+        assertThat(result.getAvailableSlots()).isEmpty();
+        verifyNoInteractions(appointmentRepository);
+    }
+
+    @Test
+    void getAvailableSlots_lastDayOfVacation_shouldReturnNoSlots() {
+        // Arrange: the vacation ends on FUTURE_DATE, a day with opening hours
+        UUID doctorId = UUID.randomUUID();
+        stubDoctorWithVacation(doctorId, FUTURE_DATE.minusDays(2), FUTURE_DATE);
+
+        // Act
+        AvailableSlotsResponse result = availabilityService.getAvailableSlots(doctorId, FUTURE_DATE);
+
+        // Assert
+        assertThat(result.getAvailableSlots()).isEmpty();
+    }
+
+    @Test
+    void getAvailableSlots_dayAfterVacation_shouldReturnTheSlots() {
+        // Arrange
+        UUID doctorId = UUID.randomUUID();
+        stubDoctorWithVacation(doctorId, FUTURE_DATE.minusDays(3), FUTURE_DATE.minusDays(1));
+        stubTakenAppointments(doctorId, FUTURE_DATE, List.of());
+
+        // Act
+        AvailableSlotsResponse result = availabilityService.getAvailableSlots(doctorId, FUTURE_DATE);
+
+        // Assert
+        assertThat(result.getAvailableSlots()).containsExactly(FUTURE_DATE.atTime(9, 0), FUTURE_DATE.atTime(9, 30));
+    }
+
+    @Test
+    void getAvailableSlots_dayBeforeVacation_shouldReturnTheSlots() {
+        // Arrange
+        UUID doctorId = UUID.randomUUID();
+        stubDoctorWithVacation(doctorId, FUTURE_DATE.plusDays(1), FUTURE_DATE.plusDays(3));
+        stubTakenAppointments(doctorId, FUTURE_DATE, List.of());
+
+        // Act
+        AvailableSlotsResponse result = availabilityService.getAvailableSlots(doctorId, FUTURE_DATE);
+
+        // Assert
+        assertThat(result.getAvailableSlots()).hasSize(2);
     }
 }

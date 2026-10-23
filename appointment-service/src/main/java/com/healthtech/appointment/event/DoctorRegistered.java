@@ -18,4 +18,5 @@ public class DoctorRegistered {
     private String lastName;
     private LocalDateTime registeredAt;
     private Set<OpeningHoursPayload> openingHours;
+    private boolean autoConfirmBookings;
 }
