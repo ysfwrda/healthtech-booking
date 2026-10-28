@@ -23,6 +23,7 @@ import java.security.interfaces.RSAPrivateKey;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -32,6 +33,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 public class AppointmentIntegrationTest extends AbstractAppointmentApiTest {
 
@@ -264,6 +266,96 @@ public class AppointmentIntegrationTest extends AbstractAppointmentApiTest {
         assertThat(retry.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(retry.getBody().getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
         assertThat(cancelledEventCount(booked.id())).isEqualTo(1);
+    }
+
+    @Test
+    void createAppointment_slotOfCancelledAppointment_returns201() {
+        // Arrange: ux_active_appointment excludes CANCELLED rows, so cancelling frees the slot
+        LocalDate target = LocalDate.now().plusWeeks(1);
+        ValidDoctor doctor = seedDoctor(target);
+        LocalDateTime slot = LocalDateTime.of(target, LocalTime.of(9, 0));
+        ValidPatient firstPatient = seedPatient();
+        UUID cancelledId = book(firstPatient, doctor, slot, AppointmentType.VACCINATION);
+        assertThat(putCancel(patientHeaders(firstPatient.getPatientId()), cancelledId).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        ValidPatient secondPatient = seedPatient();
+
+        // Act
+        ResponseEntity<String> response = restTemplate.exchange("/api/appointments", HttpMethod.POST,
+                new HttpEntity<>(bookingRequest(doctor, slot, null), patientHeaders(secondPatient.getPatientId())),
+                String.class);
+
+        // Assert
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+    }
+
+    private List<AppointmentResponse> getMyAppointments(ValidPatient patient) {
+        ResponseEntity<AppointmentResponse[]> response = restTemplate.exchange("/api/appointments", HttpMethod.GET,
+                new HttpEntity<>(patientHeaders(patient.getPatientId())), AppointmentResponse[].class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        return List.of(response.getBody());
+    }
+
+    @Test
+    void getMyAppointments_twoPatientsWithTheSameDoctor_returnsOnlyTheCallersAppointments() {
+        // Arrange
+        LocalDate target = LocalDate.now().plusWeeks(1);
+        ValidDoctor doctor = seedDoctor(target);
+        ValidPatient caller = seedPatient();
+        ValidPatient otherPatient = seedPatient();
+        UUID callersFirst = book(caller, doctor, LocalDateTime.of(target, LocalTime.of(9, 0)), AppointmentType.VACCINATION);
+        UUID otherPatients = book(otherPatient, doctor, LocalDateTime.of(target, LocalTime.of(9, 30)),
+                AppointmentType.VACCINATION);
+        UUID callersSecond = book(caller, doctor, LocalDateTime.of(target, LocalTime.of(10, 0)), AppointmentType.FOLLOW_UP);
+
+        // Act
+        List<AppointmentResponse> appointments = getMyAppointments(caller);
+
+        // Assert
+        assertThat(appointments).extracting(AppointmentResponse::getId)
+                .containsExactlyInAnyOrder(callersFirst, callersSecond)
+                .doesNotContain(otherPatients);
+        assertThat(appointments).extracting(AppointmentResponse::getPatientId).containsOnly(caller.getPatientId());
+    }
+
+    @Test
+    void getMyAppointments_cancelledAppointment_isIncludedWithStatusCancelled() {
+        // Arrange
+        LocalDate target = LocalDate.now().plusWeeks(1);
+        ValidDoctor doctor = seedDoctor(target);
+        ValidPatient caller = seedPatient();
+        UUID kept = book(caller, doctor, LocalDateTime.of(target, LocalTime.of(9, 0)), AppointmentType.VACCINATION);
+        UUID cancelled = book(caller, doctor, LocalDateTime.of(target, LocalTime.of(10, 0)), AppointmentType.VACCINATION);
+        assertThat(putCancel(patientHeaders(caller.getPatientId()), cancelled).getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        // Act
+        List<AppointmentResponse> appointments = getMyAppointments(caller);
+
+        // Assert
+        assertThat(appointments).extracting(AppointmentResponse::getId, AppointmentResponse::getStatus)
+                .containsExactlyInAnyOrder(
+                        tuple(kept, AppointmentStatus.CONFIRMED),
+                        tuple(cancelled, AppointmentStatus.CANCELLED));
+    }
+
+    @Test
+    void getMyAppointments_bookedOutOfOrder_returnsThemOrderedByStartTime() {
+        // Arrange: booked latest first, so insertion order differs from start-time order
+        LocalDate target = LocalDate.now().plusWeeks(1);
+        ValidDoctor doctor = seedDoctor(target);
+        ValidPatient caller = seedPatient();
+        LocalDateTime nine = LocalDateTime.of(target, LocalTime.of(9, 0));
+        LocalDateTime ten = LocalDateTime.of(target, LocalTime.of(10, 0));
+        LocalDateTime eleven = LocalDateTime.of(target, LocalTime.of(11, 0));
+        book(caller, doctor, eleven, AppointmentType.VACCINATION);
+        book(caller, doctor, nine, AppointmentType.VACCINATION);
+        book(caller, doctor, ten, AppointmentType.VACCINATION);
+
+        // Act
+        List<AppointmentResponse> appointments = getMyAppointments(caller);
+
+        // Assert
+        assertThat(appointments).extracting(AppointmentResponse::getDateTime).containsExactly(nine, ten, eleven);
     }
 
     @Test
