@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import * as authApi from "../api/auth";
-import { clearSession, getUsername, setSession } from "../api/client";
+import { clearSession, getUsername, onSessionCleared, setSession } from "../api/client";
 import type { LoginRequest, RegisterRequest } from "../api/types";
 
 interface AuthContextValue {
@@ -15,6 +15,8 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [username, setUsername] = useState<string | null>(getUsername());
+
+  useEffect(() => onSessionCleared("patient", () => setUsername(null)), []);
 
   async function login(data: LoginRequest): Promise<void> {
     const response = await authApi.login(data);

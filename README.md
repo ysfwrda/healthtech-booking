@@ -705,6 +705,14 @@ register/login, doctor search with specialty/language filters, doctor detail wit
 live availability, appointment booking, changing (purpose and time) and cancellation, and doctor register/login (`/doctors/register`,
 `/doctors/login`), mirroring the API described in Step 4.
 
+The patient and the doctor have separate interfaces. A visitor sees the public links; a logged-in patient sees only
+*Find a doctor* and *My appointments*; a logged-in doctor sees only *Appointments* and *My availability* and lands on
+`/doctor/appointments`. Logging in as one role logs the other out, so the two sets of links never mix. A doctor can
+list their appointments (filter by date range and status), confirm a pending one, change its type or time (not the
+patient's notes) and cancel it; on `/doctor/availability` they edit their weekly opening hours and add or remove
+vacations. A patient sees a pending appointment as "Awaiting confirmation" and an appointment that no longer fits the
+doctor's availability with a banner asking to reschedule or cancel (the 48-hour notice does not apply to it).
+
 ---
 
 ## Project Structure

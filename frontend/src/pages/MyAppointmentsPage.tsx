@@ -7,6 +7,7 @@ import { NoticeDialog } from "../components/NoticeDialog";
 import { StatusMessage } from "../components/StatusMessage";
 import { CHANGE_MIN_NOTICE_HOURS } from "../api/constants";
 import { isWithinChangeNotice } from "../dates";
+import { statusLabel, typeLabel } from "../labels";
 import type { AppointmentResponse } from "../api/types";
 
 export function MyAppointmentsPage() {
@@ -72,7 +73,8 @@ export function MyAppointmentsPage() {
   function handleChangeClick(appointment: AppointmentResponse) {
     setActionError("");
     setNotice("");
-    if (isWithinChangeNotice(appointment.dateTime)) {
+    // The notice period does not apply when the doctor's own availability change made the appointment unusable.
+    if (!appointment.conflictReason && isWithinChangeNotice(appointment.dateTime)) {
       blockChange();
       return;
     }
@@ -112,8 +114,8 @@ export function MyAppointmentsPage() {
           <li key={appointment.id} className={appointment.status === "CANCELLED" ? "cancelled" : undefined}>
             <span>{doctorNames[appointment.doctorId] ?? appointment.doctorId}</span>
             <span>{appointment.dateTime.replace("T", " ")}</span>
-            <span>{appointment.type}</span>
-            <span>{appointment.status}</span>
+            <span>{typeLabel(appointment.type)}</span>
+            <span className={`badge badge-${appointment.status.toLowerCase()}`}>{statusLabel(appointment.status)}</span>
             {appointment.status !== "CANCELLED" && (
               <>
                 <button
@@ -131,6 +133,11 @@ export function MyAppointmentsPage() {
                   {cancellingId === appointment.id ? "Cancelling..." : "Cancel"}
                 </button>
               </>
+            )}
+            {appointment.conflictReason && appointment.status !== "CANCELLED" && (
+              <p className="flag-banner" role="status">
+                Your doctor is no longer available at this time. Please change the time or cancel the appointment.
+              </p>
             )}
             {changingId === appointment.id && (
               <ChangeAppointmentForm

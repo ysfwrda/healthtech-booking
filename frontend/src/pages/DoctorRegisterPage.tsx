@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { useDoctorAuth } from "../auth/DoctorAuthContext";
 import { getSpecialties } from "../api/doctors";
 import { ApiError } from "../api/client";
@@ -29,6 +30,7 @@ function isDuplicateRow(rows: OpeningHoursRow[], candidate: OpeningHoursRow, exc
 
 export function DoctorRegisterPage() {
   const { registerDoctor } = useDoctorAuth();
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const [firstName, setFirstName] = useState("");
@@ -144,7 +146,8 @@ export function DoctorRegisterPage() {
         openingHours: payload,
         languages: Array.from(selectedLanguages),
       });
-      navigate("/doctors");
+      logout();
+      navigate("/doctor/appointments");
     } catch (err) {
       setStatus("error");
       if (err instanceof ApiError) {

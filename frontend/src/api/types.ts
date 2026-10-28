@@ -24,6 +24,9 @@ export type AppointmentType = "INITIAL_CONSULTATION" | "FOLLOW_UP" | "VACCINATIO
 
 export type AppointmentStatus = "PENDING" | "CONFIRMED" | "CANCELLED";
 
+// Why a booked appointment no longer fits the doctor's availability; absent or null when it fits.
+export type ConflictReason = "OUTSIDE_OPENING_HOURS" | "DOCTOR_VACATION";
+
 export interface RegisterRequest {
   firstName: string;
   lastName: string;
@@ -139,8 +142,50 @@ export interface AppointmentResponse {
   duration: number;
   type: AppointmentType;
   status: AppointmentStatus;
+  conflictReason?: ConflictReason | null;
   notes?: string;
   createdAt: string;
+}
+
+export interface DoctorAppointmentResponse {
+  id: string;
+  patientId: string;
+  patientName?: string | null;
+  patientEmail?: string | null;
+  doctorId: string;
+  dateTime: string;
+  duration: number;
+  type: AppointmentType;
+  status: AppointmentStatus;
+  conflictReason?: ConflictReason | null;
+  notes?: string;
+  createdAt: string;
+}
+
+// A doctor changes the type and/or the time, never the patient's notes.
+export interface DoctorAppointmentUpdateRequest {
+  type?: AppointmentType;
+  dateTime?: string;
+}
+
+export interface VacationDto {
+  id: string;
+  startDate: string;
+  endDate: string;
+}
+
+export interface VacationRequest {
+  startDate: string;
+  endDate: string;
+}
+
+export interface AvailabilityResponse {
+  openingHours: OpeningHoursDto[];
+  vacations: VacationDto[];
+}
+
+export interface OpeningHoursUpdateRequest {
+  openingHours: OpeningHoursDto[];
 }
 
 export interface ProblemDetail {

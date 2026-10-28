@@ -7,15 +7,28 @@ import { SlotPicker } from "./SlotPicker";
 import { StatusMessage } from "./StatusMessage";
 import type { AppointmentResponse, AppointmentType, AppointmentUpdateRequest } from "../api/types";
 
+// What the form needs of an appointment; both the patient's and the doctor's view of one have it.
+type ChangeableAppointment = Pick<AppointmentResponse, "id" | "doctorId" | "dateTime" | "type" | "notes">;
+
 interface ChangeAppointmentFormProps {
-  appointment: AppointmentResponse;
+  appointment: ChangeableAppointment;
   onSaved: () => void;
   onClose: () => void;
-  // The server refused because the appointment starts inside the notice period.
-  onWindowClosed: () => void;
+  // The server refused because the appointment starts inside the notice period (patients only).
+  onWindowClosed?: () => void;
+  // The notes belong to the patient: the doctor's form leaves them out.
+  canEditNotes?: boolean;
+  save?: (id: string, update: AppointmentUpdateRequest) => Promise<unknown>;
 }
 
-export function ChangeAppointmentForm({ appointment, onSaved, onClose, onWindowClosed }: ChangeAppointmentFormProps) {
+export function ChangeAppointmentForm({
+  appointment,
+  onSaved,
+  onClose,
+  onWindowClosed,
+  canEditNotes = true,
+  save = updateAppointment,
+}: ChangeAppointmentFormProps) {
   const [type, setType] = useState<AppointmentType>(appointment.type);
   const [notes, setNotes] = useState(appointment.notes ?? "");
   const [date, setDate] = useState(appointment.dateTime.slice(0, 10));
@@ -29,7 +42,7 @@ export function ChangeAppointmentForm({ appointment, onSaved, onClose, onWindowC
   if (type !== appointment.type) {
     update.type = type;
   }
-  if (notes !== (appointment.notes ?? "")) {
+  if (canEditNotes && notes !== (appointment.notes ?? "")) {
     update.notes = notes;
   }
   if (selectedSlot) {
@@ -46,10 +59,10 @@ export function ChangeAppointmentForm({ appointment, onSaved, onClose, onWindowC
     setSaving(true);
     setError("");
     try {
-      await updateAppointment(appointment.id, update);
+      await save(appointment.id, update);
       onSaved();
     } catch (err) {
-      if (err instanceof ApiError && err.title === "Change Window Closed") {
+      if (err instanceof ApiError && err.title === "Change Window Closed" && onWindowClosed) {
         onWindowClosed();
         return;
       }
@@ -77,10 +90,12 @@ export function ChangeAppointmentForm({ appointment, onSaved, onClose, onWindowC
           ))}
         </select>
       </label>
-      <label>
-        Notes (optional)
-        <textarea value={notes} maxLength={500} onChange={(e) => setNotes(e.target.value)} />
-      </label>
+      {canEditNotes && (
+        <label>
+          Notes (optional)
+          <textarea value={notes} maxLength={500} onChange={(e) => setNotes(e.target.value)} />
+        </label>
+      )}
       <label>
         New date (leave the time unselected to keep the current one)
         <input type="date" value={date} min={todayIsoDate()} onChange={(e) => changeDate(e.target.value)} />
