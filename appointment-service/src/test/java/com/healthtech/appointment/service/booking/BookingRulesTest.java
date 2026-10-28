@@ -3,7 +3,9 @@ package com.healthtech.appointment.service.booking;
 import com.healthtech.appointment.exception.OutsideOpeningHoursException;
 import com.healthtech.appointment.exception.SlotInPastException;
 import com.healthtech.appointment.exception.SlotNotAlignedException;
+import com.healthtech.appointment.exception.SlotOnVacationException;
 import com.healthtech.appointment.readmodel.OpeningHours;
+import com.healthtech.appointment.readmodel.VacationPeriod;
 import com.healthtech.appointment.readmodel.ValidDoctor;
 import com.healthtech.appointment.service.SlotPolicy;
 import org.junit.jupiter.api.Test;
@@ -125,5 +127,47 @@ class BookingRulesTest {
         LocalDateTime pastAndOutsideHours = MONDAY.atTime(7, 0);
         assertThatThrownBy(() -> rules.forEach(rule -> rule.check(pastAndOutsideHours, mondayNineToFive)))
                 .isInstanceOf(OutsideOpeningHoursException.class);
+    }
+
+    private ValidDoctor onVacationFromTuesdayToThursday() {
+        return ValidDoctor.builder()
+                .vacations(Set.of(VacationPeriod.builder()
+                        .startDate(MONDAY.plusDays(1)).endDate(MONDAY.plusDays(3)).build()))
+                .build();
+    }
+
+    @Test
+    void notOnVacation_firstDayOfVacation_shouldThrowSlotOnVacation() {
+        // Act & Assert
+        assertThatThrownBy(() -> new NotOnVacationRule().check(MONDAY.plusDays(1).atTime(9, 0), onVacationFromTuesdayToThursday()))
+                .isInstanceOf(SlotOnVacationException.class);
+    }
+
+    @Test
+    void notOnVacation_lastDayOfVacation_shouldThrowSlotOnVacation() {
+        // Act & Assert
+        assertThatThrownBy(() -> new NotOnVacationRule().check(MONDAY.plusDays(3).atTime(16, 30), onVacationFromTuesdayToThursday()))
+                .isInstanceOf(SlotOnVacationException.class);
+    }
+
+    @Test
+    void notOnVacation_dayBeforeAndDayAfter_shouldPass() {
+        // Act & Assert
+        assertThatCode(() -> new NotOnVacationRule().check(MONDAY.atTime(9, 0), onVacationFromTuesdayToThursday()))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> new NotOnVacationRule().check(MONDAY.plusDays(4).atTime(9, 0), onVacationFromTuesdayToThursday()))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void notOnVacation_runsAfterTheOtherRules() {
+        // Arrange
+        List<BookingRule> rules = new ArrayList<>(List.of(new NotOnVacationRule(), notInPast, withinOpeningHours, slotAligned));
+
+        // Act
+        rules.sort(AnnotationAwareOrderComparator.INSTANCE);
+
+        // Assert
+        assertThat(rules.get(3)).isInstanceOf(NotOnVacationRule.class);
     }
 }

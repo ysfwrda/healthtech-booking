@@ -5,10 +5,13 @@
 # Flow: register patient -> register doctor -> read availability -> book a slot
 #       -> confirm slot disappears -> double-book (rejected) -> change the
 #       appointment (purpose and time) -> confirm old slot returns and new one
-#       is taken -> cancel -> confirm slot reappears.
+#       is taken -> cancel -> confirm slot reappears. Then the doctor side:
+#       a new booking is PENDING -> the doctor lists, confirms and changes it
+#       -> a vacation or shorter hours flag it (and offer no slots) -> the doctor
+#       removes the vacation and cancels.
 #
 # All calls go through the API Gateway (8080). Booking and cancel require a
-# patient JWT (Authorization: Bearer). The patient identity is taken from the
+# patient JWT (Authorization: Bearer); the doctor endpoints require the doctor JWT. The patient identity is taken from the
 # token subject, so patientId is NOT sent in the request body.
 #
 # Requires: curl, jq. Services and infra (Kafka, Postgres) must be running.
@@ -133,5 +136,91 @@ else
   fail "slot $SLOT did NOT reappear after cancellation"
 fi
 
+# --- The doctor's side: pending bookings, confirm, change, vacation, cancel -----------------------------------------
+
+DOCTOR_TOKEN="$(echo "$DOCTOR_RESP" | jq -r '.token')"
+[ "$DOCTOR_TOKEN" != "null" ] && [ -n "$DOCTOR_TOKEN" ] || fail "no token in doctor register response: $DOCTOR_RESP"
+
+# Polls a command until it succeeds; the doctor-service -> appointment-service events arrive asynchronously.
+wait_for() { for _ in $(seq 1 30); do eval "$1" >/dev/null 2>&1 && return 0; sleep 1; done; return 1; }
+
+section "Book with the new doctor (expect PENDING: only seeded doctors confirm automatically)"
+PENDING_RESP="$(curl -s -X POST "$GATEWAY/api/appointments" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{ "doctorId": "'"$DOCTOR_ID"'", "dateTime": "'"$SLOT"'", "type": "INITIAL_CONSULTATION", "notes": "for the doctor" }')"
+DR_APPOINTMENT_ID="$(echo "$PENDING_RESP" | jq -r '.id')"
+[ "$(echo "$PENDING_RESP" | jq -r '.status')" = "PENDING" ] || fail "new booking is not PENDING: $PENDING_RESP"
+ok "booked, status PENDING, appointmentId=$DR_APPOINTMENT_ID"
+
+section "Doctor endpoints reject the patient token (403) and no token (401)"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$GATEWAY/api/appointments/doctor" -H "Authorization: Bearer $TOKEN")" = "403" ] || fail "patient token on the doctor list was not 403"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$GATEWAY/api/appointments/doctor")" = "401" ] || fail "doctor list without a token was not 401"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$GATEWAY/api/doctors/me/availability")" = "401" ] || fail "availability without a token was not 401"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$GATEWAY/api/doctors/me/availability" -H "Authorization: Bearer $TOKEN")" = "403" ] || fail "patient token on the availability was not 403"
+ok "roles enforced"
+
+section "Doctor lists the appointment (with the patient name)"
+DR_LIST="$(curl -s "$GATEWAY/api/appointments/doctor?from=$BOOKING_DATE&to=$BOOKING_DATE&status=PENDING" -H "Authorization: Bearer $DOCTOR_TOKEN")"
+echo "$DR_LIST" | jq -e --arg id "$DR_APPOINTMENT_ID" 'map(select(.id == $id and .patientName == "John Doe")) | length == 1' >/dev/null || fail "pending appointment not in the doctor's list: $DR_LIST"
+ok "listed with patientName"
+
+section "Doctor confirms"
+CONFIRM_RESP="$(curl -s -X PUT "$GATEWAY/api/appointments/doctor/$DR_APPOINTMENT_ID/confirm" -H "Authorization: Bearer $DOCTOR_TOKEN")"
+[ "$(echo "$CONFIRM_RESP" | jq -r '.status')" = "CONFIRMED" ] || fail "confirm did not give CONFIRMED: $CONFIRM_RESP"
+ok "confirmed"
+
+section "Doctor changes the time (no 48-hour rule for the doctor)"
+DR_NEW_SLOT="$(echo "$AVAIL_BEFORE" | jq -r '.availableSlots[2]')"
+DR_CHANGE_RESP="$(curl -s -X PATCH "$GATEWAY/api/appointments/doctor/$DR_APPOINTMENT_ID" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DOCTOR_TOKEN" \
+  -d '{ "dateTime": "'"$DR_NEW_SLOT"'" }')"
+[ "$(echo "$DR_CHANGE_RESP" | jq -r '.dateTime' | cut -c1-16)" = "$(echo "$DR_NEW_SLOT" | cut -c1-16)" ] || fail "doctor change did not move the appointment: $DR_CHANGE_RESP"
+[ "$(echo "$DR_CHANGE_RESP" | jq -r '.status')" = "CONFIRMED" ] || fail "doctor change altered the status: $DR_CHANGE_RESP"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X PATCH "$GATEWAY/api/appointments/doctor/$DR_APPOINTMENT_ID" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DOCTOR_TOKEN" -d '{ "notes": "x" }')" = "400" ] || fail "doctor change with only notes was not 400"
+ok "moved to $DR_NEW_SLOT, status unchanged, notes not editable"
+
+section "Doctor enters a vacation covering the appointment (the change is saved, the appointment is flagged)"
+VACATION_RESP="$(curl -s -X POST "$GATEWAY/api/doctors/me/availability/vacations" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DOCTOR_TOKEN" \
+  -d '{ "startDate": "'"$BOOKING_DATE"'", "endDate": "'"$BOOKING_DATE"'" }')"
+VACATION_ID="$(echo "$VACATION_RESP" | jq -r '.id')"
+[ "$VACATION_ID" != "null" ] && [ -n "$VACATION_ID" ] || fail "vacation was not saved: $VACATION_RESP"
+wait_for "curl -s '$GATEWAY/api/appointments' -H 'Authorization: Bearer $TOKEN' | jq -e --arg id '$DR_APPOINTMENT_ID' 'map(select(.id == \$id and .conflictReason == \"DOCTOR_VACATION\")) | length == 1'" \
+  || fail "appointment was not flagged DOCTOR_VACATION after the vacation"
+ok "vacation saved, appointment flagged DOCTOR_VACATION"
+
+section "On the vacation day: no slots, booking rejected (400), confirm refused for a flagged pending appointment"
+wait_for "curl -s '$GATEWAY/api/availability?doctorId=$DOCTOR_ID&date=$BOOKING_DATE' | jq -e '.availableSlots | length == 0'" || fail "slots are still offered on the vacation day"
+VAC_BOOK_CODE="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$GATEWAY/api/appointments" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{ "doctorId": "'"$DOCTOR_ID"'", "dateTime": "'"$SLOT"'", "type": "FOLLOW_UP" }')"
+[ "$VAC_BOOK_CODE" = "400" ] || fail "booking on the vacation day returned $VAC_BOOK_CODE (expected 400)"
+ok "no slots, booking rejected"
+
+section "Doctor removes the vacation (the flag clears and the slots return)"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "$GATEWAY/api/doctors/me/availability/vacations/$VACATION_ID" -H "Authorization: Bearer $DOCTOR_TOKEN")" = "204" ] || fail "vacation delete was not 204"
+wait_for "curl -s '$GATEWAY/api/appointments' -H 'Authorization: Bearer $TOKEN' | jq -e --arg id '$DR_APPOINTMENT_ID' 'map(select(.id == \$id and .conflictReason == null)) | length == 1'" \
+  || fail "flag did not clear after the vacation was removed"
+ok "flag cleared"
+
+section "Doctor shortens the opening hours below the appointment (saved, appointment flagged OUTSIDE_OPENING_HOURS)"
+SHORT_CODE="$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$GATEWAY/api/doctors/me/availability/opening-hours" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DOCTOR_TOKEN" \
+  -d '{ "openingHours": [ { "dayOfWeek": "TUESDAY", "startTime": "09:00", "endTime": "10:00" } ] }')"
+[ "$SHORT_CODE" = "200" ] || fail "opening-hours change returned $SHORT_CODE (expected 200)"
+wait_for "curl -s '$GATEWAY/api/appointments' -H 'Authorization: Bearer $TOKEN' | jq -e --arg id '$DR_APPOINTMENT_ID' 'map(select(.id == \$id and .conflictReason == \"OUTSIDE_OPENING_HOURS\")) | length == 1'" \
+  || fail "appointment was not flagged OUTSIDE_OPENING_HOURS"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$GATEWAY/api/doctors/me/availability/opening-hours" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $DOCTOR_TOKEN" \
+  -d '{ "openingHours": [ { "dayOfWeek": "MONDAY", "startTime": "09:15", "endTime": "10:00" } ] }')" = "400" ] || fail "off-grid opening hours were not rejected with 400"
+ok "flagged; off-grid hours rejected"
+
+section "Doctor cancels (no notice period)"
+DR_CANCEL_CODE="$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$GATEWAY/api/appointments/doctor/$DR_APPOINTMENT_ID/cancel" -H "Authorization: Bearer $DOCTOR_TOKEN")"
+[ "$DR_CANCEL_CODE" = "200" ] || fail "doctor cancel returned $DR_CANCEL_CODE (expected 200)"
+ok "cancelled by the doctor"
+
 section "Done"
-ok "full booking pipeline exercised"
+ok "full booking pipeline exercised, including the doctor's side"

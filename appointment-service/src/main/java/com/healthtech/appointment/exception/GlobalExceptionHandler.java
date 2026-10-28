@@ -97,6 +97,30 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problemDetail;
     }
 
+    @ExceptionHandler(SlotOnVacationException.class)
+    public ProblemDetail handleSlotOnVacationException(SlotOnVacationException ex) {
+        log.warn("{}, status 400", ex.getMessage());
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problemDetail.setTitle("Slot On Vacation");
+        return problemDetail;
+    }
+
+    @ExceptionHandler(InvalidDateRangeException.class)
+    public ProblemDetail handleInvalidDateRangeException(InvalidDateRangeException ex) {
+        log.warn("{}, status 400", ex.getMessage());
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problemDetail.setTitle("Invalid Date Range");
+        return problemDetail;
+    }
+
+    @ExceptionHandler(AppointmentNotConfirmableException.class)
+    public ProblemDetail handleAppointmentNotConfirmableException(AppointmentNotConfirmableException ex) {
+        log.warn("{}, status 409", ex.getMessage());
+        ProblemDetail problemDetail = forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problemDetail.setTitle("Appointment Not Confirmable");
+        return problemDetail;
+    }
+
     @ExceptionHandler(ChangeWindowClosedException.class)
     public ProblemDetail handleChangeWindowClosedException(ChangeWindowClosedException ex) {
         log.warn("{}, status 409", ex.getMessage());

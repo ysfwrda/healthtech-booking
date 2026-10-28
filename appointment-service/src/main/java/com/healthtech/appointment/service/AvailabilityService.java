@@ -41,6 +41,14 @@ public class AvailabilityService {
                     .build();
         }
 
+        if (doctor.isOnVacation(date)) {
+            return AvailableSlotsResponse.builder()
+                    .doctorId(doctorId)
+                    .date(date)
+                    .availableSlots(List.of())
+                    .build();
+        }
+
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.plusDays(1).atStartOfDay();
 

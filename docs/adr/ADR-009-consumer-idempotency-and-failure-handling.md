@@ -71,10 +71,16 @@ rejected:
 * This is tested against real Postgres, not an in-memory substitute, because constraint and flush
   behavior differ.
 
-**Read models.** No code change. The `patient.registered` and `doctor.registered` consumers are
-idempotent by keyed upsert. This is proven by redelivery tests rather than assumed
-(`ReadModelProjectionIntegrationTest`): redelivering `DoctorRegistered` leaves `openingHours`
-unchanged and not duplicated, and redelivering `PatientRegistered` leaves the projection unchanged.
+**Read models.** The `patient.registered` consumer is idempotent by keyed upsert. The `doctor.registered` consumer is
+keyed by id as well, but no longer a plain upsert: for a doctor it already knows it updates only the names and
+`autoConfirmBookings`, so a repeated event cannot undo availability changes. The doctor's hours and vacations come from
+`doctor.availability-updated`, a full snapshot with a per-doctor `version`; the consumer applies it only when the version
+is greater than the one stored, and runs its re-check of the booked appointments on every delivery because that step only
+acts on appointments whose flag has to change. Both consumers lock the doctor's row, so they cannot overwrite each other.
+This is proven by redelivery and race tests rather than assumed (`ReadModelProjectionIntegrationTest`,
+`AvailabilityChangeIntegrationTest`, `DoctorAvailabilityKafkaIntegrationTest`): redelivering `DoctorRegistered` leaves
+`openingHours` unchanged and not duplicated, redelivering `PatientRegistered` leaves the projection unchanged, and an older
+or repeated availability snapshot changes nothing.
 
 **Poison pills** *(not implemented).* Consumers wrap their deserializers in
 `ErrorHandlingDeserializer`. Without it a deserialization failure is thrown inside the Kafka client
@@ -147,6 +153,9 @@ The consumers in notification-service and appointment-service still use a plain 
 with the default error handling, and none has a retry policy or dead-letter topic. The
 Consequences about failure handling describe the state after that work.
 
+appointment-service's mapper ignores unknown JSON properties, so a producer that adds a field does not
+turn every record into a poison pill before the consumer is upgraded.
+
 ## Consequences
 
 ### Positive
@@ -180,7 +189,9 @@ Consequences about failure handling describe the state after that work.
   `appointment.changed` is an update event, but notification-service only inserts a notification
   row for it and overwrites nothing, so an out-of-order event produces notifications in a different
   order and corrupts no state. It becomes a real problem the day a consumer applies update events
-  to stored state, when a version or sequence check will be required.
+  to stored state, when a version or sequence check will be required. That day has come for the doctor read model in
+appointment-service: `doctor.availability-updated` carries a `version` that doctor-service increases by one under a lock
+on the doctor's row, and the consumer ignores a version that is not newer than the stored one.
 * **Event payloads may carry more personal data than consumers need.** The payloads, and the
   outbox and DLT copies of them, are patient data held for retention periods nobody chose on
   data-minimization grounds. Payload contents should be reviewed against what each consumer

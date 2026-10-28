@@ -133,6 +133,24 @@ class DoctorAuthServiceTest {
     }
 
     @Test
+    void register_selfRegisteredDoctor_publishesAutoConfirmBookingsFalse() {
+        // Arrange
+        Specialty specialty = Specialty.builder().id(specialtyId).name("Cardiology").build();
+        when(doctorMapper.toEntity(registrationRequest)).thenReturn(doctor);
+        when(passwordEncoder.encode("secret123")).thenReturn("$2a$hashed");
+        when(specialtyRepository.findById(specialtyId)).thenReturn(Optional.of(specialty));
+        when(doctorRepository.saveAndFlush(doctor)).thenReturn(doctor);
+        when(doctorTokenProvider.generateToken(doctorId)).thenReturn("jwt-token");
+
+        // Act
+        doctorAuthService.register(registrationRequest);
+
+        // Assert
+        verify(outboxRepository).save(argThat(row ->
+                row.getPayload().contains("\"autoConfirmBookings\":false")));
+    }
+
+    @Test
     void register_passwordIsStoredAsHash_notPlaintext() {
         // Arrange
         Specialty specialty = Specialty.builder().id(specialtyId).name("Cardiology").build();

@@ -33,6 +33,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/doctors/register", "/api/doctors/login").permitAll()
+                        // A doctor's own availability. Must come before the public GET /api/doctors/** rule below,
+                        // which would otherwise let an unauthenticated GET through to the doctor service.
+                        .requestMatchers("/api/doctors/me/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/doctors/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/specialties/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/availability/**").permitAll()

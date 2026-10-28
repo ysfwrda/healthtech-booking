@@ -11,6 +11,8 @@
 #   - an OPTIONS preflight on a public POST route is not blocked (401/403)
 #   - PATCH /api/appointments/{id} (change): no token is 401, a DOCTOR token is 403,
 #     and the CORS preflight for PATCH is allowed
+#   - the doctor endpoints (/api/appointments/doctor/**, /api/doctors/me/**): a DOCTOR token
+#     passes, no token is 401 and a PATIENT token is 403, although GET /api/doctors/** is public
 #
 # Requires: curl, jq. Services and infra (Kafka, Postgres) must be running
 # (docker compose up -d), same precondition as scripts/test-flow.sh.
@@ -98,6 +100,38 @@ section "PATCH /api/appointments/{id} with a DOCTOR token: 403"
 CODE="$(curl -s -o /dev/null -w '%{http_code}' -X PATCH "$GATEWAY/api/appointments/$SOME_ID" \
   -H "Authorization: Bearer $DOCTOR_TOKEN" -H "Content-Type: application/json" -d '{ "type": "FOLLOW_UP" }')"
 assert_status "PATCH /api/appointments/{id} with DOCTOR token" 403 "$CODE"
+
+section "The doctor's own endpoints: DOCTOR token passes, no token is 401, PATIENT token is 403"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' "$GATEWAY/api/appointments/doctor" \
+  -H "Authorization: Bearer $DOCTOR_TOKEN")"
+assert_status "GET /api/appointments/doctor with DOCTOR token" 200 "$CODE"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' "$GATEWAY/api/appointments/doctor")"
+assert_status "GET /api/appointments/doctor with no token" 401 "$CODE"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' "$GATEWAY/api/appointments/doctor" \
+  -H "Authorization: Bearer $PATIENT_TOKEN")"
+assert_status "GET /api/appointments/doctor with PATIENT token" 403 "$CODE"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$GATEWAY/api/appointments/doctor/$SOME_ID/confirm")"
+assert_status "PUT /api/appointments/doctor/{id}/confirm with no token" 401 "$CODE"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$GATEWAY/api/appointments/doctor/$SOME_ID/cancel" \
+  -H "Authorization: Bearer $PATIENT_TOKEN")"
+assert_status "PUT /api/appointments/doctor/{id}/cancel with PATIENT token" 403 "$CODE"
+
+section "/api/doctors/me/availability sits under the public GET /api/doctors/**: it must still need a DOCTOR token"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' "$GATEWAY/api/doctors/me/availability")"
+assert_status "GET /api/doctors/me/availability with no token" 401 "$CODE"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' "$GATEWAY/api/doctors/me/availability" \
+  -H "Authorization: Bearer $PATIENT_TOKEN")"
+assert_status "GET /api/doctors/me/availability with PATIENT token" 403 "$CODE"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' "$GATEWAY/api/doctors/me/availability" \
+  -H "Authorization: Bearer $DOCTOR_TOKEN")"
+assert_status "GET /api/doctors/me/availability with DOCTOR token" 200 "$CODE"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$GATEWAY/api/doctors/me/availability/opening-hours" \
+  -H "Content-Type: application/json" -d '{ "openingHours": [] }')"
+assert_status "PUT /api/doctors/me/availability/opening-hours with no token" 401 "$CODE"
+CODE="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$GATEWAY/api/doctors/me/availability/vacations" \
+  -H "Authorization: Bearer $PATIENT_TOKEN" -H "Content-Type: application/json" \
+  -d '{ "startDate": "2030-01-01", "endDate": "2030-01-02" }')"
+assert_status "POST /api/doctors/me/availability/vacations with PATIENT token" 403 "$CODE"
 
 section "OPTIONS preflight for PATCH on an appointment: allowed"
 PREFLIGHT_HEADERS="$(curl -s -D - -o /dev/null -X OPTIONS "$GATEWAY/api/appointments/$SOME_ID" \

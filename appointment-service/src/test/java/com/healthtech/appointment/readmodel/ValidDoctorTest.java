@@ -3,6 +3,7 @@ package com.healthtech.appointment.readmodel;
 import org.junit.jupiter.api.Test;
 
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Set;
 
@@ -65,5 +66,45 @@ class ValidDoctorTest {
         assertThat(doctor.isOpenFor(DayOfWeek.MONDAY, LocalTime.of(12, 0), LocalTime.of(12, 30))).isFalse();
         assertThat(doctor.isOpenFor(DayOfWeek.WEDNESDAY, LocalTime.of(9, 0), LocalTime.of(9, 30))).isFalse();
         assertThat(doctor.isOpenFor(DayOfWeek.TUESDAY, LocalTime.of(10, 0), LocalTime.of(10, 30))).isFalse();
+    }
+
+    private static VacationPeriod vacation(LocalDate start, LocalDate end) {
+        return VacationPeriod.builder().startDate(start).endDate(end).build();
+    }
+
+    @Test
+    void isOnVacation_shouldIncludeBothEndDaysAndExcludeTheDaysAround() {
+        // Arrange
+        ValidDoctor onVacation = ValidDoctor.builder()
+                .vacations(Set.of(vacation(LocalDate.of(2026, 12, 24), LocalDate.of(2026, 12, 26))))
+                .build();
+
+        // Act & Assert
+        assertThat(onVacation.isOnVacation(LocalDate.of(2026, 12, 23))).isFalse();
+        assertThat(onVacation.isOnVacation(LocalDate.of(2026, 12, 24))).isTrue();
+        assertThat(onVacation.isOnVacation(LocalDate.of(2026, 12, 25))).isTrue();
+        assertThat(onVacation.isOnVacation(LocalDate.of(2026, 12, 26))).isTrue();
+        assertThat(onVacation.isOnVacation(LocalDate.of(2026, 12, 27))).isFalse();
+    }
+
+    @Test
+    void isOnVacation_singleDayVacation_coversOnlyThatDay() {
+        // Arrange
+        ValidDoctor onVacation = ValidDoctor.builder()
+                .vacations(Set.of(vacation(LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 1))))
+                .build();
+
+        // Act & Assert
+        assertThat(onVacation.isOnVacation(LocalDate.of(2026, 5, 1))).isTrue();
+        assertThat(onVacation.isOnVacation(LocalDate.of(2026, 5, 2))).isFalse();
+    }
+
+    @Test
+    void isOnVacation_noVacations_isFalse() {
+        // Arrange
+        ValidDoctor noVacation = ValidDoctor.builder().build();
+
+        // Act & Assert
+        assertThat(noVacation.isOnVacation(LocalDate.of(2026, 5, 1))).isFalse();
     }
 }

@@ -28,12 +28,14 @@ import java.util.UUID;
 public class AppointmentController {
     private final AppointmentService appointmentService;
 
-    @Operation(summary = "Book an appointment for the authenticated patient")
+    @Operation(summary = "Book an appointment for the authenticated patient",
+            description = "The appointment starts PENDING until the doctor confirms it, or CONFIRMED when the doctor confirms bookings automatically.")
     @ApiResponse(responseCode = "201", description = "Appointment booked",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = AppointmentResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failed, malformed request, slot not aligned to the slot grid, outside the doctor's opening hours, or slot in the past")
+    @ApiResponse(responseCode = "400", description = "Validation failed, malformed request, slot not aligned to the slot grid, outside the doctor's opening hours, on one of the doctor's vacation days, or slot in the past")
     @ApiResponse(responseCode = "404", description = "Doctor or patient not found. A patient who just registered may briefly get this until their record reaches the appointment service")
     @ApiResponse(responseCode = "409", description = "Slot already booked")
+    @ApiResponse(responseCode = "503", description = "The doctor's schedule is being changed and could not be read within 3 seconds; retry shortly (Retry-After: 1). Nothing was booked, so retrying is safe")
     @PostMapping
     public ResponseEntity<AppointmentResponse> bookAppointment(@Valid @RequestBody AppointmentRequest request,
                                                                @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
@@ -56,11 +58,11 @@ public class AppointmentController {
                     + "before the current start time; the new time itself only has to be in the future.")
     @ApiResponse(responseCode = "200", description = "Appointment changed (or already as requested)",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = AppointmentResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Validation failed (no field given, notes too long), slot not aligned to the slot grid, outside the doctor's opening hours, or slot in the past")
+    @ApiResponse(responseCode = "400", description = "Validation failed (no field given, notes too long), slot not aligned to the slot grid, outside the doctor's opening hours, on one of the doctor's vacation days, or slot in the past")
     @ApiResponse(responseCode = "403", description = "The token is not a patient token, or the resource belongs to another patient")
     @ApiResponse(responseCode = "404", description = "Appointment not found, or the doctor is not known to the appointment service")
-    @ApiResponse(responseCode = "409", description = "Slot already booked, the appointment is cancelled, or it starts in less than the minimum notice period")
-    @ApiResponse(responseCode = "503", description = "The appointment is locked by another request and could not be changed within 3 seconds; retry shortly (Retry-After: 1)")
+    @ApiResponse(responseCode = "409", description = "Slot already booked, the appointment is cancelled, or it starts in less than the minimum notice period (the notice period does not apply to an appointment flagged because the doctor's availability changed)")
+    @ApiResponse(responseCode = "503", description = "The appointment or the doctor's schedule is locked by another request and could not be changed within 3 seconds; retry shortly (Retry-After: 1)")
     @PatchMapping("/{id}")
     public ResponseEntity<AppointmentResponse> updateAppointment(@PathVariable UUID id,
                                                                  @Valid @RequestBody AppointmentUpdateRequest request,

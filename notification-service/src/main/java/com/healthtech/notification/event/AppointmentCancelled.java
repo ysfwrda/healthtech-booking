@@ -23,6 +23,13 @@ public class AppointmentCancelled implements AppointmentNotificationEvent {
     private Integer duration;
     private LocalDateTime dateTime;
     private LocalDateTime cancelledAt;
+    // PATIENT or DOCTOR; absent in events from before the doctor could cancel, which means the patient.
+    private String cancelledBy;
+
+    @Override
+    public boolean initiatedByDoctor() {
+        return "DOCTOR".equals(cancelledBy);
+    }
 
     @Override
     public NotificationType notificationType() {

@@ -27,6 +27,13 @@ operations:
 for notification-service, was added after this decision and publishes through the outbox from the
 start. It locks the row first and publishes nothing when only the notes change.
 
+The doctor's side was added the same way. `AppointmentService` also publishes `AppointmentConfirmed`
+(`appointment.confirmed`) on a doctor's confirm, `AppointmentCancelled` and `AppointmentChanged` on a doctor's cancel
+and change, and `AvailabilityChangeService` publishes `AppointmentRescheduleRequired`
+(`appointment.reschedule-required`) when an availability change makes a booked appointment no longer fit. In
+doctor-service, `AvailabilityService` publishes `DoctorAvailabilityUpdated` (`doctor.availability-updated`) on every
+change of the opening hours or the vacations. Each writes its outbox row in the transaction of the change it describes.
+
 Postgres and Kafka are separate systems with no shared transaction, so these two writes cannot
 succeed or fail together. This is the dual-write problem, and it appears here in two directions.
 
@@ -165,11 +172,11 @@ specified in ADR-009 and is not implemented yet.
 
 **Scope.** Every domain event goes through the outbox, including those of the demo
 `DoctorSeeder`. The seeder is a bootstrap path rather than a request path, but re-running it does
-not regenerate a lost event: it skips doctors that already exist, so a seeded doctor whose
-`doctor.registered` was lost would never reach appointment-service's `valid_doctor` read model and
-every booking for that doctor would return 404. The seeder therefore saves each doctor and writes
-its outbox row in one transaction, the same as a self-registration, and a Kafka outage at startup
-only delays the event.
+not regenerate a lost event for a doctor it creates: if the transaction committed, the outbox row exists. For a
+doctor that already exists it publishes `doctor.registered` again on every start, so a read-model row that was lost or
+that predates a field of the event (`autoConfirmBookings`) is repaired; appointment-service ignores the hours of the
+repeated event for a doctor it already knows. The seeder saves each new doctor and writes its outbox row in one
+transaction, the same as a self-registration, and a Kafka outage at startup only delays the event.
 
 **Retention.** Published rows are pruned daily, retaining seven days. A daily job against a
 weekly retention keeps the maximum age bounded at eight days; a weekly job would allow fourteen.

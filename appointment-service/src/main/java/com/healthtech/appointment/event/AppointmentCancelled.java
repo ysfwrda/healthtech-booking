@@ -18,4 +18,5 @@ public class AppointmentCancelled {
     private Integer duration;
     private LocalDateTime dateTime;
     private LocalDateTime cancelledAt;
+    private Initiator cancelledBy;
 }

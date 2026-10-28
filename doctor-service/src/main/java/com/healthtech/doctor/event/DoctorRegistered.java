@@ -18,4 +18,6 @@ public class DoctorRegistered {
     private String lastName;
     private Set<OpeningHoursData> openingHours;
     private LocalDateTime registeredAt;
+    // True only for the seeded demo doctors: their bookings are confirmed on the spot.
+    private boolean autoConfirmBookings;
 }

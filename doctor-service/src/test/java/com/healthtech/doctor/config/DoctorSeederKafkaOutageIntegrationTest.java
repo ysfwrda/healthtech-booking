@@ -126,15 +126,17 @@ class DoctorSeederKafkaOutageIntegrationTest {
     }
 
     @Test
-    void run_doctorsAlreadyExist_writesNoAdditionalOutboxRow() {
+    void run_doctorsAlreadyExist_writesOneMoreOutboxRowPerSeededDoctor() {
         // Arrange
         long doctorRegisteredRowsBefore = doctorRegisteredRowCount();
+        long doctorsBefore = doctorRepository.count();
 
         // Act
         doctorSeeder.run();
 
-        // Assert
-        assertThat(doctorRegisteredRowCount()).isEqualTo(doctorRegisteredRowsBefore);
+        // Assert: nobody is created again, but each seeded doctor is announced again
+        assertThat(doctorRepository.count()).isEqualTo(doctorsBefore);
+        assertThat(doctorRegisteredRowCount()).isEqualTo(doctorRegisteredRowsBefore + 6);
     }
 
     private void pauseKafka() {

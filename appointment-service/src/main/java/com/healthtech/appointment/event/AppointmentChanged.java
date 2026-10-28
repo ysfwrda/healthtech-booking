@@ -22,4 +22,5 @@ public class AppointmentChanged {
     private AppointmentType previousType;
     private LocalDateTime previousDateTime;
     private LocalDateTime changedAt;
+    private Initiator changedBy;
 }

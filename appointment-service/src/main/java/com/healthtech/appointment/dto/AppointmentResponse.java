@@ -2,6 +2,7 @@ package com.healthtech.appointment.dto;
 
 import com.healthtech.appointment.domain.AppointmentStatus;
 import com.healthtech.appointment.domain.AppointmentType;
+import com.healthtech.appointment.domain.ConflictReason;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -26,6 +27,8 @@ public class AppointmentResponse {
     private AppointmentType type;
 
     private AppointmentStatus status;
+
+    private ConflictReason conflictReason;
 
     private String notes;
 
