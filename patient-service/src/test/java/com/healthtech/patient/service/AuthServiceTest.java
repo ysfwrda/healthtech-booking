@@ -23,7 +23,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -48,11 +52,12 @@ class AuthServiceTest {
     private RegisterRequest registerRequest;
     private Patient patient;
     private final UUID patientId = UUID.randomUUID();
+    private final Clock fixedClock = Clock.fixed(Instant.parse("2026-03-02T09:30:00Z"), ZoneOffset.UTC);
 
     @BeforeEach
     void setUp() {
         authService = new AuthService(jwtTokenProvider, patientRepository, patientMapper, passwordEncoder,
-                new OutboxEventWriter(outboxRepository, objectMapper));
+                new OutboxEventWriter(outboxRepository, objectMapper), fixedClock);
 
         registerRequest = RegisterRequest.builder()
                 .firstName("John")
@@ -168,6 +173,21 @@ class AuthServiceTest {
         verify(patientRepository).saveAndFlush(argThat(p -> "$2a$hashed".equals(p.getPasswordHash())));
     }
 
+    @Test
+    void register_happyPath_leavesLastLoginNull() {
+        // Arrange
+        when(patientMapper.toEntity(registerRequest)).thenReturn(patient);
+        when(passwordEncoder.encode("secret123")).thenReturn("$2a$hashed");
+        when(jwtTokenProvider.generateToken(patientId)).thenReturn("jwt-token");
+        when(jwtTokenProvider.getExpirationSeconds()).thenReturn(3600L);
+
+        // Act
+        authService.register(registerRequest);
+
+        // Assert
+        verify(patientRepository).saveAndFlush(argThat(p -> p.getLastLogin() == null));
+    }
+
     // ── login ─────────────────────────────────────────────────────────────────
 
     @Test
@@ -186,6 +206,50 @@ class AuthServiceTest {
         assertThat(response.getUsername()).isEqualTo("johndoe");
         assertThat(response.getToken()).isEqualTo("jwt-token");
         assertThat(response.getExpiresIn()).isEqualTo(3600L);
+    }
+
+    @Test
+    void login_validCredentials_setsLastLoginToNow() {
+        // Arrange
+        LoginRequest loginRequest = new LoginRequest("johndoe", "secret123");
+        when(patientRepository.findByUsername("johndoe")).thenReturn(Optional.of(patient));
+        when(passwordEncoder.matches("secret123", "$2a$hashed")).thenReturn(true);
+
+        // Act
+        authService.login(loginRequest);
+
+        // Assert
+        assertThat(patient.getLastLogin()).isEqualTo(LocalDateTime.of(2026, 3, 2, 9, 30));
+    }
+
+    @Test
+    void login_unknownUsername_writesNoPatient() {
+        // Arrange
+        LoginRequest loginRequest = new LoginRequest("ghost", "secret123");
+        when(patientRepository.findByUsername("ghost")).thenReturn(Optional.empty());
+
+        // Act
+        assertThatThrownBy(() -> authService.login(loginRequest)).isInstanceOf(InvalidCredentialsException.class);
+
+        // Assert
+        verify(patientRepository).findByUsername("ghost");
+        verifyNoMoreInteractions(patientRepository);
+    }
+
+    @Test
+    void login_wrongPassword_leavesLastLoginUnchanged() {
+        // Arrange
+        LocalDateTime previousLogin = LocalDateTime.of(2026, 1, 10, 8, 0);
+        patient.setLastLogin(previousLogin);
+        LoginRequest loginRequest = new LoginRequest("johndoe", "wrongpass");
+        when(patientRepository.findByUsername("johndoe")).thenReturn(Optional.of(patient));
+        when(passwordEncoder.matches("wrongpass", "$2a$hashed")).thenReturn(false);
+
+        // Act
+        assertThatThrownBy(() -> authService.login(loginRequest)).isInstanceOf(InvalidCredentialsException.class);
+
+        // Assert
+        assertThat(patient.getLastLogin()).isEqualTo(previousLogin);
     }
 
     @Test

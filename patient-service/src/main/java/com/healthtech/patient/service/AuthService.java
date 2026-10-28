@@ -18,6 +18,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -28,6 +30,7 @@ public class AuthService {
     private final PatientMapper patientMapper;
     private final PasswordEncoder passwordEncoder;
     private final DomainEventPublisher eventPublisher;
+    private final Clock clock;
 
     @Transactional
     public AuthResponse register(RegisterRequest registerRequest) {
@@ -62,12 +65,14 @@ public class AuthService {
                 .build();
     }
 
+    @Transactional
     public AuthResponse login(LoginRequest loginRequest) {
         Patient patient = patientRepository.findByUsername(loginRequest.getUsername())
                 .orElseThrow(() -> new InvalidCredentialsException("Invalid username or password"));
         if (!passwordEncoder.matches(loginRequest.getPassword(), patient.getPasswordHash())) {
             throw new InvalidCredentialsException("Invalid username or password");
         }
+        patient.setLastLogin(LocalDateTime.now(clock));
 
         String token = jwtTokenProvider.generateToken(patient.getId());
         return AuthResponse.builder()
