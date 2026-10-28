@@ -488,17 +488,52 @@ docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
 To avoid typing the file list each time, set `export COMPOSE_FILE=docker-compose.yml:docker-compose.images.yml`, after
 which plain `docker compose pull` and `docker compose up -d` use the images.
 
-Both options start the services alongside Kafka, Zookeeper, Kafka UI (`http://localhost:8090`), and the four PostgreSQL
-instances, all on a shared Docker network. The services connect to Kafka and their databases by container name. The
-images contain no keys; `./keys` is mounted into the containers at runtime (see Step 2).
+Both options start the services alongside Kafka, Zookeeper and the four PostgreSQL instances, all on a shared Docker
+network. The services connect to Kafka and their databases by container name. The images contain no keys; `./keys` is
+mounted into the containers at runtime (see Step 2).
+
+**Kafka UI is optional** and does not start by default. It sits behind the `tools` Compose profile (pinned to
+`provectuslabs/kafka-ui:v0.7.2`); add the profile to start it at `http://localhost:8090`:
+
+```bash
+docker compose --profile tools up -d
+```
+
+Commands that stop the stack (`docker compose down`) need the same flag to remove Kafka UI too.
 
 **Startup order and recovery.** Each container has a healthcheck, and a service starts only once its dependencies are
 healthy: Zookeeper, then Kafka and the databases, then the three backend services, then the gateway, then the frontend.
 A cold start takes a minute or two. If one of the appointment, patient or doctor services fails to become healthy, the
 gateway and frontend are deliberately not started and `docker compose up -d` exits with an error; look at
 `docker compose ps` and `docker compose logs <service>`. Zookeeper, Kafka and the PostgreSQL containers restart
-automatically after a crash or a reboot of Docker, but the application services do not: after a reboot, run
-`docker compose up -d` again to bring the whole stack back.
+automatically after a crash or a reboot of Docker. The five application services use `restart: on-failure:3`: Docker
+restarts one at most three times after a non-zero exit (including a memory kill), then leaves it down so the failure
+stays visible, and it does not bring them back after a reboot of Docker. After a reboot, or once a service has given up,
+run `docker compose up -d` again to bring the whole stack back.
+
+**Memory limits.** Every container has a `mem_limit`, so one container cannot take the whole Docker VM. Each limit is
+about 1.5x the container's steady-state memory, measured with `docker stats --no-stream` after a cold
+`docker compose up -d --build` and a run of `scripts/test-flow.sh` and `scripts/gateway-security-smoke-test.sh`
+(Docker VM of 7.6 GiB, so the JVMs defaulted to a heap of about 1.9 GiB each). Limits were rounded up, and are higher
+than 1.5x where the process itself needs more room:
+
+| Container             | Steady state (before) | `mem_limit` | Notes                                                                 |
+|-----------------------|-----------------------|-------------|-----------------------------------------------------------------------|
+| appointment-service   | 457 MiB               | 768m        | Heap capped at 65% of the limit by `-XX:MaxRAMPercentage=65`          |
+| doctor-service        | 456 MiB               | 768m        | same                                                                  |
+| patient-service       | 436 MiB               | 768m        | same                                                                  |
+| notification-service  | 377 MiB               | 640m        | same                                                                  |
+| api-gateway           | 278 MiB               | 512m        | same                                                                  |
+| kafka                 | 407 MiB               | 1g          | `KAFKA_HEAP_OPTS=-Xms256m -Xmx512m` (default is 1 GB); heap fills over time (an unconfigured broker reached 1.16 GiB after 31 h), so the limit is sized to the heap cap plus overhead, not to the early reading |
+| zookeeper             | 126 MiB               | 384m        | `KAFKA_HEAP_OPTS=-Xms128m -Xmx256m`; limit is the heap cap plus JVM overhead  |
+| PostgreSQL (x4)       | 50 to 52 MiB each     | 192m        | Above 1.5x because the default `shared_buffers` is 128 MB             |
+| kafka-ui (`tools`)    | 301 MiB               | 512m        | Default heap is 25% of the limit; it served topics at that size |
+| frontend              | 9 MiB                 | 32m         | Static files only; 32m is the smallest round value that fits            |
+
+With the limits and heap caps in place, the same run settles at about 40 to 50% of each application service's limit
+(api-gateway 207 MiB, appointment 387, doctor 357, patient 339, notification 286), and Kafka UI stays near 305 MiB. If
+you add load or data and a container is killed (`docker inspect -f '{{.State.OOMKilled}}' <container>`), raise its
+`mem_limit` in `docker-compose.yml`; `docker stats` shows the current use.
 
 Option B reads two optional environment variables:
 
@@ -508,6 +543,8 @@ Option B reads two optional environment variables:
 | `IMAGE_REGISTRY` | `ghcr.io/ysfwrda` | Pull from a fork's registry, e.g. `ghcr.io/<your-user>`     |
 
 Note that Option B runs the code published from `main`, not your working tree; use Option A to test local changes.
+Images published before the memory limits were added lack `-XX:MaxRAMPercentage=65`, so until CI republishes them the
+JVM heap defaults to 25% of the container limit; the limits themselves still apply.
 Without the override file, the images are never pulled and `docker compose up -d --build` always builds from source.
 
 To run a single service on the host against the infrastructure for development, start only the infrastructure and run
@@ -680,7 +717,8 @@ curl -X POST http://localhost:8080/api/doctors/login \
 
 ### Step 5 — Verify the Event Flow
 
-* Kafka UI (`http://localhost:8090`): confirm `patient.registered`, `doctor.registered`, `appointment.booked`,
+* Kafka UI (`http://localhost:8090`, start it with `docker compose --profile tools up -d`): confirm
+  `patient.registered`, `doctor.registered`, `appointment.booked`,
   `appointment.cancelled` and `appointment.changed` have messages.
 * Appointment Service: confirm `valid_patient` / `valid_doctor` rows appear in `appointment_db` (the read-model).
 * Notification Service: confirm the booking event was consumed and a notification record was saved in `notification_db`.
@@ -735,7 +773,7 @@ healthtech-booking/
 | Resource             | Host Port | Notes                      |
 |----------------------|-----------|----------------------------|
 | Kafka                | 9092      | PLAINTEXT (host access)    |
-| Kafka UI             | 8090      | Browse topics and messages |
+| Kafka UI (`tools`)    | 8090      | Browse topics and messages |
 | Swagger UI (gateway) | 8080      | `/swagger-ui.html`, all APIs |
 | PostgreSQL (appt)    | 5432      | `appointment_db`           |
 | PostgreSQL (notif)   | 5433      | `notification_db`          |
