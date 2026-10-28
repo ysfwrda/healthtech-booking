@@ -218,6 +218,37 @@ class DoctorAuthServiceTest {
     }
 
     @Test
+    void login_passwordOver72Bytes_throwsInvalidCredentialsExceptionWithoutComparing() {
+        // Arrange: BCrypt ignores everything after byte 72, so the encoder would report a match
+        String tooLong = "a".repeat(73);
+        DoctorLoginRequest loginRequest = new DoctorLoginRequest("anna.mueller@example.com", tooLong);
+        when(doctorRepository.findByEmail("anna.mueller@example.com")).thenReturn(Optional.of(doctor));
+        lenient().when(passwordEncoder.matches(tooLong, "$2a$raw")).thenReturn(true);
+
+        // Act & Assert
+        assertThatThrownBy(() -> doctorAuthService.login(loginRequest))
+                .isInstanceOf(InvalidCredentialsException.class);
+        verify(passwordEncoder, never()).matches(any(), any());
+        verify(doctorTokenProvider, never()).generateToken(any());
+    }
+
+    @Test
+    void login_passwordOfExactly72Bytes_isComparedWithTheEncoder() {
+        // Arrange
+        String atLimit = "a".repeat(72);
+        DoctorLoginRequest loginRequest = new DoctorLoginRequest("anna.mueller@example.com", atLimit);
+        when(doctorRepository.findByEmail("anna.mueller@example.com")).thenReturn(Optional.of(doctor));
+        when(passwordEncoder.matches(atLimit, "$2a$raw")).thenReturn(true);
+        when(doctorTokenProvider.generateToken(any())).thenReturn("jwt");
+
+        // Act
+        DoctorAuthResponse response = doctorAuthService.login(loginRequest);
+
+        // Assert
+        assertThat(response.getToken()).isEqualTo("jwt");
+    }
+
+    @Test
     void login_wrongPassword_throwsInvalidCredentialsException() {
         // Arrange
         DoctorLoginRequest loginRequest = new DoctorLoginRequest("anna.mueller@example.com", "wrongpass");

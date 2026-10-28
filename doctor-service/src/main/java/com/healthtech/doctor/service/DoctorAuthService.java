@@ -15,6 +15,7 @@ import com.healthtech.doctor.mapper.DoctorMapper;
 import com.healthtech.doctor.repository.DoctorRepository;
 import com.healthtech.doctor.repository.SpecialtyRepository;
 import com.healthtech.doctor.security.DoctorTokenProvider;
+import com.healthtech.doctor.validation.PasswordValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -77,7 +78,8 @@ public class DoctorAuthService {
     public DoctorAuthResponse login(DoctorLoginRequest request) {
         Doctor doctor = doctorRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password"));
-        if (!passwordEncoder.matches(request.getPassword(), doctor.getPasswordHash())) {
+        if (!PasswordValidator.fitsEncoder(request.getPassword())
+                || !passwordEncoder.matches(request.getPassword(), doctor.getPasswordHash())) {
             throw new InvalidCredentialsException("Invalid email or password");
         }
 

@@ -108,6 +108,35 @@ class AuthControllerTest {
     }
 
     @Test
+    void register_passwordWithinCharacterLimitButOver72Bytes_returns400WithPasswordError() throws Exception {
+        // Arrange: 37 two-byte characters are 74 bytes, which the BCrypt encoder rejects
+        String password = "\"" + "ä".repeat(37) + "\"";
+
+        // Act & Assert
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson(password)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.password").exists());
+        verify(authService, never()).register(any(RegisterRequest.class));
+    }
+
+    @Test
+    void register_passwordExactly72BytesOfMultiByteCharacters_returns201() throws Exception {
+        // Arrange
+        String password = "\"" + "ä".repeat(36) + "\"";
+        when(authService.register(any(RegisterRequest.class)))
+                .thenReturn(AuthResponse.builder().token("jwt").expiresIn(3600L).username("max.mustermann").build());
+
+        // Act & Assert
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerJson(password)))
+                .andExpect(status().isCreated());
+        verify(authService).register(any(RegisterRequest.class));
+    }
+
+    @Test
     void register_blankPassword_returns400WithPasswordError() throws Exception {
         // Arrange
         String password = "\"   \"";

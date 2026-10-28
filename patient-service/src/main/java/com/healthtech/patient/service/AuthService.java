@@ -12,6 +12,7 @@ import com.healthtech.patient.exception.UsernameAlreadyExistsException;
 import com.healthtech.patient.mapper.PatientMapper;
 import com.healthtech.patient.repository.PatientRepository;
 import com.healthtech.patient.security.JwtTokenProvider;
+import com.healthtech.patient.validation.PasswordValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -65,7 +66,8 @@ public class AuthService {
     public AuthResponse login(LoginRequest loginRequest) {
         Patient patient = patientRepository.findByUsername(loginRequest.getUsername())
                 .orElseThrow(() -> new InvalidCredentialsException("Invalid username or password"));
-        if (!passwordEncoder.matches(loginRequest.getPassword(), patient.getPasswordHash())) {
+        if (!PasswordValidator.fitsEncoder(loginRequest.getPassword())
+                || !passwordEncoder.matches(loginRequest.getPassword(), patient.getPasswordHash())) {
             throw new InvalidCredentialsException("Invalid username or password");
         }
 

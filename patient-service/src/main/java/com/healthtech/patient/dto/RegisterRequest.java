@@ -2,10 +2,10 @@ package com.healthtech.patient.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.healthtech.patient.domain.InsuranceType;
+import com.healthtech.patient.validation.ValidPassword;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -29,8 +29,8 @@ public class RegisterRequest {
     private String username;
 
     @NotBlank
-    @Size(min = 8, max = 72)
-    @Schema(example = "ChangeMe123!", description = "8 to 72 characters")
+    @ValidPassword
+    @Schema(example = "ChangeMe123!", description = "At least 8 characters and at most 72 bytes in UTF-8")
     private String password;
 
     @NotNull
