@@ -200,6 +200,7 @@ services:
       DB_USERNAME: appointment_user
       DB_PASSWORD: appointment_pass
       JWT_PUBLIC_KEY_PATH: file:/run/keys/public.pem
+      CLINIC_TIME_ZONE: Europe/Berlin
     volumes:
       - ./keys:/run/keys:ro
     depends_on:

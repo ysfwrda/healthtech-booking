@@ -5,7 +5,7 @@ import { ApiError } from "../api/client";
 import { ChangeAppointmentForm } from "../components/ChangeAppointmentForm";
 import { NoticeDialog } from "../components/NoticeDialog";
 import { StatusMessage } from "../components/StatusMessage";
-import { CHANGE_MIN_NOTICE_HOURS } from "../api/constants";
+import { CHANGE_MIN_NOTICE_HOURS, CLINIC_TIME_ZONE } from "../api/constants";
 import { isWithinChangeNotice } from "../dates";
 import type { AppointmentResponse } from "../api/types";
 
@@ -96,6 +96,7 @@ export function MyAppointmentsPage() {
   return (
     <div>
       <h1>My appointments</h1>
+      <p className="status status-info">All appointment times are displayed in clinic time ({CLINIC_TIME_ZONE}).</p>
       {notice && <StatusMessage kind="info">{notice}</StatusMessage>}
       {actionError && <StatusMessage kind="error">{actionError}</StatusMessage>}
       {appointments.length === 0 && <StatusMessage kind="info">You have no appointments yet.</StatusMessage>}

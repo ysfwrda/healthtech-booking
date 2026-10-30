@@ -36,6 +36,8 @@ app:
 appointment:
   change:
     min-notice-hours: 48
+  clinic:
+    time-zone: ${CLINIC_TIME_ZONE:Europe/Berlin}
 
 outbox:
   relay:

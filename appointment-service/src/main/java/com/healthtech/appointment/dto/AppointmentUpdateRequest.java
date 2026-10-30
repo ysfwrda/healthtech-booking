@@ -18,7 +18,7 @@ public class AppointmentUpdateRequest {
     @Schema(description = "New purpose; omit to keep the current one")
     private AppointmentType type;
 
-    @Schema(description = "Start of a free slot of the same doctor, taken from GET /api/availability; omit to keep the current time", example = "2026-10-12T09:30:00")
+    @Schema(description = "Start of a free slot of the same doctor in clinic time (Europe/Berlin), taken from GET /api/availability; omit to keep the current time", example = "2026-10-12T09:30:00")
     private LocalDateTime dateTime;
 
     @Size(max = 500)
